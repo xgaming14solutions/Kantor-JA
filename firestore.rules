@@ -1,0 +1,153 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isUserDoc(userId) {
+      return isSignedIn() && (request.auth.uid == userId);
+    }
+
+    function hasUserDoc() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return hasUserDoc() && getUserData().role == 'ADMIN';
+    }
+
+    function isKepalaSekolah() {
+      return hasUserDoc() && getUserData().role == 'KEPALA_SEKOLAH';
+    }
+
+    function isGuruMapel() {
+      return hasUserDoc() && getUserData().role == 'GURU_MAPEL';
+    }
+
+    function getTeacherId() {
+      return getUserData().teacherId;
+    }
+
+    // Users collection rules
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() || request.auth.uid == userId || !exists(/databases/$(database)/documents/users/$(userId)));
+    }
+
+    // Master Data: Teachers
+    match /teachers/{teacherId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() || true);
+    }
+
+    // Master Data: Classes
+    match /classes/{classId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() || true);
+    }
+
+    // Master Data: Students
+    match /students/{studentId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() || true);
+    }
+
+    // Master Data: Subjects
+    match /subjects/{subjectId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() || true);
+    }
+
+    // Master Data: Teacher Assignments
+    match /teacherAssignments/{assignmentId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() || true);
+    }
+
+    // Master Data: Academic Years
+    match /academicYears/{academicYearId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() || true);
+    }
+
+    // Transactions: Scores
+    // Principle of Least Privilege:
+    // - Only signed-in staff can read scores
+    // - Writes restricted: Admin can write any score; Guru Mapel can only write/update/delete scores matching their own teacherId
+    // - Value constraint: 0 <= value <= 100
+    // - Identity integrity: teacherId cannot be spoofed or changed on update
+    match /scores/{scoreId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn() && (
+        isAdmin() || (
+          isGuruMapel() &&
+          request.resource.data.teacherId == getTeacherId() &&
+          request.resource.data.teacherId is string &&
+          request.resource.data.teacherId.size() > 0 &&
+          request.resource.data.studentId is string &&
+          request.resource.data.classId is string &&
+          request.resource.data.subjectId is string &&
+          request.resource.data.value >= 0 &&
+          request.resource.data.value <= 100
+        )
+      );
+
+      allow update: if isSignedIn() && (
+        isAdmin() || (
+          isGuruMapel() &&
+          resource.data.teacherId == getTeacherId() &&
+          request.resource.data.teacherId == resource.data.teacherId &&
+          request.resource.data.studentId == resource.data.studentId &&
+          request.resource.data.classId == resource.data.classId &&
+          request.resource.data.subjectId == resource.data.subjectId &&
+          request.resource.data.value >= 0 &&
+          request.resource.data.value <= 100
+        )
+      );
+
+      allow delete: if isSignedIn() && (
+        isAdmin() || (
+          isGuruMapel() &&
+          resource.data.teacherId == getTeacherId()
+        )
+      );
+    }
+
+    // Transactions: Attendance
+    match /attendance/{attendanceId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Transactions: Report Cards
+    match /reportCards/{reportCardId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Academic Settings (Kepala Sekolah & Admin only)
+    match /academicSettings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() || isKepalaSekolah());
+    }
+
+    // Academic Setting Logs (Audit Trail)
+    match /academicSettingLogs/{logId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isAdmin() || isKepalaSekolah());
+    }
+
+    // Catch-all: Deny all unmatched paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

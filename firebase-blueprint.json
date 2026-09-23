@@ -1,0 +1,210 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Akun pengguna sistem KantoJA dengan role dan relasi guru",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "username": { "type": "string", "description": "Username unik untuk login", "maxLength": 50 },
+        "email": { "type": "string", "format": "email", "description": "Email resmi pengguna" },
+        "displayName": { "type": "string", "description": "Nama lengkap pengguna", "maxLength": 150 },
+        "name": { "type": "string", "description": "Nama lengkap pengguna", "maxLength": 150 },
+        "role": {
+          "type": "string",
+          "enum": ["ADMIN", "KEPALA_SEKOLAH", "WALI_KELAS", "GURU_MAPEL"],
+          "description": "Hak akses otorisasi sistem"
+        },
+        "teacherId": { "type": "string", "description": "Relasi ID ke master data teachers", "maxLength": 128 },
+        "nip": { "type": "string", "maxLength": 30 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "avatarUrl": { "type": "string" },
+        "isActive": { "type": "boolean", "description": "Status keaktifan akun" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "username", "email", "displayName", "role", "isActive"]
+    },
+    "Teacher": {
+      "title": "Teacher",
+      "description": "Profil tenaga pendidik KantoJA",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nip": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "gender": { "type": "string", "enum": ["L", "P"] },
+        "status": { "type": "string" },
+        "specialization": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "nip", "name", "email", "gender", "status", "isActive"]
+    },
+    "SchoolClass": {
+      "title": "SchoolClass",
+      "description": "Rombongan belajar kelas sekolah",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "gradeLevel": { "type": "number" },
+        "academicYearId": { "type": "string" },
+        "homeroomTeacherId": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "capacity": { "type": "number" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "name", "gradeLevel", "academicYearId", "homeroomTeacherId"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Data peserta didik",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nis": { "type": "string" },
+        "nisn": { "type": "string" },
+        "name": { "type": "string" },
+        "gender": { "type": "string", "enum": ["L", "P"] },
+        "classId": { "type": "string" },
+        "academicYearId": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "nis", "name", "gender", "classId", "academicYearId", "status"]
+    },
+    "Subject": {
+      "title": "Subject",
+      "description": "Mata pelajaran kurikulum sekolah",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "kkm": { "type": "number" },
+        "category": { "type": "string" }
+      },
+      "required": ["id", "code", "name", "kkm", "category"]
+    },
+    "TeacherAssignment": {
+      "title": "TeacherAssignment",
+      "description": "Penugasan mengajar guru ke rombel dan mata pelajaran",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "classId": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "academicYearId": { "type": "string" },
+        "semester": { "type": "string" },
+        "totalHoursPerWeek": { "type": "number" }
+      },
+      "required": ["id", "teacherId", "classId", "subjectId", "academicYearId", "semester"]
+    },
+    "AcademicYear": {
+      "title": "AcademicYear",
+      "description": "Tahun ajaran dan semester",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "semester": { "type": "string", "enum": ["Ganjil", "Genap"] },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "name", "semester", "isActive"]
+    },
+    "AcademicSetting": {
+      "title": "AcademicSetting",
+      "description": "Pengaturan bobot nilai, KKM, komponen, dan metode penilaian per periode",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "academicYearId": { "type": "string" },
+        "semester": { "type": "string", "enum": ["Ganjil", "Genap"] },
+        "calculationMethod": { "type": "string", "enum": ["WEIGHTED", "SIMPLE_AVERAGE"] },
+        "rounding": { "type": "string", "enum": ["1_decimal", "round", "none"] },
+        "version": { "type": "number" },
+        "status": { "type": "string", "enum": ["Aktif", "Arsip"] },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["id", "academicYearId", "semester", "calculationMethod", "rounding", "version"]
+    },
+    "AcademicSettingLog": {
+      "title": "AcademicSettingLog",
+      "description": "Riwayat audit log perubahan aturan akademik oleh Kepala Sekolah / Admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "settingId": { "type": "string" },
+        "academicYearId": { "type": "string" },
+        "semester": { "type": "string" },
+        "version": { "type": "number" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["id", "settingId", "academicYearId", "semester", "version", "updatedAt", "updatedBy"]
+    },
+    "Score": {
+      "title": "Score",
+      "description": "Buku nilai siswa berbasis relasi penugasan guru",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "classId": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "academicYearId": { "type": "string" },
+        "semester": { "type": "string", "enum": ["Ganjil", "Genap"] },
+        "type": { "type": "string" },
+        "value": { "type": "number", "minimum": 0, "maximum": 100 },
+        "notes": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["id", "studentId", "teacherId", "classId", "subjectId", "academicYearId", "semester", "type", "value", "date"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Koleksi akun pengguna sistem KantoJA"
+    },
+    "/teachers/{teacherId}": {
+      "schema": "Teacher",
+      "description": "Master data guru dan staf pengajar"
+    },
+    "/classes/{classId}": {
+      "schema": "SchoolClass",
+      "description": "Master data rombongan belajar kelas"
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Master data siswa"
+    },
+    "/subjects/{subjectId}": {
+      "schema": "Subject",
+      "description": "Master data mata pelajaran"
+    },
+    "/teacherAssignments/{assignmentId}": {
+      "schema": "TeacherAssignment",
+      "description": "Penugasan mengajar guru"
+    },
+    "/academicYears/{academicYearId}": {
+      "schema": "AcademicYear",
+      "description": "Master data tahun ajaran sekolah"
+    },
+    "/scores/{scoreId}": {
+      "schema": "Score",
+      "description": "Nilai transaksi akademik siswa dengan otorisasi penugasan guru"
+    },
+    "/academicSettings/{settingId}": {
+      "schema": "AcademicSetting",
+      "description": "Aturan dan bobot penilaian per tahun ajaran dan semester"
+    },
+    "/academicSettingLogs/{logId}": {
+      "schema": "AcademicSettingLog",
+      "description": "Log riwayat perubahan pengaturan akademik"
+    }
+  }
+}

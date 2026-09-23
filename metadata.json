@@ -1,0 +1,6 @@
+{
+  "name": "KantoJA",
+  "description": "KantoJA - Sistem Informasi Manajemen Sekolah untuk Admin, Kepala Sekolah, Wali Kelas, dan Guru Mata Pelajaran",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
