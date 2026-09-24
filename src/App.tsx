@@ -19,9 +19,19 @@ import { GenericModuleView } from './components/GenericModuleView';
 import { Menu, ShieldAlert, School, Shield, GraduationCap, UserCheck } from 'lucide-react';
 import { NAVIGATION_ITEMS } from './components/Sidebar';
 
+// Helper to parse clean tab from URL path
+const getInitialTab = (): string => {
+  if (typeof window === 'undefined') return 'dashboard';
+  const path = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
+  if (path && NAVIGATION_ITEMS.some((item) => item.id === path)) {
+    return path;
+  }
+  return 'dashboard';
+};
+
 export default function App() {
   const { currentUser, role, loading } = useAuth();
-  const [currentTab, setCurrentTab] = useState<string>('dashboard');
+  const [currentTab, setCurrentTab] = useState<string>(getInitialTab);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
 
   // Sync URL with tab and auth state
@@ -33,8 +43,8 @@ export default function App() {
       return;
     }
 
-    // If logged in and at /login, change to /dashboard
-    const path = window.location.pathname.replace(/^\/+/, '');
+    // Clean current path from URL
+    const path = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
     if (path === 'login' || !path) {
       window.history.replaceState(null, '', `/${currentTab}`);
     } else {
@@ -48,10 +58,27 @@ export default function App() {
     }
   }, [currentUser, loading]);
 
+  // Handle browser back and forward button navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
+      const matchingItem = NAVIGATION_ITEMS.find((item) => item.id === path);
+      if (matchingItem) {
+        setCurrentTab(matchingItem.id);
+      } else if (!path || path === 'dashboard') {
+        setCurrentTab('dashboard');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   // Update URL on currentTab change
   const handleNavigate = (tab: string) => {
     setCurrentTab(tab);
-    window.history.replaceState(null, '', `/${tab}`);
+    if (window.location.pathname.replace(/^\/+|\/+$/g, '') !== tab) {
+      window.history.pushState(null, '', `/${tab}`);
+    }
   };
 
   // If loading session
