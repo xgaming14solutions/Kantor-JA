@@ -91,7 +91,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
         </div>
         <h3 className="text-lg font-bold text-slate-900">Akses Ditolak</h3>
         <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-          Anda tidak memiliki izin untuk membuka halaman Manajemen Pengguna. Menu ini khusus untuk Administrator KantoJA.
+          Anda tidak memiliki izin untuk membuka halaman Manajemen Pengguna. Menu ini khusus untuk Administrator AKSARA.
         </p>
       </div>
     );

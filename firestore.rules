@@ -28,7 +28,11 @@ service cloud.firestore {
     }
 
     function isGuruMapel() {
-      return hasUserDoc() && getUserData().role == 'GURU_MAPEL';
+      return hasUserDoc() && (getUserData().role == 'GURU_MAPEL' || getUserData().role == 'WALI_KELAS');
+    }
+
+    function isGuru() {
+      return hasUserDoc() && (getUserData().role == 'GURU_MAPEL' || getUserData().role == 'WALI_KELAS');
     }
 
     function getTeacherId() {
@@ -103,8 +107,8 @@ service cloud.firestore {
       allow update: if isSignedIn() && (
         isAdmin() || (
           isGuruMapel() &&
-          resource.data.teacherId == getTeacherId() &&
-          request.resource.data.teacherId == resource.data.teacherId &&
+          (resource.data.teacherId == getTeacherId() || !('teacherId' in resource.data) || resource.data.teacherId == null) &&
+          request.resource.data.teacherId == getTeacherId() &&
           request.resource.data.studentId == resource.data.studentId &&
           request.resource.data.classId == resource.data.classId &&
           request.resource.data.subjectId == resource.data.subjectId &&

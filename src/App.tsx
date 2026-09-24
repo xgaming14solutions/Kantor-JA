@@ -14,6 +14,7 @@ import { AssignmentsView } from './components/AssignmentsView';
 import { UsersView } from './components/UsersView';
 import { AcademicSettingsView } from './components/AcademicSettingsView';
 import { ReportCardsView } from './components/ReportCardsView';
+import { PrintReportCardView } from './components/PrintReportCardView';
 import { MyClassesView } from './components/MyClassesView';
 import { GenericModuleView } from './components/GenericModuleView';
 import { Menu, ShieldAlert, School, Shield, GraduationCap, UserCheck } from 'lucide-react';
@@ -89,7 +90,7 @@ export default function App() {
           <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center animate-pulse shadow-md">
             <School className="w-6 h-6" />
           </div>
-          <p className="text-xs font-medium text-slate-500">Memuat KantoJA...</p>
+          <p className="text-xs font-medium text-slate-500">Memuat AKSARA...</p>
         </div>
       </div>
     );
@@ -115,7 +116,7 @@ export default function App() {
           </div>
           <h3 className="text-lg font-bold text-slate-900">Akses Ditolak</h3>
           <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-            Anda tidak memiliki izin untuk membuka halaman ini. Sistem otorisasi RBAC KantoJA membatasi hak akses berdasarkan peran akun Anda (<strong>{role}</strong>).
+            Anda tidak memiliki izin untuk membuka halaman ini. Sistem otorisasi RBAC AKSARA membatasi hak akses berdasarkan peran akun Anda (<strong>{role}</strong>).
           </p>
           <button
             onClick={() => handleNavigate('dashboard')}
@@ -151,7 +152,9 @@ export default function App() {
       case 'academic-settings':
         return <AcademicSettingsView userRole={role} />;
       case 'report-cards':
-        return <ReportCardsView userRole={role} />;
+        return <ReportCardsView userRole={role} onNavigateToPrint={(studentId, classId) => handleNavigate('print-report')} />;
+      case 'print-report':
+        return <PrintReportCardView userRole={role} onBack={() => handleNavigate('report-cards')} />;
       case 'my-classes':
         return <MyClassesView />;
       default:
@@ -217,10 +220,10 @@ export default function App() {
             </button>
             <div className="flex flex-col">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                KantoJA &bull; {activeNavItem?.label || 'Sistem Informasi Sekolah'}
+                AKSARA &bull; {activeNavItem?.label || 'Sistem Informasi Sekolah'}
               </span>
               <span className="text-sm font-bold text-slate-900 hidden sm:inline">
-                Sistem Informasi Manajemen Sekolah
+                Sistem Informasi Manajemen Akademik dan Administrasi Sekolah
               </span>
             </div>
           </div>

@@ -150,9 +150,20 @@ export const INITIAL_CLASSES: SchoolClass[] = [
 
 export const INITIAL_SUBJECTS: Subject[] = [
   {
+    id: 'sub_aqd',
+    code: 'AQD-01',
+    name: 'Aqidah',
+    nameArab: 'العقيدة',
+    kkm: 75,
+    category: 'Diniyah',
+    isActive: true,
+    description: 'Pembelajaran tauhid, rukun iman, dan akhlak karimah'
+  },
+  {
     id: 'sub_mat',
     code: 'MAT-01',
     name: 'Matematika',
+    nameArab: 'الرياضيات',
     kkm: 75,
     category: 'Umum',
     isActive: true,

@@ -39,10 +39,10 @@ export const LoginView: React.FC = () => {
           <School className="w-8 h-8" />
         </div>
         <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
-          KantoJA
+          AKSARA
         </h1>
         <p className="mt-1.5 text-sm font-medium text-slate-600">
-          Sistem Informasi Manajemen Sekolah
+          Sistem Informasi Manajemen Akademik dan Administrasi Sekolah
         </p>
       </div>
 
@@ -181,7 +181,7 @@ export const LoginView: React.FC = () => {
 
         {/* Footer info */}
         <p className="mt-6 text-center text-xs text-slate-400">
-          KantoJA &copy; {new Date().getFullYear()} &bull; Sistem Informasi Manajemen Sekolah Terpadu
+          AKSARA &copy; {new Date().getFullYear()} &bull; Sistem Informasi Manajemen Akademik dan Administrasi Sekolah
         </p>
       </div>
     </div>

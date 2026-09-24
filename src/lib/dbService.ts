@@ -487,16 +487,16 @@ export function validateTeacherAssignmentAuth(
   semester: 'Ganjil' | 'Genap'
 ): boolean {
   if (!teacherId || !classId || !subjectId) return false;
-  const cleanTeacherId = teacherId.trim();
-  const cleanClassId = classId.trim();
-  const cleanSubjectId = subjectId.trim();
+  const cleanTeacherId = teacherId.trim().toLowerCase();
+  const cleanClassId = classId.trim().toLowerCase();
+  const cleanSubjectId = subjectId.trim().toLowerCase();
   const cleanYear = (academicYearId || '').trim().toLowerCase();
   const cleanSemester = (semester || '').trim().toLowerCase();
 
   return assignments.some((a) => {
-    if (a.teacherId !== cleanTeacherId) return false;
-    if (a.classId !== cleanClassId) return false;
-    if (a.subjectId !== cleanSubjectId) return false;
+    if ((a.teacherId || '').trim().toLowerCase() !== cleanTeacherId) return false;
+    if ((a.classId || '').trim().toLowerCase() !== cleanClassId) return false;
+    if ((a.subjectId || '').trim().toLowerCase() !== cleanSubjectId) return false;
     if (a.status === 'Nonaktif' || a.status === 'Historis') return false;
 
     // Academic Year check (handling ID or Name matching)
@@ -505,6 +505,7 @@ export function validateTeacherAssignmentAuth(
       const aDigits = aYear.replace(/[^0-9]/g, '');
       const cDigits = cleanYear.replace(/[^0-9]/g, '');
       const yearMatches =
+        !aYear ||
         aYear === cleanYear ||
         (aDigits.length >= 4 && cDigits.length >= 4 && (aDigits.startsWith(cDigits) || cDigits.startsWith(aDigits)));
       if (!yearMatches) return false;
@@ -546,8 +547,8 @@ export function assertTeacherScoreAccess(
     return { allowed: true };
   }
 
-  // Only GURU_MAPEL or ADMIN can write scores
-  if (userRole !== 'GURU_MAPEL') {
+  // Both GURU_MAPEL and WALI_KELAS who hold active teaching assignments can manage scores
+  if (userRole !== 'GURU_MAPEL' && userRole !== 'WALI_KELAS') {
     return {
       allowed: false,
       reason: `Akses Ditolak (403 Forbidden): Peran '${userRole || 'Tamu'}' tidak memiliki wewenang untuk mengelola nilai siswa.`
@@ -562,7 +563,7 @@ export function assertTeacherScoreAccess(
   }
 
   // Prevent teacher identity spoofing
-  if (score.teacherId && score.teacherId !== currentTeacherId) {
+  if (score.teacherId && score.teacherId.trim().toLowerCase() !== currentTeacherId.trim().toLowerCase()) {
     return {
       allowed: false,
       reason: `Akses Ditolak (403 Forbidden): Anda tidak diizinkan membuat atau mengubah nilai atas nama guru lain (${score.teacherId}).`
@@ -596,7 +597,7 @@ export function assertTeacherScoreAccess(
  * then falling back to matching email, nip, or user id in teachers list.
  */
 export function getEffectiveTeacherId(
-  currentUser: { id?: string; teacherId?: string | null; email?: string | null; nip?: string | null } | null | undefined,
+  currentUser: { id?: string; teacherId?: string | null; email?: string | null; nip?: string | null; name?: string; displayName?: string } | null | undefined,
   role: string | null | undefined,
   teachers: Teacher[]
 ): string | null {
@@ -604,11 +605,13 @@ export function getEffectiveTeacherId(
   if (role === 'GURU_MAPEL' || role === 'WALI_KELAS' || role === 'KEPALA_SEKOLAH') {
     const cleanEmail = currentUser?.email?.toLowerCase().trim();
     const cleanNip = currentUser?.nip?.trim();
+    const cleanName = (currentUser?.displayName || currentUser?.name || '').toLowerCase().trim();
     const match = teachers.find(
       (t) =>
         (cleanEmail && t.email?.toLowerCase().trim() === cleanEmail) ||
         (cleanNip && t.nip?.trim() === cleanNip) ||
-        t.id === currentUser?.id
+        t.id === currentUser?.id ||
+        (cleanName && t.name?.toLowerCase().trim() === cleanName)
     );
     return match?.id || null;
   }
@@ -625,12 +628,15 @@ export function getActiveTeacherAssignments(
   teacherId: string | null | undefined,
   activeAcademicYear: AcademicYear | null | undefined
 ): TeacherAssignment[] {
-  if (!teacherId || !activeAcademicYear) return [];
+  if (!teacherId) return [];
+  const cleanTId = teacherId.trim().toLowerCase();
   return teacherAssignments.filter((a) => {
-    if (a.teacherId !== teacherId) return false;
+    if ((a.teacherId || '').trim().toLowerCase() !== cleanTId) return false;
 
     // Check status
     if (a.status === 'Nonaktif' || a.status === 'Historis') return false;
+
+    if (!activeAcademicYear) return true;
 
     // Academic Year check
     const aYear = (a.academicYearId || '').trim().toLowerCase();
@@ -641,6 +647,7 @@ export function getActiveTeacherAssignments(
     const nameDigits = curYearName.replace(/[^0-9]/g, '');
 
     const yearMatches =
+      !aYear ||
       aYear === curYearId ||
       aYear === curYearName ||
       (aDigits.length >= 4 && idDigits.length >= 4 && (aDigits.startsWith(idDigits) || idDigits.startsWith(aDigits))) ||

@@ -18,7 +18,8 @@ import {
   SlidersHorizontal,
   LogOut,
   X,
-  School
+  School,
+  Printer
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -97,6 +98,13 @@ export const NAVIGATION_ITEMS: MenuItem[] = [
     id: 'report-cards',
     label: 'Rapor',
     icon: Award,
+    allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH', 'WALI_KELAS'],
+  },
+  // Cetak Rapor (Template Cetak Resmi A4)
+  {
+    id: 'print-report',
+    label: 'Cetak Rapor',
+    icon: Printer,
     allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH', 'WALI_KELAS'],
   },
   // Pengaturan Akademik (Kepala Sekolah & Admin)
@@ -183,7 +191,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <div>
               <div className="font-bold text-base leading-none text-slate-900 tracking-tight">
-                KantoJA
+                AKSARA
               </div>
               <div className="text-[11px] text-slate-500 font-medium leading-none mt-1">
                 Sistem Info Sekolah
@@ -253,7 +261,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition border border-rose-100"
           >
             <LogOut className="w-3.5 h-3.5" />
-            Keluar dari KantoJA
+            Keluar dari AKSARA
           </button>
         </div>
       </aside>

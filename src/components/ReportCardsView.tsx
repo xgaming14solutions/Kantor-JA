@@ -22,9 +22,10 @@ import {
 
 interface ReportCardsViewProps {
   userRole?: UserRole;
+  onNavigateToPrint?: (studentId?: string, classId?: string) => void;
 }
 
-export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole }) => {
+export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNavigateToPrint }) => {
   const { role, currentUser } = useAuth();
   const effectiveRole = userRole || role || 'ADMIN';
 
@@ -338,6 +339,15 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole }) =>
         </div>
 
         <div className="flex items-center gap-2">
+          {onNavigateToPrint && (
+            <button
+              onClick={() => onNavigateToPrint(undefined, selectedClassId)}
+              className="px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <Printer className="w-4 h-4" />
+              Cetak Rapor Formal
+            </button>
+          )}
           <button
             onClick={handleExportCsv}
             className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition shadow-2xs inline-flex items-center gap-1.5 cursor-pointer"
@@ -570,12 +580,25 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole }) =>
                     Lembar Hasil Belajar Peserta Didik (Rapor)
                   </h3>
                   <p className="text-xs text-slate-500">
-                    SMP KantoJA &bull; Semester {activeAcademicYear?.semester || 'Ganjil'} {activeAcademicYear?.name || '2026/2027'}
+                    SMP AKSARA &bull; Semester {activeAcademicYear?.semester || 'Ganjil'} {activeAcademicYear?.name || '2026/2027'}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
+                {onNavigateToPrint && (
+                  <button
+                    onClick={() => {
+                      const studentId = activeStudentDetail.student.id;
+                      setSelectedStudentForModal(null);
+                      onNavigateToPrint(studentId, selectedClassId);
+                    }}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    Buka Template Cetak Rapor
+                  </button>
+                )}
                 <button
                   onClick={handlePrint}
                   className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
@@ -834,7 +857,7 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole }) =>
 
                   <div>
                     <p className="text-slate-500">Mengetahui,</p>
-                    <p className="text-slate-700 font-medium">Kepala Sekolah SMP KantoJA</p>
+                    <p className="text-slate-700 font-medium">Kepala Sekolah SMP AKSARA</p>
                     <div className="h-16" />
                     <p className="font-bold text-slate-800 border-t border-slate-300 pt-1 inline-block min-w-36">
                       {headmaster?.name || 'Dr. H. Mulyadi, M.Pd.'}

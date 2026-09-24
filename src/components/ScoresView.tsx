@@ -64,6 +64,9 @@ export const ScoresView: React.FC = () => {
     return currentAcademicSetting.components.filter((c) => c.enabled);
   }, [currentAcademicSetting]);
 
+  // Is current logged-in user a teacher (GURU_MAPEL or WALI_KELAS)
+  const isTeacher = role === 'GURU_MAPEL' || role === 'WALI_KELAS';
+
   // 1. Resolve Effective Teacher ID: user/guru -> teacherId
   const effectiveTeacherId = useMemo(() => {
     return getEffectiveTeacherId(currentUser, role, teachers);
@@ -73,20 +76,33 @@ export const ScoresView: React.FC = () => {
     return teachers.find((t) => t.id === effectiveTeacherId) || null;
   }, [teachers, effectiveTeacherId]);
 
-  // 2. Filter Active Teacher Assignments for GURU_MAPEL: teacherId -> teacherAssignments -> classId + subjectId + academicYearId
+  // 2. Filter Active Teacher Assignments for teachers: teacherId -> teacherAssignments -> classId + subjectId + academicYearId
   const activeTeacherAssignments = useMemo(() => {
-    if (role !== 'GURU_MAPEL') return [];
+    if (!isTeacher) return [];
     return getActiveTeacherAssignments(teacherAssignments, effectiveTeacherId, activeAcademicYear);
-  }, [role, effectiveTeacherId, activeAcademicYear, teacherAssignments]);
+  }, [isTeacher, effectiveTeacherId, activeAcademicYear, teacherAssignments]);
 
-  // 3. Filter Available Subjects strictly from TeacherAssignments for GURU_MAPEL
+  // Selected Class State
+  const [selectedClassId, setSelectedClassId] = useState<string>('');
+
+  // 3. Filter Available Subjects strictly from TeacherAssignments for GURU_MAPEL, and prioritize assigned for WALI_KELAS
   const availableSubjects = useMemo(() => {
     if (role === 'GURU_MAPEL') {
       const assignedSubjectIds = new Set(activeTeacherAssignments.map((a) => a.subjectId));
       return subjects.filter((s) => assignedSubjectIds.has(s.id));
     }
+    if (role === 'WALI_KELAS') {
+      const assignedSubjectIds = new Set(
+        activeTeacherAssignments
+          .filter((a) => !selectedClassId || a.classId === selectedClassId)
+          .map((a) => a.subjectId)
+      );
+      const assigned = subjects.filter((s) => assignedSubjectIds.has(s.id) && s.isActive !== false);
+      const others = subjects.filter((s) => !assignedSubjectIds.has(s.id) && s.isActive !== false);
+      return [...assigned, ...others];
+    }
     return subjects.filter((s) => s.isActive !== false);
-  }, [role, activeTeacherAssignments, subjects]);
+  }, [role, activeTeacherAssignments, selectedClassId, subjects]);
 
   // Selected Subject State
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
@@ -102,7 +118,7 @@ export const ScoresView: React.FC = () => {
     }
   }, [availableSubjects, selectedSubjectId]);
 
-  // 4. Filter Available Classes strictly from TeacherAssignments for GURU_MAPEL
+  // 4. Filter Available Classes strictly from TeacherAssignments for teachers
   const availableClasses = useMemo(() => {
     if (role === 'GURU_MAPEL') {
       const assignedClassIds = new Set(
@@ -112,11 +128,19 @@ export const ScoresView: React.FC = () => {
       );
       return classes.filter((c) => assignedClassIds.has(c.id));
     }
+    if (role === 'WALI_KELAS') {
+      const taughtClassIds = new Set(activeTeacherAssignments.map((a) => a.classId));
+      const relevant = classes.filter(
+        (c) =>
+          c.isActive !== false &&
+          (taughtClassIds.has(c.id) ||
+            c.homeroomTeacherId === effectiveTeacherId ||
+            c.teacherId === effectiveTeacherId)
+      );
+      return relevant.length > 0 ? relevant : classes.filter((c) => c.isActive !== false);
+    }
     return classes.filter((c) => c.isActive !== false);
-  }, [role, activeTeacherAssignments, selectedSubjectId, classes]);
-
-  // Selected Class State
-  const [selectedClassId, setSelectedClassId] = useState<string>('');
+  }, [role, activeTeacherAssignments, selectedSubjectId, classes, effectiveTeacherId]);
 
   // Auto-sync selectedClassId
   useEffect(() => {
@@ -133,10 +157,15 @@ export const ScoresView: React.FC = () => {
   const currentSubject = subjects.find((s) => s.id === selectedSubjectId) || null;
   const currentClass = classes.find((c) => c.id === selectedClassId) || null;
 
-  // Strict Authorization Barrier: Validate that GURU_MAPEL has an active assignment for the selected class & subject
-  const isAuthorized = useMemo(() => {
-    if (role !== 'GURU_MAPEL') return true;
-    if (!effectiveTeacherId || !activeAcademicYear) return false;
+  // Strict Authorization Barrier:
+  // - ADMIN has full oversight and can edit any score
+  // - KEPALA_SEKOLAH has read-only oversight
+  // - GURU_MAPEL & WALI_KELAS can edit IF AND ONLY IF they have an active teacherAssignment for:
+  //   effectiveTeacherId + selectedClassId + selectedSubjectId + activeAcademicYear
+  const canEditScores = useMemo(() => {
+    if (role === 'ADMIN') return true;
+    if (role === 'KEPALA_SEKOLAH') return false;
+    if (!isTeacher || !effectiveTeacherId || !activeAcademicYear) return false;
     if (!selectedClassId || !selectedSubjectId) return false;
     return validateTeacherAssignmentAuth(
       teacherAssignments,
@@ -146,13 +175,16 @@ export const ScoresView: React.FC = () => {
       activeAcademicYear.id,
       activeAcademicYear.semester
     );
-  }, [role, effectiveTeacherId, activeAcademicYear, selectedClassId, selectedSubjectId, teacherAssignments]);
+  }, [role, isTeacher, effectiveTeacherId, activeAcademicYear, selectedClassId, selectedSubjectId, teacherAssignments]);
 
-  // Filter students belonging to this class (BLOCKED and returns empty array if unauthorized)
+  const isAuthorized = canEditScores;
+
+  // Filter students belonging to this class (BLOCKED and returns empty array if unauthorized GURU_MAPEL)
   const classStudents = useMemo(() => {
-    if (!selectedClassId || !isAuthorized) return [];
+    if (!selectedClassId) return [];
+    if (role === 'GURU_MAPEL' && !canEditScores) return [];
     return students.filter((s) => s.classId === selectedClassId && s.status === 'Aktif');
-  }, [students, selectedClassId, isAuthorized]);
+  }, [students, selectedClassId, role, canEditScores]);
 
   // 5. Modal State for "+ Input Nilai Baru"
   const [isInputModalOpen, setIsInputModalOpen] = useState<boolean>(false);
@@ -194,7 +226,7 @@ export const ScoresView: React.FC = () => {
     setFormError(null);
     setFormSuccess(null);
 
-    if (role === 'GURU_MAPEL' && !isAuthorized) {
+    if (isTeacher && !canEditScores) {
       alert('Akses Ditolak (403 Forbidden): Anda tidak memiliki wewenang penugasan mengajar aktif untuk kelas dan mata pelajaran ini.');
       return;
     }
@@ -257,8 +289,23 @@ export const ScoresView: React.FC = () => {
       );
       return classes.filter((c) => assignedClassIds.has(c.id));
     }
+    if (role === 'WALI_KELAS') {
+      const assignedClassIds = new Set(
+        activeTeacherAssignments
+          .filter((a) => !formData.subjectId || a.subjectId === formData.subjectId)
+          .map((a) => a.classId)
+      );
+      const relevant = classes.filter(
+        (c) =>
+          c.isActive !== false &&
+          (assignedClassIds.has(c.id) ||
+            c.homeroomTeacherId === effectiveTeacherId ||
+            c.teacherId === effectiveTeacherId)
+      );
+      return relevant.length > 0 ? relevant : classes.filter((c) => c.isActive !== false);
+    }
     return classes.filter((c) => c.isActive !== false);
-  }, [role, activeTeacherAssignments, formData.subjectId, classes]);
+  }, [role, activeTeacherAssignments, formData.subjectId, classes, effectiveTeacherId]);
 
   // Ensure formData.classId remains valid when subject changes
   useEffect(() => {
@@ -302,9 +349,8 @@ export const ScoresView: React.FC = () => {
       return;
     }
 
-    // SECURITY VALIDATION: Section G
-    // Verify that the logged-in teacher has an active assignment for this class, subject, year, and semester
-    if (role === 'GURU_MAPEL') {
+    // SECURITY VALIDATION: Verify that the logged-in teacher has an active assignment for this class, subject, year, and semester
+    if (isTeacher) {
       const authCheck = assertTeacherScoreAccess(
         role,
         effectiveTeacherId,
@@ -350,11 +396,21 @@ export const ScoresView: React.FC = () => {
       );
 
       // Verify teacher ownership if updating an existing score
-      if (existingScore && role === 'GURU_MAPEL') {
+      if (existingScore && isTeacher) {
         if (existingScore.teacherId && existingScore.teacherId !== effectiveTeacherId) {
-          setFormError('Akses Ditolak (403 Forbidden): Anda tidak diizinkan mengubah nilai yang dimasukkan oleh guru lain.');
-          setIsSubmitting(false);
-          return;
+          const isStillAssigned = validateTeacherAssignmentAuth(
+            teacherAssignments,
+            effectiveTeacherId!,
+            formData.classId,
+            formData.subjectId,
+            activeAcademicYear.id,
+            activeAcademicYear.semester
+          );
+          if (!isStillAssigned) {
+            setFormError('Akses Ditolak (403 Forbidden): Anda tidak diizinkan mengubah nilai yang dimasukkan oleh guru lain.');
+            setIsSubmitting(false);
+            return;
+          }
         }
       }
 
@@ -364,10 +420,17 @@ export const ScoresView: React.FC = () => {
       const cleanType = formData.type.toLowerCase().replace(/[^a-z0-9]/g, '_');
       const deterministicId = `sc_${activeAcademicYear.id}_${activeAcademicYear.semester}_${formData.classId}_${cleanSubjectId}_${cleanStudentId}_${cleanType}`;
 
+      const resolvedTeacherId =
+        (isTeacher ? effectiveTeacherId : null) ||
+        existingScore?.teacherId ||
+        effectiveTeacherId ||
+        currentUser?.teacherId ||
+        't_001';
+
       const scoreToSave: Score = {
         id: existingScore ? existingScore.id : deterministicId,
         studentId: cleanStudentId,
-        teacherId: (role === 'GURU_MAPEL' ? effectiveTeacherId : existingScore?.teacherId || currentUser?.teacherId) || 't_003',
+        teacherId: resolvedTeacherId,
         classId: formData.classId,
         subjectId: cleanSubjectId,
         academicYearId: activeAcademicYear.id,
@@ -406,6 +469,123 @@ export const ScoresView: React.FC = () => {
       setFormError('Gagal menyimpan nilai ke sistem. Silakan coba kembali.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // State for Score Input/Edit directly in Rincian Modal
+  const [detailInputType, setDetailInputType] = useState<string>('Tugas');
+  const [detailInputValue, setDetailInputValue] = useState<string>('');
+  const [detailInputDate, setDetailInputDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [detailInputNotes, setDetailInputNotes] = useState<string>('');
+  const [detailFormError, setDetailFormError] = useState<string | null>(null);
+  const [detailFormSuccess, setDetailFormSuccess] = useState<string | null>(null);
+  const [isDetailSubmitting, setIsDetailSubmitting] = useState<boolean>(false);
+
+  // Sync Rincian input form when student or component changes
+  useEffect(() => {
+    if (!detailStudentId || !selectedSubjectId || !selectedClassId || !activeAcademicYear) {
+      setDetailInputValue('');
+      setDetailInputNotes('');
+      return;
+    }
+
+    const existing = scores.find(
+      (s) =>
+        s.studentId === detailStudentId &&
+        s.subjectId === selectedSubjectId &&
+        s.classId === selectedClassId &&
+        (s.academicYearId === activeAcademicYear.id || s.academicYearId === activeAcademicYear.name) &&
+        (!s.semester || s.semester === activeAcademicYear.semester) &&
+        (s.type === detailInputType || matchesScoreType(s.type, detailInputType))
+    );
+
+    if (existing) {
+      setDetailInputValue(String(existing.value));
+      setDetailInputNotes(existing.notes || '');
+      setDetailInputDate(existing.date || new Date().toISOString().split('T')[0]);
+    } else {
+      setDetailInputValue('');
+      setDetailInputNotes('');
+      setDetailInputDate(new Date().toISOString().split('T')[0]);
+    }
+    setDetailFormError(null);
+    setDetailFormSuccess(null);
+  }, [detailStudentId, detailInputType, selectedSubjectId, selectedClassId, activeAcademicYear, scores]);
+
+  const handleSaveDetailScore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDetailFormError(null);
+    setDetailFormSuccess(null);
+
+    if (!canEditScores) {
+      setDetailFormError('Akses Ditolak (403 Forbidden): Anda tidak memiliki penugasan mengajar aktif untuk kelas dan mata pelajaran ini.');
+      return;
+    }
+
+    if (!selectedStudentForDetail || !selectedClassId || !selectedSubjectId || !activeAcademicYear) {
+      setDetailFormError('Data siswa atau mata pelajaran tidak valid.');
+      return;
+    }
+
+    const numericValue = parseFloat(detailInputValue);
+    if (isNaN(numericValue) || numericValue < 0 || numericValue > 100) {
+      setDetailFormError('Nilai harus berupa angka valid antara 0 sampai 100.');
+      return;
+    }
+
+    setIsDetailSubmitting(true);
+    try {
+      const targetDate = detailInputDate || new Date().toISOString().split('T')[0];
+
+      const existingScore = scores.find(
+        (s) =>
+          s.studentId === selectedStudentForDetail.id &&
+          s.subjectId === selectedSubjectId &&
+          s.classId === selectedClassId &&
+          (s.academicYearId === activeAcademicYear.id || s.academicYearId === activeAcademicYear.name) &&
+          (!s.semester || s.semester === activeAcademicYear.semester) &&
+          (s.type === detailInputType || matchesScoreType(s.type, detailInputType))
+      );
+
+      const cleanStudentId = selectedStudentForDetail.id.trim();
+      const cleanSubjectId = selectedSubjectId.trim();
+      const cleanType = detailInputType.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      const deterministicId = `sc_${activeAcademicYear.id}_${activeAcademicYear.semester}_${selectedClassId}_${cleanSubjectId}_${cleanStudentId}_${cleanType}`;
+
+      const resolvedTeacherId =
+        (isTeacher ? effectiveTeacherId : null) ||
+        existingScore?.teacherId ||
+        effectiveTeacherId ||
+        currentUser?.teacherId ||
+        't_001';
+
+      const scoreToSave: Score = {
+        id: existingScore ? existingScore.id : deterministicId,
+        studentId: cleanStudentId,
+        teacherId: resolvedTeacherId,
+        classId: selectedClassId,
+        subjectId: cleanSubjectId,
+        academicYearId: activeAcademicYear.id,
+        semester: activeAcademicYear.semester,
+        type: detailInputType,
+        value: Math.round(numericValue * 10) / 10,
+        notes: (detailInputNotes || '').trim(),
+        date: targetDate
+      };
+
+      await saveScore(scoreToSave);
+      await refreshAll();
+
+      setDetailFormSuccess(
+        existingScore
+          ? `Nilai ${detailInputType} (${scoreToSave.value}) berhasil diperbarui di database.`
+          : `Nilai ${detailInputType} (${scoreToSave.value}) berhasil disimpan ke database.`
+      );
+    } catch (err: any) {
+      console.error('Error saving score in detail modal:', err);
+      setDetailFormError(err.message || 'Gagal menyimpan nilai. Silakan coba lagi.');
+    } finally {
+      setIsDetailSubmitting(false);
     }
   };
 
@@ -514,7 +694,7 @@ export const ScoresView: React.FC = () => {
   const handleDeleteScore = async (scoreToDelete: Score) => {
     if (!window.confirm('Apakah Anda yakin ingin menghapus data nilai ini?')) return;
     try {
-      if (role === 'GURU_MAPEL') {
+      if (isTeacher) {
         const authCheck = assertTeacherScoreAccess(
           role,
           effectiveTeacherId,
@@ -558,13 +738,13 @@ export const ScoresView: React.FC = () => {
             </strong>
           </div>
 
-          {(role === 'GURU_MAPEL' || role === 'ADMIN') && (
+          {(canEditScores || role === 'ADMIN') && (
             <button
               id="btn-input-nilai-baru"
               onClick={() => handleOpenInputModal()}
-              disabled={role === 'GURU_MAPEL' && (availableSubjects.length === 0 || !isAuthorized)}
+              disabled={isTeacher && (availableSubjects.length === 0 || !canEditScores)}
               className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white transition shadow-xs cursor-pointer ${
-                role === 'GURU_MAPEL' && (availableSubjects.length === 0 || !isAuthorized)
+                isTeacher && (availableSubjects.length === 0 || !canEditScores)
                   ? 'bg-slate-400 cursor-not-allowed opacity-70'
                   : 'bg-indigo-600 hover:bg-indigo-700'
               }`}
@@ -576,22 +756,31 @@ export const ScoresView: React.FC = () => {
         </div>
       </div>
 
-      {/* Role & Assignment Info Banner for GURU_MAPEL */}
-      {role === 'GURU_MAPEL' && (
+      {/* Role & Assignment Info Banner for Teachers */}
+      {isTeacher && (
         <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
           <div className="flex items-start md:items-center gap-2.5">
             <div className="p-2 rounded-xl bg-indigo-100 text-indigo-700 shrink-0">
               <ShieldCheck className="w-4 h-4" />
             </div>
             <div>
-              <p className="font-semibold text-slate-800">
-                Akses Guru Mapel:{' '}
-                <span className="text-indigo-900">
-                  {teacherProfile?.name || currentUser?.displayName || currentUser?.name || 'Budi Santoso, S.Si.'}
-                </span>{' '}
-                <span className="text-[11px] font-mono text-indigo-600">({effectiveTeacherId || 't_003'})</span>
+              <p className="font-semibold text-slate-800 flex items-center gap-2">
+                <span>
+                  Akses Guru: <strong className="text-indigo-950">{teacherProfile?.name || currentUser?.displayName || currentUser?.name || 'Agi Nugraha'}</strong>
+                </span>
+                <span className="text-[11px] font-mono text-indigo-600">({effectiveTeacherId || 'N/A'})</span>
+                {role === 'WALI_KELAS' && (
+                  <span className="px-2 py-0.5 rounded-md text-[10px] bg-purple-100 text-purple-700 font-semibold border border-purple-200">
+                    Wali Kelas
+                  </span>
+                )}
+                {role === 'GURU_MAPEL' && (
+                  <span className="px-2 py-0.5 rounded-md text-[10px] bg-indigo-100 text-indigo-700 font-semibold border border-indigo-200">
+                    Guru Mapel
+                  </span>
+                )}
               </p>
-              <p className="text-slate-600 text-[11px] mt-0.5">
+              <p className="text-slate-600 text-[11px] mt-1">
                 {activeTeacherAssignments.length > 0 ? (
                   <>
                     Penugasan Aktif:{' '}
@@ -601,14 +790,15 @@ export const ScoresView: React.FC = () => {
                       return (
                         <span key={a.id} className="font-medium text-slate-800">
                           {idx > 0 && ', '}
-                          {sub?.name || a.subjectId} ({cls ? `Kelas ${cls.name}` : a.classId}) - {a.totalHoursPerWeek} Jam/Minggu
+                          {sub?.name || a.subjectId} ({cls ? `Kelas ${cls.name}` : a.classId})
+                          {a.totalHoursPerWeek ? ` - ${a.totalHoursPerWeek} Jam/Minggu` : ''}
                         </span>
                       );
                     })}
                   </>
                 ) : (
                   <span className="text-amber-700 font-medium">
-                    Tidak ditemukan penugasan aktif untuk semester ini. Hubungi Kurikulum/Admin.
+                    Tidak ditemukan penugasan mengajar aktif untuk semester ini.
                   </span>
                 )}
               </p>
@@ -616,7 +806,7 @@ export const ScoresView: React.FC = () => {
           </div>
 
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100/80 text-indigo-800 font-medium text-[11px] self-start md:self-auto">
-            <span>Filter Otomatis Database Berdasarkan teacherAssignments</span>
+            <span>Otorisasi Penugasan: teacherAssignments</span>
           </div>
         </div>
       )}
@@ -631,7 +821,7 @@ export const ScoresView: React.FC = () => {
             id="select-filter-class"
             value={selectedClassId}
             onChange={(e) => setSelectedClassId(e.target.value)}
-            disabled={availableClasses.length <= 1 && role === 'GURU_MAPEL'}
+            disabled={availableClasses.length <= 1 && isTeacher}
             className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-600 disabled:opacity-80"
           >
             {availableClasses.length === 0 ? (
@@ -654,7 +844,7 @@ export const ScoresView: React.FC = () => {
             id="select-filter-subject"
             value={selectedSubjectId}
             onChange={(e) => setSelectedSubjectId(e.target.value)}
-            disabled={availableSubjects.length <= 1 && role === 'GURU_MAPEL'}
+            disabled={availableSubjects.length <= 1 && isTeacher}
             className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-600 disabled:opacity-80"
           >
             {availableSubjects.length === 0 ? (
@@ -688,7 +878,7 @@ export const ScoresView: React.FC = () => {
 
       {/* Relational Scores Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        {role === 'GURU_MAPEL' && !isAuthorized ? (
+        {role === 'GURU_MAPEL' && !canEditScores ? (
           <div className="p-10 text-center bg-rose-50/60 border border-rose-200/80 m-4 rounded-xl">
             <ShieldAlert className="w-12 h-12 text-rose-600 mx-auto mb-3" />
             <h4 className="text-base font-bold text-rose-900">AKSES DITOLAK (403 FORBIDDEN)</h4>
@@ -699,7 +889,7 @@ export const ScoresView: React.FC = () => {
               Guru: {effectiveTeacherId || 'N/A'} • Status Akses: DIBLOKIR SISTEM
             </p>
           </div>
-        ) : availableSubjects.length === 0 && role === 'GURU_MAPEL' ? (
+        ) : availableSubjects.length === 0 && isTeacher ? (
           <div className="p-8 text-center">
             <AlertCircle className="w-8 h-8 text-amber-500 mx-auto mb-2" />
             <p className="text-sm font-semibold text-slate-800">Tidak Ada Penugasan Mengajar Aktif</p>
@@ -790,8 +980,9 @@ export const ScoresView: React.FC = () => {
                       </td>
                       <td className="py-3 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
-                          {(role === 'GURU_MAPEL' || role === 'ADMIN') && (
+                          {canEditScores && (
                             <button
+                              id={`btn-input-score-${st.id}`}
                               onClick={() => handleOpenInputModal(st.id)}
                               className="px-2 py-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition inline-flex items-center gap-1 cursor-pointer"
                               title="Input atau ubah nilai siswa ini"
@@ -801,7 +992,12 @@ export const ScoresView: React.FC = () => {
                             </button>
                           )}
                           <button
-                            onClick={() => setDetailStudentId(st.id)}
+                            id={`btn-detail-${st.id}`}
+                            onClick={() => {
+                              setDetailStudentId(st.id);
+                              setDetailFormError(null);
+                              setDetailFormSuccess(null);
+                            }}
                             className="px-2 py-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition inline-flex items-center gap-1 cursor-pointer"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -1112,12 +1308,135 @@ export const ScoresView: React.FC = () => {
                         {summary.average === null ? (
                           <span className="text-slate-400 font-medium text-[11px]">{summary.statusLabel}</span>
                         ) : summary.isPassing ? (
-                          <span className="text-emerald-600 font-bold text-[11px]">{summary.statusLabel}</span>
+                          <span className="inline-flex items-center gap-1 text-emerald-600 font-bold text-[11px]">
+                            <CheckCircle2 className="w-3 h-3" />
+                            {summary.statusLabel}
+                          </span>
                         ) : (
-                          <span className="text-rose-600 font-bold text-[11px]">{summary.statusLabel}</span>
+                          <span className="inline-flex items-center gap-1 text-rose-600 font-bold text-[11px]">
+                            <AlertTriangle className="w-3 h-3" />
+                            {summary.statusLabel}
+                          </span>
                         )}
                       </div>
                     </div>
+
+                    {/* Form Input / Ubah Nilai Langsung pada Rincian */}
+                    {canEditScores ? (
+                      <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-50/90 to-slate-50 border border-indigo-200 shadow-2xs space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                            <Edit2 className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Input / Ubah Nilai Siswa</span>
+                          </h4>
+                          <span className="text-[11px] font-medium text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-md">
+                            {currentSubject?.name} • KKM: {effectiveCurrentKkm}
+                          </span>
+                        </div>
+
+                        {detailFormError && (
+                          <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            <span>{detailFormError}</span>
+                          </div>
+                        )}
+
+                        {detailFormSuccess && (
+                          <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
+                            <Check className="w-4 h-4 shrink-0" />
+                            <span>{detailFormSuccess}</span>
+                          </div>
+                        )}
+
+                        <form onSubmit={handleSaveDetailScore} className="space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                                Jenis / Komponen Nilai <span className="text-rose-500">*</span>
+                              </label>
+                              <select
+                                id="detail-select-type"
+                                value={detailInputType}
+                                onChange={(e) => setDetailInputType(e.target.value)}
+                                className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+                              >
+                                {enabledComponents.map((comp) => (
+                                  <option key={comp.code} value={comp.code}>
+                                    {comp.name} {currentAcademicSetting.calculationMethod === 'WEIGHTED' && comp.weight > 0 ? `(${comp.weight}%)` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                                Nilai (0 - 100) <span className="text-rose-500">*</span>
+                              </label>
+                              <input
+                                id="detail-input-value"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.5"
+                                value={detailInputValue}
+                                onChange={(e) => setDetailInputValue(e.target.value)}
+                                placeholder="Contoh: 85"
+                                className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white font-semibold text-slate-900 focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                                Tanggal Penilaian
+                              </label>
+                              <input
+                                id="detail-input-date"
+                                type="date"
+                                value={detailInputDate}
+                                onChange={(e) => setDetailInputDate(e.target.value)}
+                                className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                                Keterangan (Opsional)
+                              </label>
+                              <input
+                                id="detail-input-notes"
+                                type="text"
+                                value={detailInputNotes}
+                                onChange={(e) => setDetailInputNotes(e.target.value)}
+                                placeholder="Contoh: Tugas Bab 1"
+                                className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-[10px] text-slate-500 italic">
+                              * Nilai disimpan langsung ke database dan tersinkronisasi.
+                            </span>
+                            <button
+                              type="submit"
+                              id="btn-save-detail-score"
+                              disabled={isDetailSubmitting}
+                              className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl transition shadow-xs cursor-pointer"
+                            >
+                              {isDetailSubmitting ? 'Menyimpan...' : 'Simpan Nilai'}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+                        <span>Mode Hanya Lihat: Anda tidak memiliki penugasan mengajar aktif untuk mata pelajaran ini sehingga tidak dapat menginput atau mengubah nilai.</span>
+                      </div>
+                    )}
 
                     {/* Breakdown by Academic Components */}
                     <div className="space-y-3">
@@ -1151,11 +1470,34 @@ export const ScoresView: React.FC = () => {
                                   {items.length} entri
                                 </span>
                               </div>
-                              <div className="text-xs">
-                                <span className="text-slate-500 text-[11px] mr-1">Rata-rata:</span>
-                                <strong className={`font-semibold ${avgVal !== null && avgVal !== undefined ? 'text-indigo-600' : 'text-slate-400'}`}>
-                                  {avgVal !== null && avgVal !== undefined ? avgVal : '-'}
-                                </strong>
+                              <div className="flex items-center gap-2 text-xs">
+                                {canEditScores && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDetailInputType(comp.code);
+                                      const existing = items[0];
+                                      if (existing) {
+                                        setDetailInputValue(String(existing.value));
+                                        setDetailInputNotes(existing.notes || '');
+                                        setDetailInputDate(existing.date || new Date().toISOString().split('T')[0]);
+                                      } else {
+                                        setDetailInputValue('');
+                                        setDetailInputNotes('');
+                                        setDetailInputDate(new Date().toISOString().split('T')[0]);
+                                      }
+                                    }}
+                                    className="text-[10px] px-2 py-0.5 rounded bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-semibold transition cursor-pointer"
+                                  >
+                                    + Input {comp.name}
+                                  </button>
+                                )}
+                                <div>
+                                  <span className="text-slate-500 text-[11px] mr-1">Rata-rata:</span>
+                                  <strong className={`font-semibold ${avgVal !== null && avgVal !== undefined ? 'text-indigo-600' : 'text-slate-400'}`}>
+                                    {avgVal !== null && avgVal !== undefined ? avgVal : '-'}
+                                  </strong>
+                                </div>
                               </div>
                             </div>
 
@@ -1189,17 +1531,17 @@ export const ScoresView: React.FC = () => {
                                       <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-1 rounded-lg">
                                         {sc.value}
                                       </span>
-                                      {(role === 'GURU_MAPEL' || role === 'ADMIN') && (
+                                      {canEditScores && (
                                         <div className="flex items-center gap-1">
                                           <button
                                             onClick={() => {
-                                              const stId = selectedStudentForDetail.id;
-                                              const scType = sc.type;
-                                              setDetailStudentId(null);
-                                              handleOpenInputModal(stId, scType);
+                                              setDetailInputType(sc.type);
+                                              setDetailInputValue(String(sc.value));
+                                              setDetailInputNotes(sc.notes || '');
+                                              setDetailInputDate(sc.date || new Date().toISOString().split('T')[0]);
                                             }}
                                             className="text-slate-400 hover:text-indigo-600 transition p-1 cursor-pointer"
-                                            title="Ubah Nilai Ini"
+                                            title="Ubah Nilai Ini di Form"
                                           >
                                             <Edit2 className="w-3.5 h-3.5" />
                                           </button>

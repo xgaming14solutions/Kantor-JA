@@ -77,8 +77,9 @@ export interface Subject {
   id: string;
   code: string; // e.g., "MAT-VII", "BIN-VII"
   name: string; // e.g., "Matematika", "Bahasa Indonesia"
+  nameArab?: string; // Tulisan Arab (Unicode) yang dimasukkan manual oleh admin
   kkm: number; // Kriteria Ketuntasan Minimal, e.g., 75
-  category: 'Umum' | 'Peminatan' | 'Muatan Lokal';
+  category: 'Diniyah' | 'Umum' | 'Peminatan' | 'Muatan Lokal' | (string & {});
   isActive?: boolean;
   description?: string;
 }

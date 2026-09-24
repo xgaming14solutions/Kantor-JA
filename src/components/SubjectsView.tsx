@@ -33,14 +33,16 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ userRole }) => {
     id: string;
     code: string;
     name: string;
+    nameArab: string;
     kkm: number;
-    category: 'Umum' | 'Peminatan' | 'Muatan Lokal';
+    category: 'Diniyah' | 'Umum' | string;
     isActive: boolean;
     description: string;
   }>({
     id: '',
     code: '',
     name: '',
+    nameArab: '',
     kkm: 75,
     category: 'Umum',
     isActive: true,
@@ -52,10 +54,13 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ userRole }) => {
 
   // Filtering
   const filteredSubjects = subjects.filter((s) => {
+    const sCategory = s.category || 'Umum';
+    const sNameArab = s.nameArab || '';
     const matchesSearch =
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.code.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCat = selectedCategory === 'ALL' || s.category === selectedCategory;
+      s.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sNameArab.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCat = selectedCategory === 'ALL' || sCategory === selectedCategory;
     const matchesStatus =
       statusFilter === 'ALL' ||
       (statusFilter === 'ACTIVE' && s.isActive !== false) ||
@@ -70,8 +75,9 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ userRole }) => {
       id: `sub_${Date.now()}`,
       code: '',
       name: '',
+      nameArab: '',
       kkm: 75,
-      category: 'Umum',
+      category: 'Diniyah',
       isActive: true,
       description: '',
     });
@@ -85,8 +91,9 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ userRole }) => {
       id: sub.id,
       code: sub.code,
       name: sub.name,
+      nameArab: sub.nameArab || '',
       kkm: sub.kkm,
-      category: sub.category,
+      category: sub.category || 'Umum',
       isActive: sub.isActive !== false,
       description: sub.description || '',
     });
@@ -109,8 +116,9 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ userRole }) => {
       id: formData.id || `sub_${Date.now()}`,
       code: formData.code.trim().toUpperCase(),
       name: formData.name.trim(),
+      nameArab: formData.nameArab.trim(),
       kkm: Number(formData.kkm) || 75,
-      category: formData.category,
+      category: formData.category || 'Umum',
       isActive: formData.isActive,
       description: formData.description.trim(),
     };
@@ -195,9 +203,8 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ userRole }) => {
               className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-600"
             >
               <option value="ALL">Semua Kategori</option>
+              <option value="Diniyah">Diniyah</option>
               <option value="Umum">Umum</option>
-              <option value="Peminatan">Peminatan</option>
-              <option value="Muatan Lokal">Muatan Lokal</option>
             </select>
           </div>
 
@@ -234,21 +241,37 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ userRole }) => {
               {filteredSubjects.length > 0 ? (
                 filteredSubjects.map((s) => {
                   const isAct = s.isActive !== false;
+                  const categoryName = s.category || 'Umum';
                   return (
                     <tr key={s.id} className="hover:bg-slate-50/60 transition">
                       <td className="py-3 px-4 font-mono font-bold text-slate-900">{s.code}</td>
                       <td className="py-3 px-4">
                         <div className="font-semibold text-slate-900">{s.name}</div>
+                        {s.nameArab && (
+                          <div className="text-sm font-arabic font-bold text-slate-700 mt-0.5 tracking-wide" dir="rtl">
+                            {s.nameArab}
+                          </div>
+                        )}
                         {s.description && (
-                          <div className="text-[11px] text-slate-400 truncate max-w-sm">
+                          <div className="text-[11px] text-slate-400 truncate max-w-sm mt-0.5">
                             {s.description}
                           </div>
                         )}
                       </td>
                       <td className="py-3 px-4">
-                        <span className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                          {s.category}
-                        </span>
+                        {categoryName === 'Diniyah' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            DINIYAH
+                          </span>
+                        ) : categoryName === 'Umum' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                            UMUM
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase">
+                            {categoryName}
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-center">
                         <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
@@ -370,11 +393,11 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ userRole }) => {
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Nama Mata Pelajaran <span className="text-rose-500">*</span>
+                  Nama Mata Pelajaran (Indonesia) <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="Contoh: Ilmu Pengetahuan Alam"
+                  placeholder="Contoh: Aqidah atau Matematika"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600"
@@ -383,20 +406,39 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ userRole }) => {
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Kategori Kurikulum</label>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Nama Mata Pelajaran Arab <span className="text-slate-400 font-normal">(Tulisan Arab Manual)</span>
+                </label>
+                <input
+                  type="text"
+                  dir="rtl"
+                  placeholder="Contoh: العقيدة atau الرياضيات"
+                  value={formData.nameArab}
+                  onChange={(e) => setFormData({ ...formData, nameArab: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 font-arabic text-sm text-right focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Ketik teks tulisan Arab menggunakan karakter Unicode Arab standar.
+                </span>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Kategori Mata Pelajaran <span className="text-rose-500">*</span>
+                </label>
                 <select
                   value={formData.category}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      category: e.target.value as 'Umum' | 'Peminatan' | 'Muatan Lokal',
+                      category: e.target.value,
                     })
                   }
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                  required
                 >
-                  <option value="Umum">Umum (Wajib)</option>
-                  <option value="Peminatan">Peminatan</option>
-                  <option value="Muatan Lokal">Muatan Lokal</option>
+                  <option value="Diniyah">Diniyah</option>
+                  <option value="Umum">Umum</option>
                 </select>
               </div>
 
@@ -468,8 +510,34 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ userRole }) => {
                 <span className="font-mono text-slate-800">{detailSubject.id}</span>
               </div>
               <div className="flex justify-between py-2 border-b border-slate-100">
+                <span className="text-slate-500">Nama (Indonesia)</span>
+                <span className="font-semibold text-slate-900">{detailSubject.name}</span>
+              </div>
+              {detailSubject.nameArab && (
+                <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                  <span className="text-slate-500">Nama (Arab)</span>
+                  <span className="font-arabic font-bold text-slate-900 text-sm" dir="rtl">
+                    {detailSubject.nameArab}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center py-2 border-b border-slate-100">
                 <span className="text-slate-500">Kategori</span>
-                <span className="font-semibold text-slate-800">{detailSubject.category}</span>
+                <span>
+                  {(detailSubject.category || 'Umum') === 'Diniyah' ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      DINIYAH
+                    </span>
+                  ) : (detailSubject.category || 'Umum') === 'Umum' ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                      UMUM
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase">
+                      {detailSubject.category || 'UMUM'}
+                    </span>
+                  )}
+                </span>
               </div>
               <div className="flex justify-between py-2 border-b border-slate-100">
                 <span className="text-slate-500">Kriteria Ketuntasan Minimal (KKM)</span>

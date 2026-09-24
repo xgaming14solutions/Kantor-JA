@@ -109,7 +109,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         tList,
         rawCList,
         rawStList,
-        subList,
+        rawSubList,
         rawAsgList,
         rawUsers,
         scList,
@@ -170,6 +170,13 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const userList = rawUsers.map(u => ({
         ...u,
         isActive: u.isActive !== false,
+      }));
+
+      // Ensure subjects have safe fallback for category and nameArab
+      const subList = rawSubList.map(s => ({
+        ...s,
+        category: s.category || 'Umum',
+        nameArab: s.nameArab || '',
       }));
 
       // Ensure default setting for active year exists
@@ -377,13 +384,14 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // 8. Score actions - Strictly isolated from academic setting configurations
   // SECURITY GUARD: Assert teacher assignment authorization at data-layer
   const saveScore = async (data: Score) => {
-    if (role === 'GURU_MAPEL') {
+    if (role === 'GURU_MAPEL' || role === 'WALI_KELAS') {
       const effectiveTeacherId =
         currentUser?.teacherId ||
         teachers.find(
           (t) =>
-            t.email?.toLowerCase() === currentUser?.email?.toLowerCase() ||
-            (currentUser?.nip && t.nip === currentUser?.nip)
+            (currentUser?.email && t.email?.toLowerCase() === currentUser.email.toLowerCase()) ||
+            (currentUser?.nip && t.nip === currentUser.nip) ||
+            (currentUser?.name && t.name?.toLowerCase().trim() === currentUser.name.toLowerCase().trim())
         )?.id;
 
       const authCheck = assertTeacherScoreAccess(
@@ -415,13 +423,14 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const deleteScore = async (id: string) => {
     const existing = scores.find(s => s.id === id);
-    if (existing && role === 'GURU_MAPEL') {
+    if (existing && (role === 'GURU_MAPEL' || role === 'WALI_KELAS')) {
       const effectiveTeacherId =
         currentUser?.teacherId ||
         teachers.find(
           (t) =>
-            t.email?.toLowerCase() === currentUser?.email?.toLowerCase() ||
-            (currentUser?.nip && t.nip === currentUser?.nip)
+            (currentUser?.email && t.email?.toLowerCase() === currentUser.email.toLowerCase()) ||
+            (currentUser?.nip && t.nip === currentUser.nip) ||
+            (currentUser?.name && t.name?.toLowerCase().trim() === currentUser.name.toLowerCase().trim())
         )?.id;
 
       const authCheck = assertTeacherScoreAccess(

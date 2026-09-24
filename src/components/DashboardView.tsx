@@ -87,7 +87,7 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">
-                KantoJA Dashboard
+                AKSARA Dashboard
               </span>
               <span className="text-xs text-slate-400 font-medium">
                 Tahun Ajaran Aktif:{' '}
@@ -245,7 +245,7 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
                   </div>
                   <div className="flex justify-between py-2">
                     <span className="text-slate-500">Versi Aplikasi</span>
-                    <span className="font-medium text-slate-800">KantoJA v1.0.0</span>
+                    <span className="font-medium text-slate-800">AKSARA v1.0.0</span>
                   </div>
                 </div>
               </div>

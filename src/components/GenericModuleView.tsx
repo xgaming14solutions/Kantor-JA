@@ -241,7 +241,7 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight">Manajemen Pengguna (RBAC)</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Daftar akun dan hak akses pengguna KantoJA pada Firestore collection <code>users</code>
+            Daftar akun dan hak akses pengguna AKSARA pada Firestore collection <code>users</code>
           </p>
         </div>
 
@@ -295,7 +295,7 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
           <input
             type="text"
             readOnly
-            value="SMP / MTs Unggulan KantoJA"
+            value="SMP / MTs Unggulan AKSARA"
             className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-800"
           />
         </div>
