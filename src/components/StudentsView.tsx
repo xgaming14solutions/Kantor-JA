@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Student } from '../types';
 import { useMasterData } from '../context/MasterDataContext';
 import { useAuth } from '../context/AuthContext';
@@ -25,13 +25,17 @@ interface StudentsViewProps {
 }
 
 export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, role: authRole, loading: authLoading } = useAuth();
+  const currentRole = userRole || authRole || currentUser?.role || 'ADMIN';
+
   const {
-    students,
-    classes,
-    academicYears,
+    students = [],
+    classes = [],
+    academicYears = [],
     activeAcademicYear,
-    teacherAssignments,
+    teacherAssignments = [],
+    teachers = [],
+    loading,
     saveStudent,
     updateStudentStatus,
   } = useMasterData();
@@ -41,42 +45,63 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [detailStudent, setDetailStudent] = useState<Student | null>(null);
 
   // Role-based data access restriction (ID-based)
-  const effectiveTeacherId = getEffectiveTeacherId(currentUser, userRole, teachers);
+  const effectiveTeacherId = useMemo(() => {
+    return getEffectiveTeacherId(currentUser, currentRole, teachers);
+  }, [currentUser, currentRole, teachers]);
 
   // 1. Wali Kelas: strictly filter by currentUser.teacherId -> class.teacherId / homeroomTeacherId
-  const homeroomClass = userRole === 'WALI_KELAS' ? (classes.find(
-    (c) =>
-      (c.teacherId === effectiveTeacherId || c.homeroomTeacherId === effectiveTeacherId) &&
-      (activeAcademicYear ? c.academicYearId === activeAcademicYear.id : true)
-  ) || classes.find(
-    (c) => c.teacherId === effectiveTeacherId || c.homeroomTeacherId === effectiveTeacherId
-  )) : null;
+  const homeroomClass = useMemo(() => {
+    if (currentRole !== 'WALI_KELAS') return null;
+    return (
+      (classes || []).find(
+        (c) =>
+          c &&
+          (c.teacherId === effectiveTeacherId || c.homeroomTeacherId === effectiveTeacherId) &&
+          (activeAcademicYear ? c.academicYearId === activeAcademicYear.id : true)
+      ) ||
+      (classes || []).find(
+        (c) => c && (c.teacherId === effectiveTeacherId || c.homeroomTeacherId === effectiveTeacherId)
+      ) ||
+      null
+    );
+  }, [currentRole, classes, effectiveTeacherId, activeAcademicYear]);
 
   // 2. Guru Mapel: strictly filter by currentUser.teacherId -> teacherAssignments.teacherId -> active academicYearId & semester
-  const myAssignments = getActiveTeacherAssignments(teacherAssignments, effectiveTeacherId, activeAcademicYear);
-  const taughtClassIds = Array.from(new Set(myAssignments.map((a) => a.classId)));
+  const myAssignments = useMemo(() => {
+    if (currentRole !== 'GURU_MAPEL') return [];
+    return getActiveTeacherAssignments(teacherAssignments, effectiveTeacherId, activeAcademicYear);
+  }, [currentRole, teacherAssignments, effectiveTeacherId, activeAcademicYear]);
+
+  const taughtClassIds = useMemo(() => {
+    return Array.from(new Set(myAssignments.map((a) => a.classId)));
+  }, [myAssignments]);
 
   // Determine permitted students and available class dropdown options
-  let accessibleStudents: Student[] = [];
-  let selectableClasses = classes;
+  const { accessibleStudents, selectableClasses } = useMemo(() => {
+    let accStudents: Student[] = [];
+    let selClasses = classes || [];
 
-  if (userRole === 'WALI_KELAS') {
-    accessibleStudents = homeroomClass
-      ? students.filter((s) => s.classId === homeroomClass.id)
-      : [];
-    selectableClasses = homeroomClass ? [homeroomClass] : [];
-  } else if (userRole === 'GURU_MAPEL') {
-    accessibleStudents = students.filter((s) => taughtClassIds.includes(s.classId));
-    selectableClasses = classes.filter((c) => taughtClassIds.includes(c.id));
-  } else {
-    // ADMIN and KEPALA_SEKOLAH have access to all students
-    accessibleStudents = students;
-    selectableClasses = classes;
-  }
+    if (currentRole === 'WALI_KELAS') {
+      accStudents = homeroomClass
+        ? (students || []).filter((s) => s && s.classId === homeroomClass.id)
+        : [];
+      selClasses = homeroomClass ? [homeroomClass] : [];
+    } else if (currentRole === 'GURU_MAPEL') {
+      accStudents = (students || []).filter((s) => s && taughtClassIds.includes(s.classId));
+      selClasses = (classes || []).filter((c) => c && taughtClassIds.includes(c.id));
+    } else {
+      // ADMIN and KEPALA_SEKOLAH have access to all students
+      accStudents = students || [];
+      selClasses = classes || [];
+    }
+
+    return { accessibleStudents: accStudents, selectableClasses: selClasses };
+  }, [currentRole, homeroomClass, students, classes, taughtClassIds]);
 
   const [formData, setFormData] = useState<{
     id: string;
@@ -110,23 +135,34 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
 
   const [formError, setFormError] = useState('');
   const [notice, setNotice] = useState('');
+  const [generalError, setGeneralError] = useState<string | null>(null);
 
   // Filter accessible students based on search, class, and status
-  const filteredStudents = accessibleStudents.filter((s) => {
-    const matchesSearch =
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.nis.includes(searchQuery) ||
-      (s.nisn && s.nisn.includes(searchQuery));
+  const filteredStudents = useMemo(() => {
+    return (accessibleStudents || []).filter((s) => {
+      if (!s) return false;
+      const nameStr = (s.name || '').toLowerCase();
+      const nisStr = s.nis || '';
+      const nisnStr = s.nisn || '';
+      const q = (searchQuery || '').trim().toLowerCase();
 
-    const matchesClass = selectedClass === 'ALL' || s.classId === selectedClass;
-    const matchesStatus = selectedStatus === 'ALL' || s.status === selectedStatus;
+      const matchesSearch =
+        !q ||
+        nameStr.includes(q) ||
+        nisStr.includes(q) ||
+        nisnStr.includes(q);
 
-    return matchesSearch && matchesClass && matchesStatus;
-  });
+      const matchesClass = selectedClass === 'ALL' || s.classId === selectedClass;
+      const matchesStatus = selectedStatus === 'ALL' || s.status === selectedStatus;
 
-  const getClassName = (classId: string) => {
-    const found = classes.find((c) => c.id === classId);
-    return found ? found.name : classId || '-';
+      return matchesSearch && matchesClass && matchesStatus;
+    });
+  }, [accessibleStudents, searchQuery, selectedClass, selectedStatus]);
+
+  const getClassName = (classId?: string) => {
+    if (!classId) return '-';
+    const found = (classes || []).find((c) => c && c.id === classId);
+    return found ? found.name : classId;
   };
 
   const openAddModal = () => {
@@ -142,7 +178,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
       address: '',
       parentName: '',
       parentPhone: '',
-      classId: selectableClasses[0]?.id || '',
+      classId: selectableClasses[0]?.id || (classes[0]?.id || ''),
       academicYearId: activeAcademicYear?.id || 'ay_2026_2027_1',
       status: 'Aktif',
     });
@@ -154,18 +190,18 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
     setEditingStudent(st);
     setFormData({
       id: st.id,
-      nis: st.nis,
+      nis: st.nis || '',
       nisn: st.nisn || '',
-      name: st.name,
-      gender: st.gender,
+      name: st.name || '',
+      gender: st.gender || 'L',
       birthPlace: st.birthPlace || '',
       birthDate: st.birthDate || '',
       address: st.address || '',
       parentName: st.parentName || '',
       parentPhone: st.parentPhone || '',
-      classId: st.classId,
+      classId: st.classId || '',
       academicYearId: st.academicYearId || activeAcademicYear?.id || 'ay_2026_2027_1',
-      status: st.status,
+      status: st.status || 'Aktif',
     });
     setFormError('');
     setIsModalOpen(true);
@@ -204,21 +240,56 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
       status: formData.status,
     };
 
-    await saveStudent(payload);
-    setIsModalOpen(false);
-    setNotice(
-      editingStudent
-        ? `Data siswa ${payload.name} berhasil diperbarui.`
-        : `Siswa baru ${payload.name} berhasil ditambahkan ke kelas ${getClassName(payload.classId)}.`
-    );
-    setTimeout(() => setNotice(''), 4000);
+    try {
+      setIsSubmitting(true);
+      await saveStudent(payload);
+      setIsModalOpen(false);
+      setNotice(
+        editingStudent
+          ? `Data siswa ${payload.name} berhasil diperbarui.`
+          : `Siswa baru ${payload.name} berhasil ditambahkan ke kelas ${getClassName(payload.classId)}.`
+      );
+      setTimeout(() => setNotice(''), 4000);
+    } catch (err: any) {
+      setFormError(err?.message || 'Gagal menyimpan data siswa ke database.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleStatusChange = async (st: Student, newStatus: Student['status']) => {
-    await updateStudentStatus(st.id, newStatus);
-    setNotice(`Status siswa ${st.name} diubah menjadi ${newStatus}.`);
-    setTimeout(() => setNotice(''), 4000);
+    try {
+      await updateStudentStatus(st.id, newStatus);
+      setNotice(`Status siswa ${st.name || st.id} diubah menjadi ${newStatus}.`);
+      setTimeout(() => setNotice(''), 4000);
+    } catch (err: any) {
+      setGeneralError(`Gagal memperbarui status siswa: ${err?.message || 'Terjadi kesalahan sistem'}`);
+      setTimeout(() => setGeneralError(null), 5000);
+    }
   };
+
+  // Loading state
+  if (loading || authLoading) {
+    return (
+      <div className="space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <GraduationCap className="w-6 h-6 text-indigo-600" />
+              Data Siswa
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">Memuat data kesiswaan dari sistem...</p>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-xs">
+          <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-xs font-semibold text-slate-700">Sedang memuat data kesiswaan...</p>
+          <p className="text-[11px] text-slate-400 mt-1">Menyiapkan daftar siswa dan pembagian rombongan belajar</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -230,20 +301,20 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
             Data Siswa
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            {userRole === 'WALI_KELAS'
+            {currentRole === 'WALI_KELAS'
               ? `Mode Wali Kelas: Menampilkan daftar siswa pada kelas binaan Anda (Kelas ${homeroomClass?.name || 'Binaan'}).`
-              : userRole === 'GURU_MAPEL'
+              : currentRole === 'GURU_MAPEL'
               ? `Mode Guru Mapel: Menampilkan daftar siswa pada rombel yang Anda ajar (${taughtClassIds.length} rombel).`
-              : userRole === 'KEPALA_SEKOLAH'
+              : currentRole === 'KEPALA_SEKOLAH'
               ? 'Mode Kepala Sekolah: Akses pantauan data siswa seluruh rombongan belajar.'
               : 'Daftar seluruh siswa terdaftar dan relasi penempatan rombongan belajar (classId)'}
           </p>
         </div>
 
-        {userRole === 'ADMIN' && (
+        {currentRole === 'ADMIN' && (
           <button
             onClick={openAddModal}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-xs self-start sm:self-auto"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-xs self-start sm:self-auto cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Tambah Siswa
@@ -252,7 +323,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
       </div>
 
       {/* Role Notice / Access Boundary Banner */}
-      {userRole === 'WALI_KELAS' && (
+      {currentRole === 'WALI_KELAS' && (
         <div className="p-4 bg-indigo-50/70 border border-indigo-200 rounded-2xl flex items-start gap-3">
           <DoorOpen className="w-5 h-5 text-indigo-600 mt-0.5 shrink-0" />
           <div className="text-xs">
@@ -266,7 +337,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
         </div>
       )}
 
-      {userRole === 'GURU_MAPEL' && (
+      {currentRole === 'GURU_MAPEL' && (
         <div className="p-4 bg-violet-50/70 border border-violet-200 rounded-2xl flex items-start gap-3">
           <DoorOpen className="w-5 h-5 text-violet-600 mt-0.5 shrink-0" />
           <div className="text-xs">
@@ -274,9 +345,22 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
               Hak Akses Guru Mata Pelajaran
             </div>
             <div className="text-violet-700 mt-0.5 leading-relaxed">
-              Anda hanya dapat melihat daftar siswa pada rombongan belajar yang Anda ampu berdasarkan penugasan mengajar aktif ({selectableClasses.map((c) => c.name).join(', ') || 'Belum ada kelas yang diampu'}).
+              Anda hanya dapat melihat daftar siswa pada rombongan belajar yang Anda ampu berdasarkan penugasan mengajar aktif ({selectableClasses.map((c) => c?.name).filter(Boolean).join(', ') || 'Belum ada kelas yang diampu'}).
             </div>
           </div>
+        </div>
+      )}
+
+      {/* General Error Banner */}
+      {generalError && (
+        <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            <span>{generalError}</span>
+          </div>
+          <button onClick={() => setGeneralError(null)} className="text-rose-500 hover:text-rose-700 cursor-pointer">
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
@@ -287,7 +371,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
             <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
             <span>{notice}</span>
           </div>
-          <button onClick={() => setNotice('')} className="text-emerald-500 hover:text-emerald-700">
+          <button onClick={() => setNotice('')} className="text-emerald-500 hover:text-emerald-700 cursor-pointer">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -314,8 +398,8 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
               onChange={(e) => setSelectedClass(e.target.value)}
               className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-600"
             >
-              {userRole !== 'WALI_KELAS' && <option value="ALL">Semua Kelas</option>}
-              {selectableClasses.map((c) => (
+              {currentRole !== 'WALI_KELAS' && <option value="ALL">Semua Kelas</option>}
+              {(selectableClasses || []).map((c) => (
                 <option key={c.id} value={c.id}>
                   Kelas {c.name}
                 </option>
@@ -366,21 +450,21 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
                       Lulus: 'bg-blue-50 text-blue-700 border-blue-200',
                       Pindah: 'bg-amber-50 text-amber-700 border-amber-200',
                       Keluar: 'bg-rose-50 text-rose-700 border-rose-200',
-                    }[s.status] || 'bg-slate-100 text-slate-600 border-slate-200';
+                    }[s.status || 'Aktif'] || 'bg-slate-100 text-slate-600 border-slate-200';
 
                   return (
                     <tr key={s.id} className="hover:bg-slate-50/60 transition">
                       <td className="py-3 px-4">
-                        <div className="font-mono font-medium text-slate-900">{s.nis}</div>
-                        <div className="font-mono text-[10px] text-slate-400">{s.nisn}</div>
+                        <div className="font-mono font-medium text-slate-900">{s.nis || '-'}</div>
+                        <div className="font-mono text-[10px] text-slate-400">{s.nisn || '-'}</div>
                       </td>
                       <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-900">{s.name}</div>
+                        <div className="font-semibold text-slate-900">{s.name || 'Tanpa Nama'}</div>
                         <div className="text-[11px] text-slate-400 truncate max-w-xs">
-                          {s.address}
+                          {s.address || '-'}
                         </div>
                       </td>
-                      <td className="py-3 px-4 font-medium">{s.gender}</td>
+                      <td className="py-3 px-4 font-medium">{s.gender || 'L'}</td>
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
                           {getClassName(s.classId)}
@@ -394,22 +478,22 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
                         <span
                           className={`inline-flex px-2 py-0.5 rounded-md text-[11px] font-medium border ${statusColor}`}
                         >
-                          {s.status}
+                          {s.status || 'Aktif'}
                         </span>
                       </td>
                       <td className="py-3 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             onClick={() => setDetailStudent(s)}
-                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
                             title="Detail Siswa"
                           >
                             <Info className="w-3.5 h-3.5" />
                           </button>
-                          {userRole === 'ADMIN' && (
+                          {currentRole === 'ADMIN' && (
                             <button
                               onClick={() => openEditModal(s)}
-                              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
                               title="Edit Siswa"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
@@ -422,8 +506,12 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
                 })
               ) : (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400">
-                    Tidak ada siswa yang sesuai kriteria atau penugasan Anda.
+                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <GraduationCap className="w-8 h-8 text-slate-300" />
+                      <p className="font-medium text-slate-500">Tidak ada siswa yang sesuai kriteria atau penugasan Anda.</p>
+                      <p className="text-[11px] text-slate-400">Coba ubah kata kunci pencarian atau sesuaikan filter kelas/status.</p>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -440,7 +528,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
       </div>
 
       {/* Modal Add/Edit (Admin only) */}
-      {isModalOpen && userRole === 'ADMIN' && (
+      {isModalOpen && currentRole === 'ADMIN' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 my-8 animate-scale-in">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -449,7 +537,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -528,7 +616,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
                     required
                   >
                     <option value="">-- Pilih Kelas --</option>
-                    {classes.map((c) => (
+                    {(classes || []).map((c) => (
                       <option key={c.id} value={c.id}>
                         Kelas {c.name} (Tingkat {c.gradeLevel})
                       </option>
@@ -620,7 +708,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
                     onChange={(e) => setFormData({ ...formData, academicYearId: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600"
                   >
-                    {academicYears.map((ay) => (
+                    {(academicYears || []).map((ay) => (
                       <option key={ay.id} value={ay.id}>
                         {ay.name} ({ay.semester}) {ay.isActive ? '(Aktif)' : ''}
                       </option>
@@ -633,15 +721,17 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 transition"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 transition cursor-pointer disabled:opacity-50"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition cursor-pointer disabled:opacity-50"
                 >
-                  {editingStudent ? 'Simpan Perubahan' : 'Simpan Siswa'}
+                  {isSubmitting ? 'Menyimpan...' : editingStudent ? 'Simpan Perubahan' : 'Simpan Siswa'}
                 </button>
               </div>
             </form>
@@ -656,18 +746,18 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-base">
-                  {detailStudent.name.charAt(0)}
+                  {(detailStudent.name || 'S').charAt(0)}
                 </div>
                 <div>
                   <h3 className="font-bold text-sm text-slate-900">{detailStudent.name}</h3>
                   <span className="text-[11px] text-slate-400 font-mono">
-                    NIS: {detailStudent.nis} / NISN: {detailStudent.nisn}
+                    NIS: {detailStudent.nis || '-'} / NISN: {detailStudent.nisn || '-'}
                   </span>
                 </div>
               </div>
               <button
                 onClick={() => setDetailStudent(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -689,7 +779,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
               <div className="flex justify-between py-1.5 border-b border-slate-100">
                 <span className="text-slate-500">Tempat, Tanggal Lahir</span>
                 <span className="text-slate-800">
-                  {detailStudent.birthPlace}, {detailStudent.birthDate}
+                  {detailStudent.birthPlace ? `${detailStudent.birthPlace}, ` : ''}{detailStudent.birthDate || '-'}
                 </span>
               </div>
               <div className="flex justify-between py-1.5 border-b border-slate-100">
@@ -706,7 +796,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
               </div>
               <div className="flex justify-between py-1.5 border-b border-slate-100">
                 <span className="text-slate-500">Status Kesiswaan</span>
-                <span className="font-bold text-emerald-600">{detailStudent.status}</span>
+                <span className="font-bold text-emerald-600">{detailStudent.status || 'Aktif'}</span>
               </div>
               {detailStudent.address && (
                 <div className="pt-2">
@@ -718,7 +808,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
               )}
 
               {/* Status Action Switcher (Admin only) */}
-              {userRole === 'ADMIN' && (
+              {currentRole === 'ADMIN' && (
                 <div className="pt-3 border-t border-slate-100">
                   <span className="text-[11px] font-semibold text-slate-500 block mb-1.5">
                     Ubah Cepat Status Kesiswaan:
@@ -732,7 +822,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
                             handleStatusChange(detailStudent, st);
                             setDetailStudent({ ...detailStudent, status: st });
                           }}
-                          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition ${
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
                             detailStudent.status === st
                               ? 'bg-indigo-600 text-white shadow-xs'
                               : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -750,7 +840,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
             <div className="mt-5 pt-3 border-t border-slate-100 flex justify-end">
               <button
                 onClick={() => setDetailStudent(null)}
-                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 transition text-xs"
+                className="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 transition text-xs cursor-pointer"
               >
                 Tutup
               </button>
