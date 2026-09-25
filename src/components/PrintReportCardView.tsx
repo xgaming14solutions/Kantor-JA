@@ -268,8 +268,9 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
   // Calculate subject scores for all students in class to compute Class Average per Subject
   const classSubjectAverages = useMemo(() => {
     const map: Record<string, { total: number; count: number; averageFormatted: string }> = {};
+    const academicSubjects = subjects.filter((s) => (s.type || 'subject') === 'subject');
 
-    subjects.forEach((sub) => {
+    academicSubjects.forEach((sub) => {
       let sum = 0;
       let count = 0;
 
@@ -315,8 +316,9 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
   // Calculate detailed subject scores for the active selected student
   const studentSubjectScores = useMemo(() => {
     if (!activeStudent) return [];
+    const academicSubjects = subjects.filter((s) => (s.type || 'subject') === 'subject');
 
-    return subjects.map((sub) => {
+    return academicSubjects.map((sub) => {
       const subScores = scores.filter(
         (sc) =>
           sc.studentId === activeStudent.id &&

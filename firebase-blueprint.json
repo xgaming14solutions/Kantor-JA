@@ -75,16 +75,22 @@
     },
     "Subject": {
       "title": "Subject",
-      "description": "Mata pelajaran kurikulum sekolah",
+      "description": "Mata pelajaran kurikulum sekolah atau kegiatan ekstrakurikuler",
       "type": "object",
       "properties": {
         "id": { "type": "string" },
         "code": { "type": "string" },
         "name": { "type": "string" },
+        "nameArab": { "type": "string" },
         "kkm": { "type": "number" },
-        "category": { "type": "string" }
+        "category": { "type": "string" },
+        "type": { "type": "string" },
+        "description": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
       },
-      "required": ["id", "code", "name", "kkm", "category"]
+      "required": ["id", "code", "name"]
     },
     "TeacherAssignment": {
       "title": "TeacherAssignment",
@@ -97,7 +103,10 @@
         "subjectId": { "type": "string" },
         "academicYearId": { "type": "string" },
         "semester": { "type": "string" },
-        "totalHoursPerWeek": { "type": "number" }
+        "status": { "type": "string" },
+        "totalHoursPerWeek": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
       },
       "required": ["id", "teacherId", "classId", "subjectId", "academicYearId", "semester"]
     },
@@ -163,6 +172,23 @@
         "date": { "type": "string" }
       },
       "required": ["id", "studentId", "teacherId", "classId", "subjectId", "academicYearId", "semester", "type", "value", "date"]
+    },
+    "ExtracurricularParticipant": {
+      "title": "ExtracurricularParticipant",
+      "description": "Relasi siswa peserta kegiatan ekstrakurikuler per rombel kelas dan semester",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "extracurricularId": { "type": "string" },
+        "classId": { "type": "string" },
+        "academicYearId": { "type": "string" },
+        "semester": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "studentId", "extracurricularId", "classId", "academicYearId", "semester"]
     }
   },
   "firestore": {
@@ -205,6 +231,10 @@
     "/academicSettingLogs/{logId}": {
       "schema": "AcademicSettingLog",
       "description": "Log riwayat perubahan pengaturan akademik"
+    },
+    "/extracurricularParticipants/{participantId}": {
+      "schema": "ExtracurricularParticipant",
+      "description": "Data siswa peserta ekstrakurikuler"
     }
   }
 }

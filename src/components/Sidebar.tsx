@@ -70,14 +70,14 @@ export const NAVIGATION_ITEMS: MenuItem[] = [
     id: 'assignments',
     label: 'Penugasan Guru',
     icon: ClipboardList,
-    allowedRoles: ['ADMIN'],
+    allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH', 'GURU_MAPEL', 'WALI_KELAS'],
   },
-  // Kelas & Mapel Saya (Khusus Guru Mapel)
+  // Kelas & Mapel Saya
   {
     id: 'my-classes',
     label: 'Kelas & Mapel Saya',
     icon: BookOpen,
-    allowedRoles: ['GURU_MAPEL'],
+    allowedRoles: ['GURU_MAPEL', 'WALI_KELAS'],
   },
   // Nilai Siswa
   {

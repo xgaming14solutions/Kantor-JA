@@ -149,6 +149,12 @@ service cloud.firestore {
       allow write: if isSignedIn() && (isAdmin() || isKepalaSekolah());
     }
 
+    // Extracurricular Participants
+    match /extracurricularParticipants/{participantId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
     // Catch-all: Deny all unmatched paths
     match /{document=**} {
       allow read, write: if false;

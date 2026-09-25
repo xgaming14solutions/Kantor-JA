@@ -11,7 +11,8 @@ import {
   AcademicSetting,
   AcademicSettingLog,
   ReportCard,
-  Attendance
+  Attendance,
+  ExtracurricularParticipant
 } from '../types';
 import {
   fetchCollection,
@@ -52,6 +53,7 @@ interface MasterDataContextType {
   academicSettingLogs: AcademicSettingLog[];
   reportCards: ReportCard[];
   attendance: Attendance[];
+  extracurricularParticipants: ExtracurricularParticipant[];
   loading: boolean;
   saveAcademicYear: (data: AcademicYear) => Promise<void>;
   setActiveAcademicYear: (id: string) => Promise<void>;
@@ -63,7 +65,9 @@ interface MasterDataContextType {
   toggleActiveClass: (id: string) => Promise<void>;
   saveSubject: (data: Subject) => Promise<void>;
   toggleSubjectStatus: (id: string) => Promise<void>;
+  deleteSubject: (id: string) => Promise<void>;
   saveTeacherAssignment: (data: TeacherAssignment) => Promise<void>;
+  deleteTeacherAssignment: (id: string) => Promise<void>;
   saveUser: (data: UserProfile) => Promise<void>;
   toggleUserStatus: (id: string) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
@@ -71,6 +75,13 @@ interface MasterDataContextType {
   deleteScore: (id: string) => Promise<void>;
   saveReportCard: (data: ReportCard) => Promise<void>;
   saveAttendance: (data: Attendance) => Promise<void>;
+  saveExtracurricularParticipants: (
+    extracurricularId: string,
+    classId: string,
+    academicYearId: string,
+    semester: string,
+    selectedStudentIds: string[]
+  ) => Promise<void>;
   getAcademicSetting: (academicYearId: string, semester: 'Ganjil' | 'Genap') => AcademicSetting;
   saveAcademicSetting: (
     data: AcademicSetting,
@@ -96,6 +107,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [academicSettingLogs, setAcademicSettingLogs] = useState<AcademicSettingLog[]>([]);
   const [reportCards, setReportCards] = useState<ReportCard[]>(INITIAL_REPORT_CARDS);
   const [attendance, setAttendance] = useState<Attendance[]>(INITIAL_ATTENDANCE);
+  const [extracurricularParticipants, setExtracurricularParticipants] = useState<ExtracurricularParticipant[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Load all master data collections
@@ -116,7 +128,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         rawSettings,
         rawLogs,
         rawRepList,
-        rawAttList
+        rawAttList,
+        rawEksPartList
       ] = await Promise.all([
         fetchCollection<AcademicYear>('academicYears', INITIAL_ACADEMIC_YEARS),
         fetchCollection<Teacher>('teachers', INITIAL_TEACHERS),
@@ -129,7 +142,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         fetchCollection<AcademicSetting>('academicSettings', []),
         fetchCollection<AcademicSettingLog>('academicSettingLogs', []),
         fetchCollection<ReportCard>('reportCards', INITIAL_REPORT_CARDS),
-        fetchCollection<Attendance>('attendance', INITIAL_ATTENDANCE)
+        fetchCollection<Attendance>('attendance', INITIAL_ATTENDANCE),
+        fetchCollection<ExtracurricularParticipant>('extracurricularParticipants', [])
       ]);
 
       // Normalize all academic years to guarantee valid structure
@@ -154,10 +168,12 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         teacherId: c.teacherId || c.homeroomTeacherId,
       }));
 
-      // Ensure assignments have teacherId & subjectId & academicYearId
+      // Ensure assignments have teacherId & subjectId & academicYearId & status & semester
       const asgList = rawAsgList.map(a => ({
         ...a,
         academicYearId: a.academicYearId || (activeYear ? activeYear.id : 'ay_2026_2027_1'),
+        semester: (a.semester || (activeYear ? activeYear.semester : 'Ganjil')) as 'Ganjil' | 'Genap',
+        status: a.status || 'Aktif',
       }));
 
       // Ensure students have classId and academicYearId
@@ -172,11 +188,13 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         isActive: u.isActive !== false,
       }));
 
-      // Ensure subjects have safe fallback for category and nameArab
+      // Ensure subjects have safe fallback for category, nameArab, and type
       const subList = rawSubList.map(s => ({
         ...s,
-        category: s.category || 'Umum',
+        type: s.type || 'subject',
+        category: s.category || (s.type === 'extracurricular' ? '' : 'Umum'),
         nameArab: s.nameArab || '',
+        kkm: typeof s.kkm === 'number' ? s.kkm : 75,
       }));
 
       // Ensure default setting for active year exists
@@ -208,6 +226,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       );
       setReportCards(rawRepList);
       setAttendance(rawAttList);
+      setExtracurricularParticipants(rawEksPartList || []);
     } catch (e) {
       console.warn('Error loading master data:', e);
     } finally {
@@ -322,37 +341,69 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // 5. Subject actions
   const saveSubject = async (data: Subject) => {
+    const timestamp = new Date().toISOString();
+    const cleanData: Subject = {
+      ...data,
+      type: data.type || 'subject',
+      category: data.type === 'extracurricular' ? '' : (data.category || 'Umum'),
+      nameArab: data.type === 'extracurricular' ? '' : (data.nameArab || ''),
+      kkm: typeof data.kkm === 'number' ? data.kkm : 75,
+      isActive: data.isActive !== false,
+      createdAt: data.createdAt || timestamp,
+      updatedAt: timestamp,
+    };
     setSubjects(prev => {
-      const idx = prev.findIndex(s => s.id === data.id);
+      const idx = prev.findIndex(s => s.id === cleanData.id);
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = data;
+        next[idx] = cleanData;
         return next;
       }
-      return [data, ...prev];
+      return [cleanData, ...prev];
     });
-    await saveDocument('subjects', data);
+    await saveDocument('subjects', cleanData);
   };
 
   const toggleSubjectStatus = async (id: string) => {
     const found = subjects.find(s => s.id === id);
     if (!found) return;
-    const updated: Subject = { ...found, isActive: found.isActive === false ? true : false };
+    const updated: Subject = {
+      ...found,
+      isActive: found.isActive === false ? true : false,
+      updatedAt: new Date().toISOString()
+    };
     await saveSubject(updated);
+  };
+
+  const deleteSubject = async (id: string) => {
+    setSubjects(prev => prev.filter(s => s.id !== id));
+    await deleteDocument('subjects', id);
   };
 
   // 6. Teacher Assignment actions (uses activeAcademicYear by default)
   const saveTeacherAssignment = async (data: TeacherAssignment) => {
+    const timestamp = new Date().toISOString();
+    const cleanData: TeacherAssignment = {
+      ...data,
+      status: data.status || 'Aktif',
+      createdAt: data.createdAt || timestamp,
+      updatedAt: timestamp,
+    };
     setTeacherAssignments(prev => {
-      const idx = prev.findIndex(a => a.id === data.id);
+      const idx = prev.findIndex(a => a.id === cleanData.id);
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = data;
+        next[idx] = cleanData;
         return next;
       }
-      return [data, ...prev];
+      return [cleanData, ...prev];
     });
-    await saveDocument('teacherAssignments', data);
+    await saveDocument('teacherAssignments', cleanData);
+  };
+
+  const deleteTeacherAssignment = async (id: string) => {
+    setTeacherAssignments(prev => prev.filter(a => a.id !== id));
+    await deleteDocument('teacherAssignments', id);
   };
 
   // 7. User Account actions (Admin user management)
@@ -552,6 +603,74 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     await saveDocument('attendance', data);
   };
 
+  // 11. Extracurricular Participants Actions
+  const saveExtracurricularParticipants = async (
+    extracurricularId: string,
+    classId: string,
+    academicYearId: string,
+    semester: string,
+    selectedStudentIds: string[]
+  ) => {
+    const timestamp = new Date().toISOString();
+    const selectedSet = new Set(selectedStudentIds);
+
+    // 1. Determine existing participants for this specific scope
+    const existingInScope = extracurricularParticipants.filter(
+      (p) =>
+        p.extracurricularId === extracurricularId &&
+        p.classId === classId &&
+        p.academicYearId === academicYearId &&
+        p.semester === semester
+    );
+
+    // Items to remove from database (previously selected, now unselected)
+    const toRemove = existingInScope.filter((p) => !selectedSet.has(p.studentId));
+
+    // Items to add (newly selected)
+    const existingStudentIds = new Set(existingInScope.map((p) => p.studentId));
+    const toAddIds = selectedStudentIds.filter((stId) => !existingStudentIds.has(stId));
+
+    const newRecords: ExtracurricularParticipant[] = toAddIds.map((stId) => ({
+      id: `ep_${stId}_${extracurricularId}_${academicYearId}_${semester}`.replace(/[^a-zA-Z0-9_]/g, '_'),
+      studentId: stId,
+      extracurricularId,
+      classId,
+      academicYearId,
+      semester,
+      status: 'active',
+      createdAt: timestamp,
+      updatedAt: timestamp
+    }));
+
+    // Update in-memory state
+    setExtracurricularParticipants((prev) => {
+      const remaining = prev.filter(
+        (p) =>
+          !(
+            p.extracurricularId === extracurricularId &&
+            p.classId === classId &&
+            p.academicYearId === academicYearId &&
+            p.semester === semester &&
+            !selectedSet.has(p.studentId)
+          )
+      );
+      // Append new records that are not already present
+      const combined = [...remaining];
+      for (const rec of newRecords) {
+        if (!combined.some((c) => c.id === rec.id)) {
+          combined.push(rec);
+        }
+      }
+      return combined;
+    });
+
+    // Delete unselected records from Firestore
+    await Promise.all(toRemove.map((p) => deleteDocument('extracurricularParticipants', p.id)));
+
+    // Save newly selected records to Firestore
+    await Promise.all(newRecords.map((p) => saveDocument('extracurricularParticipants', p)));
+  };
+
   return (
     <MasterDataContext.Provider
       value={{
@@ -568,6 +687,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         academicSettingLogs,
         reportCards,
         attendance,
+        extracurricularParticipants,
         loading,
         saveAcademicYear,
         setActiveAcademicYear,
@@ -579,7 +699,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         toggleActiveClass,
         saveSubject,
         toggleSubjectStatus,
+        deleteSubject,
         saveTeacherAssignment,
+        deleteTeacherAssignment,
         saveUser,
         toggleUserStatus,
         deleteUser,
@@ -587,6 +709,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         deleteScore,
         saveReportCard,
         saveAttendance,
+        saveExtracurricularParticipants,
         getAcademicSetting,
         saveAcademicSetting,
         refreshAll

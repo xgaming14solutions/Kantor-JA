@@ -156,6 +156,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     nameArab: 'العقيدة',
     kkm: 75,
     category: 'Diniyah',
+    type: 'subject',
     isActive: true,
     description: 'Pembelajaran tauhid, rukun iman, dan akhlak karimah'
   },
@@ -166,6 +167,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     nameArab: 'الرياضيات',
     kkm: 75,
     category: 'Umum',
+    type: 'subject',
     isActive: true,
     description: 'Pembelajaran aljabar, geometri, dan statistika dasar'
   },
@@ -175,6 +177,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     name: 'Bahasa Indonesia',
     kkm: 75,
     category: 'Umum',
+    type: 'subject',
     isActive: true,
     description: 'Tata bahasa, sastra, dan kemampuan literasi'
   },
@@ -184,6 +187,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     name: 'Ilmu Pengetahuan Alam',
     kkm: 75,
     category: 'Umum',
+    type: 'subject',
     isActive: true,
     description: 'Biologi, fisika, dan kimia lingkungan'
   },
@@ -193,6 +197,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     name: 'Informatika',
     kkm: 78,
     category: 'Peminatan',
+    type: 'subject',
     isActive: true,
     description: 'Literasi digital, dasar pemrograman dan algoritma'
   },
@@ -202,6 +207,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     name: 'Bahasa Inggris',
     kkm: 75,
     category: 'Umum',
+    type: 'subject',
     isActive: true,
     description: 'Kemampuan komunikasi verbal dan penulisan bahasa internasional'
   }

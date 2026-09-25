@@ -75,13 +75,16 @@ export interface Student {
 
 export interface Subject {
   id: string;
-  code: string; // e.g., "MAT-VII", "BIN-VII"
-  name: string; // e.g., "Matematika", "Bahasa Indonesia"
+  code: string; // e.g., "MAT-VII", "BIN-VII", "EKS-PRM"
+  name: string; // e.g., "Matematika", "Bahasa Indonesia", "Pertanian"
   nameArab?: string; // Tulisan Arab (Unicode) yang dimasukkan manual oleh admin
   kkm: number; // Kriteria Ketuntasan Minimal, e.g., 75
   category: 'Diniyah' | 'Umum' | 'Peminatan' | 'Muatan Lokal' | (string & {});
+  type?: 'subject' | 'extracurricular' | string;
   isActive?: boolean;
   description?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface TeacherAssignment {
@@ -93,6 +96,8 @@ export interface TeacherAssignment {
   semester: 'Ganjil' | 'Genap';
   totalHoursPerWeek?: number;
   status?: 'Aktif' | 'Nonaktif' | 'Historis' | string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Score {
@@ -183,4 +188,16 @@ export interface AcademicSettingLog {
   changes: string[];
   previousState?: Partial<AcademicSetting>;
   newState?: Partial<AcademicSetting>;
+}
+
+export interface ExtracurricularParticipant {
+  id: string; // e.g. ep_{studentId}_{extracurricularId}_{academicYearId}_{semester}
+  studentId: string;
+  extracurricularId: string;
+  classId: string;
+  academicYearId: string;
+  semester: 'Ganjil' | 'Genap' | string;
+  status: 'active' | 'inactive' | string;
+  createdAt?: string;
+  updatedAt?: string;
 }

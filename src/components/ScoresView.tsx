@@ -87,9 +87,12 @@ export const ScoresView: React.FC = () => {
 
   // 3. Filter Available Subjects strictly from TeacherAssignments for GURU_MAPEL, and prioritize assigned for WALI_KELAS
   const availableSubjects = useMemo(() => {
+    // Only standard academic subjects enter academic score management
+    const academicSubjects = subjects.filter((s) => (s.type || 'subject') === 'subject');
+
     if (role === 'GURU_MAPEL') {
       const assignedSubjectIds = new Set(activeTeacherAssignments.map((a) => a.subjectId));
-      return subjects.filter((s) => assignedSubjectIds.has(s.id));
+      return academicSubjects.filter((s) => assignedSubjectIds.has(s.id));
     }
     if (role === 'WALI_KELAS') {
       const assignedSubjectIds = new Set(
@@ -97,11 +100,11 @@ export const ScoresView: React.FC = () => {
           .filter((a) => !selectedClassId || a.classId === selectedClassId)
           .map((a) => a.subjectId)
       );
-      const assigned = subjects.filter((s) => assignedSubjectIds.has(s.id) && s.isActive !== false);
-      const others = subjects.filter((s) => !assignedSubjectIds.has(s.id) && s.isActive !== false);
+      const assigned = academicSubjects.filter((s) => assignedSubjectIds.has(s.id) && s.isActive !== false);
+      const others = academicSubjects.filter((s) => !assignedSubjectIds.has(s.id) && s.isActive !== false);
       return [...assigned, ...others];
     }
-    return subjects.filter((s) => s.isActive !== false);
+    return academicSubjects.filter((s) => s.isActive !== false);
   }, [role, activeTeacherAssignments, selectedClassId, subjects]);
 
   // Selected Subject State
