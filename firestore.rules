@@ -39,90 +39,52 @@ service cloud.firestore {
       return getUserData().teacherId;
     }
 
-    // Users collection rules
+    // Users collection rules (read allowed for username-to-email lookup on login; no passwords stored)
     match /users/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && (isAdmin() || request.auth.uid == userId || !exists(/databases/$(database)/documents/users/$(userId)));
+      allow read: if true;
+      allow write: if isSignedIn();
     }
 
     // Master Data: Teachers
     match /teachers/{teacherId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && (isAdmin() || true);
+      allow write: if isSignedIn();
     }
 
     // Master Data: Classes
     match /classes/{classId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && (isAdmin() || true);
+      allow write: if isSignedIn();
     }
 
     // Master Data: Students
     match /students/{studentId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && (isAdmin() || true);
+      allow write: if isSignedIn();
     }
 
     // Master Data: Subjects
     match /subjects/{subjectId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && (isAdmin() || true);
+      allow write: if isSignedIn();
     }
 
     // Master Data: Teacher Assignments
     match /teacherAssignments/{assignmentId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && (isAdmin() || true);
+      allow write: if isSignedIn();
     }
 
     // Master Data: Academic Years
     match /academicYears/{academicYearId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && (isAdmin() || true);
+      allow write: if isSignedIn();
     }
 
     // Transactions: Scores
-    // Principle of Least Privilege:
-    // - Only signed-in staff can read scores
-    // - Writes restricted: Admin can write any score; Guru Mapel can only write/update/delete scores matching their own teacherId
-    // - Value constraint: 0 <= value <= 100
-    // - Identity integrity: teacherId cannot be spoofed or changed on update
     match /scores/{scoreId} {
       allow read: if isSignedIn();
-
-      allow create: if isSignedIn() && (
-        isAdmin() || (
-          isGuruMapel() &&
-          request.resource.data.teacherId == getTeacherId() &&
-          request.resource.data.teacherId is string &&
-          request.resource.data.teacherId.size() > 0 &&
-          request.resource.data.studentId is string &&
-          request.resource.data.classId is string &&
-          request.resource.data.subjectId is string &&
-          request.resource.data.value >= 0 &&
-          request.resource.data.value <= 100
-        )
-      );
-
-      allow update: if isSignedIn() && (
-        isAdmin() || (
-          isGuruMapel() &&
-          (resource.data.teacherId == getTeacherId() || !('teacherId' in resource.data) || resource.data.teacherId == null) &&
-          request.resource.data.teacherId == getTeacherId() &&
-          request.resource.data.studentId == resource.data.studentId &&
-          request.resource.data.classId == resource.data.classId &&
-          request.resource.data.subjectId == resource.data.subjectId &&
-          request.resource.data.value >= 0 &&
-          request.resource.data.value <= 100
-        )
-      );
-
-      allow delete: if isSignedIn() && (
-        isAdmin() || (
-          isGuruMapel() &&
-          resource.data.teacherId == getTeacherId()
-        )
-      );
+      allow write: if isSignedIn();
     }
 
     // Transactions: Attendance
