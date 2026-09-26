@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useMasterData } from '../context/MasterDataContext';
 import { useAuth } from '../context/AuthContext';
 import { calculateStudentScore, formatFinalScore } from '../lib/academicCalculation';
+import { formatReportProgram, formatReportClassLabel } from '../lib/dbService';
 import { ReportCard, UserRole } from '../types';
 import {
   Award,
@@ -39,7 +40,8 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
     getAcademicSetting,
     reportCards,
     saveReportCard,
-    attendance
+    attendance,
+    schoolIdentity
   } = useMasterData();
 
   // Find homeroom class if current user is Wali Kelas
@@ -52,10 +54,27 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
     return classes.find((c) => c.homeroomTeacherId === currentTeacher.id || c.teacherId === currentTeacher.id);
   }, [effectiveRole, currentUser, teachers, classes]);
 
+  const activeClasses = useMemo(() => {
+    return classes.filter((c) => c.isActive !== false);
+  }, [classes]);
+
   const [selectedClassId, setSelectedClassId] = useState<string>(() => {
     if (homeroomClass) return homeroomClass.id;
-    return classes[0]?.id || 'c_7a';
+    return activeClasses[0]?.id || classes[0]?.id || '';
   });
+
+  useEffect(() => {
+    if (homeroomClass && selectedClassId !== homeroomClass.id) {
+      setSelectedClassId(homeroomClass.id);
+      return;
+    }
+    if (activeClasses.length > 0 && !activeClasses.some((c) => c.id === selectedClassId)) {
+      const classWithStudents = activeClasses.find((c) =>
+        students.some((s) => s.classId === c.id && s.status === 'Aktif' && (s as any).isActive !== false)
+      );
+      setSelectedClassId(classWithStudents?.id || activeClasses[0].id);
+    }
+  }, [activeClasses, students, selectedClassId, homeroomClass]);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedStudentForModal, setSelectedStudentForModal] = useState<string | null>(null);
@@ -77,10 +96,15 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
     return currentAcademicSetting.components.filter((c) => c.enabled);
   }, [currentAcademicSetting]);
 
-  // Students in selected class
+  // Active students in selected class
   const classStudents = useMemo(() => {
     return students
-      .filter((s) => s.classId === selectedClassId)
+      .filter(
+        (s) =>
+          s.classId === selectedClassId &&
+          s.status === 'Aktif' &&
+          (s as any).isActive !== false
+      )
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [students, selectedClassId]);
 
@@ -98,11 +122,39 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
   const classHomeroomTeacher = teachers.find(
     (t) => t.id === selectedClass?.homeroomTeacherId || t.id === selectedClass?.teacherId
   );
-  const headmaster = teachers.find((t) => t.email?.includes('kepsek') || t.notes?.toLowerCase().includes('kepala'));
+
+  // Strictly filter ONLY active Diniyah academic subjects and deduplicate by subject name
+  const diniyahSubjects = useMemo(() => {
+    const candidates = subjects.filter(
+      (s) =>
+        (s.type || 'subject') === 'subject' &&
+        s.isActive !== false &&
+        (s.category || '').trim().toLowerCase() === 'diniyah'
+    );
+
+    const byName = new Map<string, typeof candidates[0]>();
+    candidates.forEach((sub) => {
+      const key = sub.name.trim().toLowerCase();
+      const existing = byName.get(key);
+      if (!existing) {
+        byName.set(key, sub);
+      } else {
+        const existingHasScores = scores.some((sc) => sc.subjectId === existing.id);
+        const currentHasScores = scores.some((sc) => sc.subjectId === sub.id);
+        if (currentHasScores && !existingHasScores) {
+          byName.set(key, sub);
+        } else if (existing.id === 'sub_aqd' && sub.id !== 'sub_aqd') {
+          byName.set(key, sub);
+        }
+      }
+    });
+
+    return Array.from(byName.values());
+  }, [subjects, scores]);
 
   // Calculate detailed subject scores for a given student
   const getStudentSubjectScores = (studentId: string) => {
-    return subjects.map((sub) => {
+    return diniyahSubjects.map((sub) => {
       const subScores = scores.filter(
         (sc) =>
           sc.studentId === studentId &&
@@ -188,7 +240,7 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
         student: st,
         subjectResults,
         scoredCount: scoredSubjects.length,
-        totalSubjects: subjects.length,
+        totalSubjects: diniyahSubjects.length,
         totalScore,
         rawAverage,
         formattedAverage,
@@ -199,7 +251,7 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
         homeroomNotes: reportRecord?.homeroomNotes || 'Tetap pertahankan prestasi dan rajin belajar.',
       };
     });
-  }, [filteredStudents, subjects, scores, activeAcademicYear, currentAcademicSetting, attendance, reportCards]);
+  }, [filteredStudents, diniyahSubjects, scores, activeAcademicYear, currentAcademicSetting, attendance, reportCards]);
 
   // Active student for Modal
   const activeStudentDetail = useMemo(() => {
@@ -265,7 +317,7 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
       'Kelas',
       'Tahun Ajaran',
       'Semester',
-      ...subjects.map((sub) => `${sub.name} (KKM: ${currentAcademicSetting.subjectKkmOverrides?.[sub.id] ?? sub.kkm ?? 75})`),
+      ...diniyahSubjects.map((sub) => `${sub.name} (KKM: ${currentAcademicSetting.subjectKkmOverrides?.[sub.id] ?? sub.kkm ?? 75})`),
       'Rata-Rata Nilai',
       'Mapel Tuntas',
       'Mapel Remedial',
@@ -429,7 +481,7 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
               disabled={effectiveRole === 'WALI_KELAS' && !!homeroomClass}
               className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
-              {classes.map((cls) => (
+              {activeClasses.map((cls) => (
                 <option key={cls.id} value={cls.id}>
                   {cls.name} (Tingkat {cls.gradeLevel})
                 </option>
@@ -580,7 +632,9 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
                     Lembar Hasil Belajar Peserta Didik (Rapor)
                   </h3>
                   <p className="text-xs text-slate-500">
-                    SMP AKSARA &bull; Semester {activeAcademicYear?.semester || 'Ganjil'} {activeAcademicYear?.name || '2026/2027'}
+                    {schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'} &bull;{' '}
+                    {formatReportProgram(schoolIdentity.programName, selectedClass)} &bull; Semester{' '}
+                    {activeAcademicYear?.semester || 'Ganjil'} {activeAcademicYear?.name || '2025/2026'}
                   </p>
                 </div>
               </div>
@@ -619,28 +673,63 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
             <div className="flex-1 overflow-y-auto p-6 space-y-6 print:p-0">
               {/* Report Header Card */}
               <div className="border border-slate-200 rounded-2xl p-5 bg-slate-50/50">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-                  <div>
-                    <span className="text-[11px] text-slate-400 block font-medium">Nama Peserta Didik</span>
-                    <strong className="text-sm font-bold text-slate-900">{activeStudentDetail.student.name}</strong>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+                  {/* Left Column */}
+                  <div className="space-y-1.5">
+                    <div className="grid grid-cols-[100px_10px_1fr]">
+                      <span className="font-semibold text-slate-600">Nama Sekolah</span>
+                      <span>:</span>
+                      <span className="font-bold text-slate-900">
+                        {schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-[100px_10px_1fr]">
+                      <span className="font-semibold text-slate-600">Program</span>
+                      <span>:</span>
+                      <span className="font-semibold text-slate-900">
+                        {formatReportProgram(schoolIdentity.programName, selectedClass)}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-[100px_10px_1fr]">
+                      <span className="font-semibold text-slate-600">Alamat</span>
+                      <span>:</span>
+                      <span className="text-slate-800">{schoolIdentity.address || '-'}</span>
+                    </div>
+                    <div className="grid grid-cols-[100px_10px_1fr]">
+                      <span className="font-semibold text-slate-600">Nama</span>
+                      <span>:</span>
+                      <strong className="font-bold text-slate-900">
+                        {activeStudentDetail.student.name}
+                      </strong>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[11px] text-slate-400 block font-medium">NIS / NISN</span>
-                    <span className="font-mono font-semibold text-slate-700">
-                      {activeStudentDetail.student.nis} / {activeStudentDetail.student.nisn || '-'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-slate-400 block font-medium">Kelas / Tingkat</span>
-                    <span className="font-semibold text-slate-700">
-                      {selectedClass?.name || '-'} (Tingkat {selectedClass?.gradeLevel || '-'})
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-slate-400 block font-medium">Tahun Ajaran / Semester</span>
-                    <span className="font-semibold text-slate-700">
-                      {activeAcademicYear?.name || '2026/2027'} - {activeAcademicYear?.semester || 'Ganjil'}
-                    </span>
+
+                  {/* Right Column */}
+                  <div className="space-y-1.5">
+                    <div className="grid grid-cols-[95px_10px_1fr]">
+                      <span className="font-semibold text-slate-600">Kelas</span>
+                      <span>:</span>
+                      <strong className="font-bold text-slate-900">
+                        {formatReportClassLabel(selectedClass)}
+                      </strong>
+                    </div>
+                    <div className="grid grid-cols-[95px_10px_1fr]">
+                      <span className="font-semibold text-slate-600">Semester</span>
+                      <span>:</span>
+                      <span className="text-slate-800">{activeAcademicYear?.semester || 'Ganjil'}</span>
+                    </div>
+                    <div className="grid grid-cols-[95px_10px_1fr]">
+                      <span className="font-semibold text-slate-600">Tahun Ajaran</span>
+                      <span>:</span>
+                      <span className="text-slate-800">{activeAcademicYear?.name || '2025/2026'}</span>
+                    </div>
+                    <div className="grid grid-cols-[95px_10px_1fr]">
+                      <span className="font-semibold text-slate-600">NISN</span>
+                      <span>:</span>
+                      <span className="font-mono text-slate-800">
+                        {activeStudentDetail.student.nisn || activeStudentDetail.student.nis || '-'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -843,28 +932,32 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
 
                   <div>
                     <p className="text-slate-500">
-                      Jakarta, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      {schoolIdentity.city || 'Jakarta'}, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
                     <p className="text-slate-700 font-medium">Wali Kelas {selectedClass?.name}</p>
                     <div className="h-16" />
                     <p className="font-bold text-slate-800 border-t border-slate-300 pt-1 inline-block min-w-36">
-                      {classHomeroomTeacher?.name || '................................'}
+                      {classHomeroomTeacher?.name || '(..........................................)'}
                     </p>
-                    <p className="text-[10px] text-slate-400 font-mono">
-                      NIP. {classHomeroomTeacher?.nip || '198501152010011002'}
-                    </p>
+                    {classHomeroomTeacher?.nip && (
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        NIP. {classHomeroomTeacher.nip}
+                      </p>
+                    )}
                   </div>
 
                   <div>
                     <p className="text-slate-500">Mengetahui,</p>
-                    <p className="text-slate-700 font-medium">Kepala Sekolah SMP AKSARA</p>
+                    <p className="text-slate-700 font-medium">{schoolIdentity.leaderTitle || 'Mudir / Kepala Sekolah'}</p>
                     <div className="h-16" />
                     <p className="font-bold text-slate-800 border-t border-slate-300 pt-1 inline-block min-w-36">
-                      {headmaster?.name || 'Dr. H. Mulyadi, M.Pd.'}
+                      {schoolIdentity.mudirName || '(..........................................)'}
                     </p>
-                    <p className="text-[10px] text-slate-400 font-mono">
-                      NIP. {headmaster?.nip || '197203151998021001'}
-                    </p>
+                    {schoolIdentity.mudirNip && (
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        NIP/NIK. {schoolIdentity.mudirNip}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

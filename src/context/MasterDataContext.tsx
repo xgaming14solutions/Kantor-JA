@@ -12,7 +12,9 @@ import {
   AcademicSettingLog,
   ReportCard,
   Attendance,
-  ExtracurricularParticipant
+  ExtracurricularParticipant,
+  ExtracurricularScore,
+  SchoolIdentity
 } from '../types';
 import {
   fetchCollection,
@@ -22,7 +24,10 @@ import {
   seedDatabaseIfEmpty,
   normalizeAcademicYear,
   normalizeScore,
-  assertTeacherScoreAccess
+  assertTeacherScoreAccess,
+  DEFAULT_SCHOOL_IDENTITY,
+  fetchSchoolIdentity,
+  saveSchoolIdentityDoc
 } from '../lib/dbService';
 import { useAuth } from './AuthContext';
 import { createDefaultAcademicSetting } from '../lib/academicCalculation';
@@ -54,6 +59,8 @@ interface MasterDataContextType {
   reportCards: ReportCard[];
   attendance: Attendance[];
   extracurricularParticipants: ExtracurricularParticipant[];
+  extracurricularScores: ExtracurricularScore[];
+  schoolIdentity: SchoolIdentity;
   loading: boolean;
   saveAcademicYear: (data: AcademicYear) => Promise<void>;
   setActiveAcademicYear: (id: string) => Promise<void>;
@@ -82,12 +89,17 @@ interface MasterDataContextType {
     semester: string,
     selectedStudentIds: string[]
   ) => Promise<void>;
+  saveExtracurricularScore: (
+    data: Omit<ExtracurricularScore, 'id'> & { id?: string }
+  ) => Promise<ExtracurricularScore>;
+  deleteExtracurricularScore: (id: string) => Promise<void>;
   getAcademicSetting: (academicYearId: string, semester: 'Ganjil' | 'Genap') => AcademicSetting;
   saveAcademicSetting: (
     data: AcademicSetting,
     updatedByName: string,
     changeNotes?: string[]
   ) => Promise<void>;
+  saveSchoolIdentity: (data: Partial<SchoolIdentity>) => Promise<SchoolIdentity>;
   refreshAll: () => Promise<void>;
 }
 
@@ -108,6 +120,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [reportCards, setReportCards] = useState<ReportCard[]>(INITIAL_REPORT_CARDS);
   const [attendance, setAttendance] = useState<Attendance[]>(INITIAL_ATTENDANCE);
   const [extracurricularParticipants, setExtracurricularParticipants] = useState<ExtracurricularParticipant[]>([]);
+  const [extracurricularScores, setExtracurricularScores] = useState<ExtracurricularScore[]>([]);
+  const [schoolIdentity, setSchoolIdentity] = useState<SchoolIdentity>(DEFAULT_SCHOOL_IDENTITY);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Load all master data collections
@@ -129,7 +143,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         rawLogs,
         rawRepList,
         rawAttList,
-        rawEksPartList
+        rawEksPartList,
+        rawEksScoreList,
+        loadedSchoolIdentity
       ] = await Promise.all([
         fetchCollection<AcademicYear>('academicYears', INITIAL_ACADEMIC_YEARS),
         fetchCollection<Teacher>('teachers', INITIAL_TEACHERS),
@@ -143,7 +159,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         fetchCollection<AcademicSettingLog>('academicSettingLogs', []),
         fetchCollection<ReportCard>('reportCards', INITIAL_REPORT_CARDS),
         fetchCollection<Attendance>('attendance', INITIAL_ATTENDANCE),
-        fetchCollection<ExtracurricularParticipant>('extracurricularParticipants', [])
+        fetchCollection<ExtracurricularParticipant>('extracurricularParticipants', []),
+        fetchCollection<ExtracurricularScore>('extracurricularScores', []),
+        fetchSchoolIdentity()
       ]);
 
       // Normalize all academic years to guarantee valid structure
@@ -197,8 +215,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         kkm: typeof s.kkm === 'number' ? s.kkm : 75,
       }));
 
-      // Ensure default setting for active year exists
-      let settingsList = [...rawSettings];
+      // Ensure default setting for active year exists (exclude school_identity doc from academic grading settings)
+      let settingsList = rawSettings.filter((s: any) => s.id !== 'school_identity');
       if (activeYear) {
         const activeSettingExists = settingsList.some(
           s => s.academicYearId === activeYear.id && s.semester === activeYear.semester
@@ -227,6 +245,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setReportCards(rawRepList);
       setAttendance(rawAttList);
       setExtracurricularParticipants(rawEksPartList || []);
+      setExtracurricularScores(rawEksScoreList || []);
+      setSchoolIdentity(loadedSchoolIdentity);
     } catch (e) {
       console.warn('Error loading master data:', e);
     } finally {
@@ -236,7 +256,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   useEffect(() => {
     refreshAll();
-  }, []);
+  }, [currentUser?.uid, currentUser?.id]);
 
   const activeAcademicYear = academicYears.find((ay) => ay.isActive) || null;
 
@@ -671,6 +691,85 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     await Promise.all(newRecords.map((p) => saveDocument('extracurricularParticipants', p)));
   };
 
+  // 12. Extracurricular Scores Actions (Upsert: 1 score per student + extracurricular + academicYear + semester)
+  const saveExtracurricularScore = async (
+    data: Omit<ExtracurricularScore, 'id'> & { id?: string }
+  ): Promise<ExtracurricularScore> => {
+    const timestamp = new Date().toISOString();
+    const deterministicId = `es_${data.studentId}_${data.extracurricularId}_${data.academicYearId}_${data.semester}`.replace(
+      /[^a-zA-Z0-9_]/g,
+      '_'
+    );
+
+    const existingMatches = extracurricularScores.filter(
+      (s) =>
+        s.studentId === data.studentId &&
+        s.extracurricularId === data.extracurricularId &&
+        s.academicYearId === data.academicYearId &&
+        s.semester === data.semester
+    );
+
+    const primaryExisting = existingMatches[0];
+    const targetId = data.id || primaryExisting?.id || deterministicId;
+
+    const recordToSave: ExtracurricularScore = {
+      id: targetId,
+      studentId: data.studentId.trim(),
+      extracurricularId: data.extracurricularId.trim(),
+      classId: data.classId.trim(),
+      academicYearId: data.academicYearId.trim(),
+      semester: data.semester.trim(),
+      nilai: data.nilai.trim().toUpperCase(),
+      keterangan: (data.keterangan || '').trim(),
+      teacherId: data.teacherId || primaryExisting?.teacherId || currentUser?.teacherId || 't_001',
+      createdAt: primaryExisting?.createdAt || data.createdAt || timestamp,
+      updatedAt: timestamp
+    };
+
+    // Update in-memory state and remove any accidental duplicates for the same key
+    setExtracurricularScores((prev) => {
+      const filtered = prev.filter(
+        (s) =>
+          !(
+            s.studentId === recordToSave.studentId &&
+            s.extracurricularId === recordToSave.extracurricularId &&
+            s.academicYearId === recordToSave.academicYearId &&
+            s.semester === recordToSave.semester
+          ) && s.id !== recordToSave.id
+      );
+      return [recordToSave, ...filtered];
+    });
+
+    // Clean up any duplicate documents in Firestore if another ID existed for the same combination
+    const duplicateIds = existingMatches.map((m) => m.id).filter((id) => id !== targetId);
+    if (duplicateIds.length > 0) {
+      await Promise.all(duplicateIds.map((dupId) => deleteDocument('extracurricularScores', dupId)));
+    }
+
+    await saveDocument('extracurricularScores', recordToSave);
+    return recordToSave;
+  };
+
+  const deleteExtracurricularScore = async (id: string): Promise<void> => {
+    setExtracurricularScores((prev) => prev.filter((s) => s.id !== id));
+    await deleteDocument('extracurricularScores', id);
+  };
+
+  // 13. School Identity & Mudir Configuration Actions
+  const saveSchoolIdentity = async (data: Partial<SchoolIdentity>): Promise<SchoolIdentity> => {
+    const updaterName = currentUser?.displayName || currentUser?.name || currentUser?.email || 'Administrator';
+    const merged: Partial<SchoolIdentity> = {
+      ...schoolIdentity,
+      ...data,
+      id: 'school_identity',
+      updatedBy: updaterName,
+      updatedAt: new Date().toISOString()
+    };
+    const saved = await saveSchoolIdentityDoc(merged);
+    setSchoolIdentity(saved);
+    return saved;
+  };
+
   return (
     <MasterDataContext.Provider
       value={{
@@ -688,6 +787,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         reportCards,
         attendance,
         extracurricularParticipants,
+        extracurricularScores,
+        schoolIdentity,
         loading,
         saveAcademicYear,
         setActiveAcademicYear,
@@ -710,8 +811,11 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         saveReportCard,
         saveAttendance,
         saveExtracurricularParticipants,
+        saveExtracurricularScore,
+        deleteExtracurricularScore,
         getAcademicSetting,
         saveAcademicSetting,
+        saveSchoolIdentity,
         refreshAll
       }}
     >

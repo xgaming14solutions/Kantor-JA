@@ -201,3 +201,33 @@ export interface ExtracurricularParticipant {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface ExtracurricularScore {
+  id: string; // e.g. es_{studentId}_{extracurricularId}_{academicYearId}_{semester}
+  studentId: string;
+  extracurricularId: string;
+  classId: string;
+  academicYearId: string;
+  semester: 'Ganjil' | 'Genap' | string;
+  nilai: 'A' | 'B' | 'C' | 'D' | string;
+  keterangan?: string;
+  teacherId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SchoolIdentity {
+  id: string; // 'school_identity'
+  schoolName: string; // Nama Lembaga/Sekolah
+  programName: string; // Nama Program / PKBM (misal: PKBM AL-QOLAM)
+  npsn: string; // NPSN
+  address: string; // Alamat Sekolah
+  mudirName: string; // Nama Mudir/Kepala Sekolah
+  mudirNip: string; // NIP/NIK Mudir
+  leaderTitle: string; // Jabatan Pimpinan (misal: Mudir / Kepala Sekolah)
+  city: string; // Kota/Kabupaten
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+

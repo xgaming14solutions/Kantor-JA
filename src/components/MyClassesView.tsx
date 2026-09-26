@@ -43,7 +43,7 @@ export const MyClassesView: React.FC = () => {
   }, [myAssignments]);
 
   const myClasses = useMemo(() => {
-    return classes.filter((c) => taughtClassIds.includes(c.id));
+    return classes.filter((c) => c.isActive !== false && taughtClassIds.includes(c.id));
   }, [classes, taughtClassIds]);
 
   // 4. Homeroom Class: ONLY for WALI_KELAS role
@@ -51,6 +51,7 @@ export const MyClassesView: React.FC = () => {
     if (role !== 'WALI_KELAS') return null;
     return classes.find(
       (c) =>
+        c.isActive !== false &&
         (c.teacherId === effectiveTeacherId || c.homeroomTeacherId === effectiveTeacherId) &&
         (activeAcademicYear ? c.academicYearId === activeAcademicYear.id : true)
     ) || null;

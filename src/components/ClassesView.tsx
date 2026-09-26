@@ -58,7 +58,7 @@ export const ClassesView: React.FC<ClassesViewProps> = ({ userRole }) => {
       gradeLevel: 7,
       academicYearId: activeAcademicYear?.id || 'ay_2026_2027_1',
       semester: activeAcademicYear?.semester || 'Ganjil',
-      homeroomTeacherId: teachers[0]?.id || '',
+      homeroomTeacherId: teachers.find((t) => t.isActive !== false)?.id || '',
       capacity: 32,
       isActive: true,
     });
@@ -164,7 +164,12 @@ export const ClassesView: React.FC<ClassesViewProps> = ({ userRole }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {classes.map((cls) => {
           const homeroom = teachers.find((t) => t.id === cls.homeroomTeacherId);
-          const studentCount = students.filter((s) => s.classId === cls.id).length;
+          const studentCount = students.filter(
+            (s) =>
+              s.classId === cls.id &&
+              s.status === 'Aktif' &&
+              (s as any).isActive !== false
+          ).length;
           const isAct = cls.isActive !== false;
 
           return (
@@ -456,7 +461,12 @@ export const ClassesView: React.FC<ClassesViewProps> = ({ userRole }) => {
             {/* Homeroom teacher info */}
             {(() => {
               const homeroom = teachers.find((t) => t.id === detailClass.homeroomTeacherId);
-              const classStudents = students.filter((s) => s.classId === detailClass.id);
+              const classStudents = students.filter(
+                (s) =>
+                  s.classId === detailClass.id &&
+                  s.status === 'Aktif' &&
+                  (s as any).isActive !== false
+              );
 
               return (
                 <div className="mt-4 space-y-4 text-xs">

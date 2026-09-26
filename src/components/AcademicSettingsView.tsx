@@ -122,6 +122,11 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
     return draftSetting.components.filter((c) => c.enabled);
   }, [draftSetting.components]);
 
+  // Active Academic Subjects (exclude extracurriculars and inactive subjects)
+  const activeAcademicSubjects = useMemo(() => {
+    return subjects.filter((s) => (s.type || 'subject') === 'subject' && s.isActive !== false);
+  }, [subjects]);
+
   // Total Weight of Active Components
   const totalWeight = useMemo(() => {
     return activeComponents.reduce((acc, curr) => acc + (Number(curr.weight) || 0), 0);
@@ -870,7 +875,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {subjects.map((sub) => {
+                  {activeAcademicSubjects.map((sub) => {
                     const override = draftSetting.subjectKkmOverrides?.[sub.id];
                     const isOverridden = override !== undefined;
                     const effectiveValue = isOverridden ? override : sub.kkm;

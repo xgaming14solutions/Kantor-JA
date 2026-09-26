@@ -21,7 +21,8 @@ import {
   Student,
   Score,
   Attendance,
-  ReportCard
+  ReportCard,
+  SchoolIdentity
 } from '../types';
 import {
   INITIAL_ACADEMIC_YEARS,
@@ -322,18 +323,42 @@ function safeSetItem(key: string, value: string): void {
   }
 }
 
+const REMOVED_DUMMY_IDS = new Set([
+  'sub_aqd',
+  's_001', 's_002', 's_003', 's_004', 's_005', 's_006', 's_007',
+  't_001', 't_002', 't_003', 't_004', 't_005',
+  'c_7b',
+  'asg_001', 'asg_002', 'asg_003', 'asg_004', 'asg_005', 'asg_006', 'asg_1789956019973', 'asg_1790162665382',
+  'rep_001', 'rep_002',
+  'u_dewi', 'u_gurumapel', 'u_kepsek', 'u_walikelas',
+  'sc_001', 'sc_002', 'sc_003', 'sc_2627_001', 'sc_2627_002', 'sc_2627_003', 'sc_2627_004', 'sc_2627_005', 'sc_2627_006',
+  'sc_1790092794810', 'sc_1790096236955',
+  'att_001', 'att_002', 'att_003', 'att_004', 'att_005', 'att_2627_001', 'att_2627_002', 'att_2627_003'
+]);
+
+const REMOVED_DUMMY_STUDENT_IDS = new Set([
+  's_001', 's_002', 's_003', 's_004', 's_005', 's_006', 's_007'
+]);
+
+function isRemovedDummyRecord(item: any): boolean {
+  if (!item || typeof item !== 'object') return false;
+  if (item.id && REMOVED_DUMMY_IDS.has(String(item.id))) return true;
+  if (item.studentId && REMOVED_DUMMY_STUDENT_IDS.has(String(item.studentId))) return true;
+  return false;
+}
+
 export async function fetchCollection<T extends { id: string }>(
   collectionName: string,
   fallbackData: T[]
 ): Promise<T[]> {
-  // Read local cache first to ensure zero data loss on browser refresh
+  // Read local cache first to ensure zero data loss when offline
   let localItems: T[] = [];
   try {
     const cached = safeGetItem(`kantoja_${collectionName}`);
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
-        localItems = parsed;
+        localItems = parsed.filter(item => !isRemovedDummyRecord(item));
       }
     }
   } catch (err) {
@@ -342,56 +367,37 @@ export async function fetchCollection<T extends { id: string }>(
 
   // Fetch genuine Firestore collection
   let firestoreItems: T[] | null = null;
+  let firestoreReadSucceeded = false;
   try {
     const snap = await getDocs(collection(db, collectionName));
-    if (!snap.empty) {
-      firestoreItems = snap.docs.map(d => ({ id: d.id, ...d.data() } as unknown as T));
-    }
+    firestoreReadSucceeded = true;
+    firestoreItems = snap.docs
+      .map(d => ({ id: d.id, ...d.data() } as unknown as T))
+      .filter(item => !isRemovedDummyRecord(item));
   } catch (e) {
     console.warn(`Firestore read failed for collection ${collectionName}, relying on local cache:`, e);
   }
 
   let items: T[] = [];
-  if (firestoreItems && firestoreItems.length > 0) {
+  if (firestoreReadSucceeded && firestoreItems !== null) {
     items = firestoreItems;
-    // NON-DESTRUCTIVE SAFEGUARD:
-    // If local cache has any items that are NOT in Firestore yet (e.g. recent inputs or sync pending),
-    // merge them in so they are NEVER wiped out on page reload/refresh!
-    if (localItems.length > 0) {
-      const firestoreIds = new Set(firestoreItems.map(item => item.id));
-      const unpersistedLocal = localItems.filter(item => !firestoreIds.has(item.id));
-      if (unpersistedLocal.length > 0) {
-        items = [...items, ...unpersistedLocal];
-        // Background sync unpersisted items to Firestore
-        unpersistedLocal.forEach(item => {
-          const sanitized = sanitizeDataForFirestore(item as any);
-          setDoc(doc(db, collectionName, item.id), sanitized, { merge: true }).catch(err => {
-            console.warn(`Background sync failed for ${collectionName}/${item.id}:`, err);
-          });
-        });
-      }
-    }
   } else if (localItems.length > 0) {
     items = localItems;
   } else {
-    items = fallbackData;
+    items = fallbackData.filter(item => !isRemovedDummyRecord(item));
   }
 
-  // Collection-specific normalization & non-destructive preservation of seed/fallback data
+  // Collection-specific normalization
   if (collectionName === 'academicYears') {
     items = (items as any[]).map(normalizeAcademicYear) as unknown as T[];
   } else if (collectionName === 'scores') {
     items = (items as any[]).map(normalizeScore) as unknown as T[];
-    // Non-destructive preservation: ensure default demo/seed scores are present
-    const existingIds = new Set(items.map(item => item.id));
-    const missingFallback = fallbackData.filter(item => !existingIds.has(item.id));
-    if (missingFallback.length > 0) {
-      items = [...items, ...missingFallback];
-    }
   }
 
-  // Save the normalized, merged list back to cache
-  safeSetItem(`kantoja_${collectionName}`, JSON.stringify(items));
+  // Save the normalized list back to cache only if Firestore read succeeded or cache already existed
+  if (firestoreReadSucceeded) {
+    safeSetItem(`kantoja_${collectionName}`, JSON.stringify(items));
+  }
   return items;
 }
 
@@ -471,6 +477,226 @@ export async function setActiveAcademicYearDoc(
   safeSetItem('kantoja_academicYears', JSON.stringify(updatedYears));
 
   return updatedYears;
+}
+
+export const DEFAULT_SCHOOL_IDENTITY: SchoolIdentity = {
+  id: 'school_identity',
+  schoolName: 'Pesantren Islam Mutiara Insan',
+  programName: 'PKBM AL-QOLAM',
+  npsn: '20108899',
+  address: 'Jl. Tuan Rio II RT 10/RW 05 Bandar Dewa Tulang Bawang Barat - Lampung',
+  mudirName: '',
+  mudirNip: '',
+  leaderTitle: 'Mudir / Kepala Sekolah',
+  city: 'Tulang Bawang Barat'
+};
+
+/**
+ * Resolves numeric grade level (7-12) from a SchoolClass object by inspecting its name (Roman/Arabic numerals) and gradeLevel.
+ */
+export function resolveClassGradeNumber(
+  cls?: { name?: string; gradeLevel?: number | string } | null
+): number {
+  if (!cls) return 7;
+  const rawName = String(cls.name || '').trim().toUpperCase();
+
+  // Check Roman numerals (longest/most specific first: XII, XI, X, IX, VIII, VII)
+  if (/\bXII\b|^XII([-\s(]|$)/.test(rawName)) return 12;
+  if (/\bXI\b|^XI([-\s(]|$)/.test(rawName)) return 11;
+  if (/\bX\b|^X([-\s(]|$)/.test(rawName)) return 10;
+  if (/\bIX\b|^IX([-\s(]|$)/.test(rawName)) return 9;
+  if (/\bVIII\b|^VIII([-\s(]|$)/.test(rawName)) return 8;
+  if (/\bVII\b|^VII([-\s(]|$)/.test(rawName)) return 7;
+
+  // Check Arabic numerals 12, 11, 10, 9, 8, 7 in class name
+  if (/\b12\b|^12([A-Z-\s(]|$)/.test(rawName)) return 12;
+  if (/\b11\b|^11([A-Z-\s(]|$)/.test(rawName)) return 11;
+  if (/\b10\b|^10([A-Z-\s(]|$)/.test(rawName)) return 10;
+  if (/\b9\b|^9([A-Z-\s(]|$)/.test(rawName)) return 9;
+  if (/\b8\b|^8([A-Z-\s(]|$)/.test(rawName)) return 8;
+  if (/\b7\b|^7([A-Z-\s(]|$)/.test(rawName)) return 7;
+
+  const numGrade = Number(cls.gradeLevel);
+  if (!isNaN(numGrade) && numGrade >= 1 && numGrade <= 12) {
+    return numGrade;
+  }
+  return 7;
+}
+
+/**
+ * Formats Program name automatically with Paket B (for Grade 7, 8, 9 / VII, VIII, IX)
+ * or Paket C (for Grade 10, 11, 12 / X, XI, XII).
+ */
+export function formatReportProgram(
+  baseProgram?: string,
+  cls?: { name?: string; gradeLevel?: number | string } | null
+): string {
+  const rawProgram = (baseProgram || DEFAULT_SCHOOL_IDENTITY.programName).trim() || DEFAULT_SCHOOL_IDENTITY.programName;
+  const cleanBase =
+    rawProgram.replace(/\s*\(\s*paket\s+[abc]\s*\)\s*$/i, '').trim() ||
+    DEFAULT_SCHOOL_IDENTITY.programName;
+  const grade = resolveClassGradeNumber(cls);
+  const paket = grade >= 10 ? 'Paket C' : 'Paket B';
+  return `${cleanBase} (${paket})`;
+}
+
+/**
+ * Formats Class label for Report Card header, e.g.:
+ * VII -> VII (Tujuh)
+ * VIII -> VIII (Delapan)
+ * IX -> IX (Sembilan)
+ * X -> X (Sepuluh)
+ * XI -> XI (Sebelas)
+ * XII -> XII (Dua Belas)
+ */
+export function formatReportClassLabel(
+  cls?: { name?: string; gradeLevel?: number | string } | null
+): string {
+  if (!cls) return '-';
+  const rawName = String(cls.name || '').trim();
+  if (rawName.includes('(') && rawName.includes(')')) {
+    return rawName;
+  }
+
+  const grade = resolveClassGradeNumber(cls);
+  const gradeMap: Record<number, { roman: string; word: string }> = {
+    7: { roman: 'VII', word: 'Tujuh' },
+    8: { roman: 'VIII', word: 'Delapan' },
+    9: { roman: 'IX', word: 'Sembilan' },
+    10: { roman: 'X', word: 'Sepuluh' },
+    11: { roman: 'XI', word: 'Sebelas' },
+    12: { roman: 'XII', word: 'Dua Belas' }
+  };
+
+  const mapped = gradeMap[grade];
+  if (!mapped) return rawName || '-';
+
+  const cleaned = rawName.replace(/^KELAS\s+/i, '').trim().toUpperCase();
+  if (!cleaned || cleaned === mapped.roman || cleaned === String(grade)) {
+    return `${mapped.roman} (${mapped.word})`;
+  }
+
+  return `${cleaned} (${mapped.word})`;
+}
+
+export function normalizeSchoolIdentity(raw: any): SchoolIdentity {
+  if (!raw || typeof raw !== 'object') {
+    return { ...DEFAULT_SCHOOL_IDENTITY };
+  }
+
+  const rawSchoolName = String(raw.schoolName ?? raw.namaSekolah ?? raw.name ?? '').trim();
+  const isLegacySchoolName =
+    !rawSchoolName ||
+    rawSchoolName === 'SMP / MTs Unggulan AKSARA' ||
+    rawSchoolName === 'SMP AKSARA';
+
+  const rawProgram = String(raw.programName ?? raw.program ?? '').trim();
+  const cleanProgram = rawProgram.replace(/\s*\(\s*paket\s+[abc]\s*\)\s*$/i, '').trim();
+
+  const rawAddress = String(raw.address ?? raw.alamat ?? '').trim();
+  const isLegacyAddress =
+    !rawAddress ||
+    rawAddress === 'Jl. Pendidikan Nasional No. 45, Kompleks Akademika, Indonesia';
+
+  const rawCity = String(raw.city ?? raw.kota ?? '').trim();
+  const isLegacyCity = !rawCity || rawCity === 'Jakarta';
+
+  return {
+    id: 'school_identity',
+    schoolName: isLegacySchoolName ? DEFAULT_SCHOOL_IDENTITY.schoolName : rawSchoolName,
+    programName: cleanProgram || DEFAULT_SCHOOL_IDENTITY.programName,
+    npsn: String(raw.npsn ?? DEFAULT_SCHOOL_IDENTITY.npsn).trim(),
+    address: isLegacyAddress ? DEFAULT_SCHOOL_IDENTITY.address : rawAddress,
+    mudirName: String(raw.mudirName ?? raw.namaMudir ?? raw.headmasterName ?? '').trim(),
+    mudirNip: String(raw.mudirNip ?? raw.nipMudir ?? raw.headmasterNip ?? '').trim(),
+    leaderTitle:
+      String(raw.leaderTitle ?? raw.jabatanPimpinan ?? DEFAULT_SCHOOL_IDENTITY.leaderTitle).trim() ||
+      'Mudir / Kepala Sekolah',
+    city: isLegacyCity ? DEFAULT_SCHOOL_IDENTITY.city : rawCity,
+    updatedAt: raw.updatedAt ? String(raw.updatedAt) : undefined,
+    updatedBy: raw.updatedBy ? String(raw.updatedBy) : undefined
+  };
+}
+
+export async function fetchSchoolIdentity(): Promise<SchoolIdentity> {
+  // 1. Read local cache first
+  let cachedIdentity: SchoolIdentity | null = null;
+  try {
+    const cached = safeGetItem('kantoja_school_identity');
+    if (cached) {
+      cachedIdentity = normalizeSchoolIdentity(JSON.parse(cached));
+    }
+  } catch (err) {
+    console.warn('Error reading school identity from localStorage:', err);
+  }
+
+  // 2. Read from Firestore document academicSettings/school_identity
+  try {
+    const snap = await getDoc(doc(db, 'academicSettings', 'school_identity'));
+    if (snap.exists()) {
+      const firestoreIdentity = normalizeSchoolIdentity({ id: snap.id, ...snap.data() });
+      // If cachedIdentity has a newer updatedAt than Firestore, sync cachedIdentity to Firestore
+      if (
+        cachedIdentity?.updatedAt &&
+        (!firestoreIdentity.updatedAt || cachedIdentity.updatedAt > firestoreIdentity.updatedAt)
+      ) {
+        setDoc(doc(db, 'academicSettings', 'school_identity'), sanitizeDataForFirestore(cachedIdentity), {
+          merge: true
+        }).catch(() => {});
+        safeSetItem('kantoja_school_identity', JSON.stringify(cachedIdentity));
+        return cachedIdentity;
+      }
+      safeSetItem('kantoja_school_identity', JSON.stringify(firestoreIdentity));
+      return firestoreIdentity;
+    } else {
+      // Seed initial school_identity document into Firestore so it exists persistently
+      const initialToSave = cachedIdentity || { ...DEFAULT_SCHOOL_IDENTITY };
+      safeSetItem('kantoja_school_identity', JSON.stringify(initialToSave));
+      setDoc(doc(db, 'academicSettings', 'school_identity'), sanitizeDataForFirestore(initialToSave), {
+        merge: true
+      }).catch(() => {});
+      return initialToSave;
+    }
+  } catch (e) {
+    console.warn('Error fetching school identity from Firestore:', e);
+  }
+
+  const fallback = cachedIdentity || { ...DEFAULT_SCHOOL_IDENTITY };
+  safeSetItem('kantoja_school_identity', JSON.stringify(fallback));
+  return fallback;
+}
+
+export async function saveSchoolIdentityDoc(data: Partial<SchoolIdentity>): Promise<SchoolIdentity> {
+  const cleanProgram = String(data.programName ?? DEFAULT_SCHOOL_IDENTITY.programName)
+    .replace(/\s*\(\s*paket\s+[abc]\s*\)\s*$/i, '')
+    .trim();
+
+  const normalized: SchoolIdentity = {
+    id: 'school_identity',
+    schoolName: String(data.schoolName ?? DEFAULT_SCHOOL_IDENTITY.schoolName).trim() || DEFAULT_SCHOOL_IDENTITY.schoolName,
+    programName: cleanProgram || DEFAULT_SCHOOL_IDENTITY.programName,
+    npsn: String(data.npsn ?? '').trim(),
+    address: String(data.address ?? DEFAULT_SCHOOL_IDENTITY.address).trim() || DEFAULT_SCHOOL_IDENTITY.address,
+    mudirName: String(data.mudirName ?? '').trim(),
+    mudirNip: String(data.mudirNip ?? '').trim(),
+    leaderTitle: String(data.leaderTitle ?? 'Mudir / Kepala Sekolah').trim() || 'Mudir / Kepala Sekolah',
+    city: String(data.city ?? DEFAULT_SCHOOL_IDENTITY.city).trim() || DEFAULT_SCHOOL_IDENTITY.city,
+    updatedAt: new Date().toISOString(),
+    updatedBy: data.updatedBy
+  };
+  const sanitized = sanitizeDataForFirestore(normalized);
+
+  // 1. Always persist to local cache immediately
+  safeSetItem('kantoja_school_identity', JSON.stringify(sanitized));
+
+  // 2. Persist to Firestore (academicSettings/school_identity)
+  try {
+    await setDoc(doc(db, 'academicSettings', 'school_identity'), sanitized, { merge: true });
+  } catch (e) {
+    console.warn('Firestore write warning for academicSettings/school_identity (saved to local cache):', e);
+  }
+
+  return sanitized;
 }
 
 /**

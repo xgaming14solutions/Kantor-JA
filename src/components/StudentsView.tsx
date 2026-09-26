@@ -90,14 +90,14 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
       accStudents = homeroomClass
         ? (students || []).filter((s) => s && s.classId === homeroomClass.id)
         : [];
-      selClasses = homeroomClass ? [homeroomClass] : [];
+      selClasses = homeroomClass && homeroomClass.isActive !== false ? [homeroomClass] : [];
     } else if (currentRole === 'GURU_MAPEL') {
       accStudents = (students || []).filter((s) => s && taughtClassIds.includes(s.classId));
-      selClasses = (classes || []).filter((c) => c && taughtClassIds.includes(c.id));
+      selClasses = (classes || []).filter((c) => c && c.isActive !== false && taughtClassIds.includes(c.id));
     } else {
-      // ADMIN and KEPALA_SEKOLAH have access to all students
+      // ADMIN and KEPALA_SEKOLAH have access to all students, and active classes for selection
       accStudents = students || [];
-      selClasses = classes || [];
+      selClasses = (classes || []).filter((c) => c && c.isActive !== false);
     }
 
     return { accessibleStudents: accStudents, selectableClasses: selClasses };
@@ -616,11 +616,13 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
                     required
                   >
                     <option value="">-- Pilih Kelas --</option>
-                    {(classes || []).map((c) => (
-                      <option key={c.id} value={c.id}>
-                        Kelas {c.name} (Tingkat {c.gradeLevel})
-                      </option>
-                    ))}
+                    {(classes || [])
+                      .filter((c) => c && (c.isActive !== false || c.id === formData.classId))
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          Kelas {c.name} (Tingkat {c.gradeLevel})
+                        </option>
+                      ))}
                   </select>
                 </div>
               </div>

@@ -189,6 +189,43 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "studentId", "extracurricularId", "classId", "academicYearId", "semester"]
+    },
+    "ExtracurricularScore": {
+      "title": "ExtracurricularScore",
+      "description": "Nilai kegiatan ekstrakurikuler siswa per tahun ajaran dan semester",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "extracurricularId": { "type": "string" },
+        "classId": { "type": "string" },
+        "academicYearId": { "type": "string" },
+        "semester": { "type": "string" },
+        "nilai": { "type": "string", "enum": ["A", "B", "C", "D"] },
+        "keterangan": { "type": "string" },
+        "teacherId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "studentId", "extracurricularId", "classId", "academicYearId", "semester", "nilai"]
+    },
+    "SchoolIdentity": {
+      "title": "SchoolIdentity",
+      "description": "Konfigurasi identitas lembaga sekolah dan data Mudir/Kepala Sekolah untuk dokumen rapor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolName": { "type": "string" },
+        "npsn": { "type": "string" },
+        "address": { "type": "string" },
+        "mudirName": { "type": "string" },
+        "mudirNip": { "type": "string" },
+        "leaderTitle": { "type": "string" },
+        "city": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["id", "schoolName"]
     }
   },
   "firestore": {
@@ -235,6 +272,10 @@
     "/extracurricularParticipants/{participantId}": {
       "schema": "ExtracurricularParticipant",
       "description": "Data siswa peserta ekstrakurikuler"
+    },
+    "/extracurricularScores/{scoreId}": {
+      "schema": "ExtracurricularScore",
+      "description": "Data nilai ekstrakurikuler siswa"
     }
   }
 }

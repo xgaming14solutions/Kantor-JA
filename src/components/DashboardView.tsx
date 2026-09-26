@@ -139,7 +139,7 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
                 </div>
               </div>
               <div className="mt-3">
-                <div className="text-2xl font-bold text-slate-900">{totalStudents}</div>
+                <div className="text-2xl font-bold text-slate-900">{activeStudents}</div>
                 <div className="text-xs text-slate-500 mt-1">Siswa terdaftar aktif</div>
               </div>
             </div>
@@ -152,8 +152,8 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
                 </div>
               </div>
               <div className="mt-3">
-                <div className="text-2xl font-bold text-slate-900">{totalTeachers}</div>
-                <div className="text-xs text-slate-500 mt-1">Tenaga pendidik & pengajar</div>
+                <div className="text-2xl font-bold text-slate-900">{activeTeachers}</div>
+                <div className="text-xs text-slate-500 mt-1">Tenaga pendidik & pengajar aktif</div>
               </div>
             </div>
 
@@ -165,7 +165,7 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
                 </div>
               </div>
               <div className="mt-3">
-                <div className="text-2xl font-bold text-slate-900">{totalClasses}</div>
+                <div className="text-2xl font-bold text-slate-900">{activeClasses}</div>
                 <div className="text-xs text-slate-500 mt-1">Rombongan belajar aktif</div>
               </div>
             </div>
@@ -199,11 +199,11 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {[
-                  { label: 'Data Siswa', sub: `${totalStudents} siswa`, tab: 'students', icon: GraduationCap },
-                  { label: 'Data Guru', sub: `${totalTeachers} guru`, tab: 'teachers', icon: Users },
-                  { label: 'Kelas & Wali', sub: `${totalClasses} kelas`, tab: 'classes', icon: DoorOpen },
-                  { label: 'Mata Pelajaran', sub: `${subjects.length} mapel`, tab: 'subjects', icon: BookOpen },
-                  { label: 'Penugasan Guru', sub: `${INITIAL_ASSIGNMENTS.length} jadwal`, tab: 'assignments', icon: FileCheck },
+                  { label: 'Data Siswa', sub: `${activeStudents} siswa aktif`, tab: 'students', icon: GraduationCap },
+                  { label: 'Data Guru', sub: `${activeTeachers} guru aktif`, tab: 'teachers', icon: Users },
+                  { label: 'Kelas & Wali', sub: `${activeClasses} kelas aktif`, tab: 'classes', icon: DoorOpen },
+                  { label: 'Mata Pelajaran', sub: `${subjects.filter((s) => s.isActive !== false).length} mapel aktif`, tab: 'subjects', icon: BookOpen },
+                  { label: 'Penugasan Guru', sub: `${teacherAssignments.filter((a) => a.status !== 'Nonaktif').length} jadwal`, tab: 'assignments', icon: FileCheck },
                   { label: 'Tahun Ajaran', sub: activeAcademicYear?.name ? `${activeAcademicYear.name} (${activeAcademicYear.semester})` : 'Belum diatur', tab: 'academic-years', icon: CalendarDays },
                 ].map((item, idx) => {
                   const Icon = item.icon;
@@ -268,22 +268,22 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
               <span className="text-xs font-medium text-slate-500">Total Siswa</span>
               <div className="mt-2 flex items-baseline gap-2">
-                <div className="text-2xl font-bold text-slate-900">{totalStudents}</div>
+                <div className="text-2xl font-bold text-slate-900">{activeStudents}</div>
                 <span className="text-xs text-slate-400">Siswa Aktif</span>
               </div>
             </div>
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
               <span className="text-xs font-medium text-slate-500">Total Guru</span>
               <div className="mt-2 flex items-baseline gap-2">
-                <div className="text-2xl font-bold text-slate-900">{totalTeachers}</div>
-                <span className="text-xs text-slate-400">Guru / Staf Pengajar</span>
+                <div className="text-2xl font-bold text-slate-900">{activeTeachers}</div>
+                <span className="text-xs text-slate-400">Guru / Staf Pengajar Aktif</span>
               </div>
             </div>
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
               <span className="text-xs font-medium text-slate-500">Rombongan Belajar</span>
               <div className="mt-2 flex items-baseline gap-2">
-                <div className="text-2xl font-bold text-slate-900">{totalClasses}</div>
-                <span className="text-xs text-slate-400">Kelas</span>
+                <div className="text-2xl font-bold text-slate-900">{activeClasses}</div>
+                <span className="text-xs text-slate-400">Kelas Aktif</span>
               </div>
             </div>
           </div>

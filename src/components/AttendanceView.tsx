@@ -29,18 +29,19 @@ export const AttendanceView: React.FC = () => {
     }
     if (role === 'GURU_MAPEL') {
       const taughtClassIds = new Set(myAssignments.map((a) => a.classId));
-      return classes.filter((c) => taughtClassIds.has(c.id));
+      return classes.filter((c) => c.isActive !== false && taughtClassIds.has(c.id));
     }
     if (role === 'WALI_KELAS') {
       const homeroomClass = classes.find(
         (c) =>
+          c.isActive !== false &&
           (c.teacherId === effectiveTeacherId || c.homeroomTeacherId === effectiveTeacherId) &&
           (activeAcademicYear ? c.academicYearId === activeAcademicYear.id : true)
       );
       const authorizedIds = new Set<string>();
       if (homeroomClass) authorizedIds.add(homeroomClass.id);
       myAssignments.forEach((a) => authorizedIds.add(a.classId));
-      return classes.filter((c) => authorizedIds.has(c.id));
+      return classes.filter((c) => c.isActive !== false && authorizedIds.has(c.id));
     }
     return [];
   }, [role, classes, myAssignments, effectiveTeacherId, activeAcademicYear]);

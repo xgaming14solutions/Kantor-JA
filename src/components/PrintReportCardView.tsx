@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useMasterData } from '../context/MasterDataContext';
 import { useAuth } from '../context/AuthContext';
 import { calculateStudentScore, formatFinalScore } from '../lib/academicCalculation';
+import { formatReportProgram, formatReportClassLabel } from '../lib/dbService';
 import { ReportCard, UserRole } from '../types';
 import {
   Printer,
@@ -111,6 +112,99 @@ export const ARABIC_SUBJECT_MAP: Record<string, string> = {
 };
 
 /**
+ * Converts an integer (0 - 1000) into Indonesian words (Terbilang)
+ */
+function integerToWords(n: number): string {
+  const num = Math.floor(Math.abs(n));
+  const satuan = [
+    '',
+    'Satu',
+    'Dua',
+    'Tiga',
+    'Empat',
+    'Lima',
+    'Enam',
+    'Tujuh',
+    'Delapan',
+    'Sembilan',
+    'Sepuluh',
+    'Sebelas'
+  ];
+
+  if (num === 0) return 'Nol';
+  if (num < 12) return satuan[num];
+  if (num < 20) return `${satuan[num - 10]} Belas`;
+  if (num < 100) {
+    const puluh = Math.floor(num / 10);
+    const sisa = num % 10;
+    return `${satuan[puluh]} Puluh${sisa > 0 ? ' ' + satuan[sisa] : ''}`;
+  }
+  if (num === 100) return 'Seratus';
+  if (num < 200) {
+    return `Seratus ${integerToWords(num - 100)}`;
+  }
+  if (num < 1000) {
+    const ratus = Math.floor(num / 100);
+    const sisa = num % 100;
+    return `${satuan[ratus]} Ratus${sisa > 0 ? ' ' + integerToWords(sisa) : ''}`;
+  }
+  return String(num);
+}
+
+/**
+ * Converts a report card numeric score (including optional decimal) to Indonesian Terbilang text.
+ * Examples:
+ * 0 -> Nol, 1 -> Satu, 10 -> Sepuluh, 11 -> Sebelas, 20 -> Dua Puluh, 21 -> Dua Puluh Satu,
+ * 85 -> Delapan Puluh Lima, 87 -> Delapan Puluh Tujuh, 90 -> Sembilan Puluh, 100 -> Seratus
+ */
+export function scoreToTerbilang(
+  formattedScore?: string | null,
+  rawScore?: number | null
+): string {
+  if (formattedScore && formattedScore !== '-') {
+    const clean = String(formattedScore).trim().replace(',', '.');
+    const parsed = parseFloat(clean);
+    if (isNaN(parsed)) return '-';
+
+    const parts = clean.split('.');
+    const intPart = parseInt(parts[0], 10);
+    if (isNaN(intPart)) return '-';
+
+    const intWords = integerToWords(intPart);
+    if (parts.length > 1) {
+      const decStr = parts[1].replace(/0+$/, '');
+      if (decStr.length > 0) {
+        const digitWords = [
+          'Nol',
+          'Satu',
+          'Dua',
+          'Tiga',
+          'Empat',
+          'Lima',
+          'Enam',
+          'Tujuh',
+          'Delapan',
+          'Sembilan'
+        ];
+        const decWords = decStr
+          .split('')
+          .map((d) => digitWords[parseInt(d, 10)] || '')
+          .filter(Boolean)
+          .join(' ');
+        if (decWords) {
+          return `${intWords} Koma ${decWords}`;
+        }
+      }
+    }
+    return intWords;
+  }
+
+  if (rawScore === null || rawScore === undefined || isNaN(rawScore)) return '-';
+  const rounded = Math.round(rawScore * 10) / 10;
+  return scoreToTerbilang(String(rounded), null);
+}
+
+/**
  * Standard letter score conversion:
  * 90 - 100: A
  * 80 - 89.9: B
@@ -159,7 +253,11 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
     getAcademicSetting,
     reportCards,
     saveReportCard,
-    attendance
+    attendance,
+    extracurricularParticipants,
+    extracurricularScores,
+    schoolIdentity,
+    loading
   } = useMasterData();
 
   // Find homeroom class if current user is Wali Kelas
@@ -174,9 +272,21 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
     );
   }, [effectiveRole, currentUser, teachers, classes]);
 
+  // Active classes only
+  const activeClasses = useMemo(() => {
+    return classes.filter((c) => c.isActive !== false);
+  }, [classes]);
+
+  // All active students across active classes
+  const allActiveStudents = useMemo(() => {
+    return students
+      .filter((s) => s.status === 'Aktif' && (s as any).isActive !== false)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [students]);
+
   // Year Selection
   const [selectedYearId, setSelectedYearId] = useState<string>(
-    activeAcademicYear?.id || academicYears[0]?.id || 'ay_2026_2027_1'
+    activeAcademicYear?.id || academicYears[0]?.id || ''
   );
 
   // Semester Selection
@@ -184,27 +294,111 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
     activeAcademicYear?.semester || 'Ganjil'
   );
 
+  // Sync with activeAcademicYear when master data finishes loading or activeAcademicYear changes
+  const lastSyncedActiveYearId = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeAcademicYear) {
+      const key = `${activeAcademicYear.id}_${activeAcademicYear.semester}`;
+      if (lastSyncedActiveYearId.current !== key) {
+        setSelectedYearId(activeAcademicYear.id);
+        setSelectedSemester(activeAcademicYear.semester);
+        lastSyncedActiveYearId.current = key;
+      }
+    }
+  }, [activeAcademicYear]);
+
   // Class Selection
   const [selectedClassId, setSelectedClassId] = useState<string>(() => {
     if (homeroomClass) return homeroomClass.id;
-    if (initialClassId && classes.some((c) => c.id === initialClassId)) return initialClassId;
-    return classes[0]?.id || 'c_7a';
+    if (initialClassId && activeClasses.some((c) => c.id === initialClassId)) return initialClassId;
+    const classWithStudents = activeClasses.find((c) =>
+      allActiveStudents.some((s) => s.classId === c.id)
+    );
+    return classWithStudents?.id || activeClasses[0]?.id || classes[0]?.id || '';
   });
 
-  // Students in selected class
+  // Active students in selected class (exclude inactive/keluar/lulus/pindah students)
   const classStudents = useMemo(() => {
-    return students
-      .filter((s) => s.classId === selectedClassId)
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [students, selectedClassId]);
+    return allActiveStudents.filter((s) => s.classId === selectedClassId);
+  }, [allActiveStudents, selectedClassId]);
 
   // Student Selection
   const [selectedStudentId, setSelectedStudentId] = useState<string>(() => {
-    if (initialStudentId && classStudents.some((s) => s.id === initialStudentId)) {
+    if (initialStudentId && allActiveStudents.some((s) => s.id === initialStudentId)) {
       return initialStudentId;
     }
     return classStudents[0]?.id || '';
   });
+
+  // Sync initialClassId & initialStudentId when passed via props or when Firestore finishes loading
+  const hasInitializedSelection = useRef(false);
+  useEffect(() => {
+    if (initialStudentId) {
+      const targetStudent = allActiveStudents.find((s) => s.id === initialStudentId);
+      if (targetStudent) {
+        if (targetStudent.classId && targetStudent.classId !== selectedClassId) {
+          setSelectedClassId(targetStudent.classId);
+        }
+        setSelectedStudentId(targetStudent.id);
+        hasInitializedSelection.current = true;
+        return;
+      }
+    }
+    if (initialClassId && activeClasses.some((c) => c.id === initialClassId)) {
+      setSelectedClassId(initialClassId);
+      const firstSt = allActiveStudents.find((s) => s.classId === initialClassId);
+      setSelectedStudentId(firstSt?.id || '');
+      hasInitializedSelection.current = true;
+      return;
+    }
+  }, [initialStudentId, initialClassId, activeClasses, allActiveStudents]);
+
+  // Ensure valid class and student selection once Firestore data loads
+  useEffect(() => {
+    if (loading) return;
+    if (homeroomClass && selectedClassId !== homeroomClass.id) {
+      setSelectedClassId(homeroomClass.id);
+      return;
+    }
+
+    const isCurrentClassValid = activeClasses.some((c) => c.id === selectedClassId);
+    if (!isCurrentClassValid && activeClasses.length > 0) {
+      const classWithStudents = activeClasses.find((c) =>
+        allActiveStudents.some((s) => s.classId === c.id)
+      );
+      const nextClassId = classWithStudents?.id || activeClasses[0].id;
+      setSelectedClassId(nextClassId);
+      const firstSt = allActiveStudents.find((s) => s.classId === nextClassId);
+      setSelectedStudentId(firstSt?.id || '');
+      hasInitializedSelection.current = true;
+      return;
+    }
+
+    // On first load after Firestore finishes, if current class has 0 students while another active class has students, prefer the class with students
+    if (!hasInitializedSelection.current && activeClasses.length > 0 && !initialClassId && !homeroomClass) {
+      const currentHasStudents = allActiveStudents.some((s) => s.classId === selectedClassId);
+      if (!currentHasStudents) {
+        const classWithStudents = activeClasses.find((c) =>
+          allActiveStudents.some((s) => s.classId === c.id)
+        );
+        if (classWithStudents) {
+          setSelectedClassId(classWithStudents.id);
+          const firstSt = allActiveStudents.find((s) => s.classId === classWithStudents.id);
+          setSelectedStudentId(firstSt?.id || '');
+        }
+      }
+      hasInitializedSelection.current = true;
+    }
+  }, [loading, activeClasses, allActiveStudents, selectedClassId, homeroomClass, initialClassId]);
+
+  // Keep selectedStudentId in sync with classStudents when class changes
+  useEffect(() => {
+    if (classStudents.length === 0) {
+      if (selectedStudentId !== '') setSelectedStudentId('');
+    } else if (!classStudents.some((s) => s.id === selectedStudentId)) {
+      setSelectedStudentId(classStudents[0].id);
+    }
+  }, [classStudents, selectedStudentId]);
 
   // Search filter inside student picker
   const [searchStudentQuery, setSearchStudentQuery] = useState<string>('');
@@ -224,7 +418,13 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
   const selectedYear = useMemo(() => {
     return (
       academicYears.find((y) => y.id === selectedYearId) ||
-      activeAcademicYear || { id: selectedYearId, name: '2026/2027', semester: selectedSemester, isActive: true }
+      activeAcademicYear ||
+      academicYears[0] || {
+        id: selectedYearId,
+        name: '2025/2026',
+        semester: selectedSemester,
+        isActive: true
+      }
     );
   }, [academicYears, selectedYearId, activeAcademicYear, selectedSemester]);
 
@@ -233,13 +433,16 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
     return getAcademicSetting(selectedYearId, selectedSemester);
   }, [selectedYearId, selectedSemester, getAcademicSetting]);
 
-  // Class metadata
-  const selectedClass = classes.find((c) => c.id === selectedClassId);
+  // Class metadata (always matches selectedClassId / activeStudent's class)
+  const selectedClass = useMemo(() => {
+    return (
+      classes.find((c) => c.id === selectedClassId) ||
+      (activeStudent ? classes.find((c) => c.id === activeStudent.classId) : undefined) ||
+      activeClasses[0]
+    );
+  }, [classes, activeClasses, selectedClassId, activeStudent]);
   const classHomeroomTeacher = teachers.find(
     (t) => t.id === selectedClass?.homeroomTeacherId || t.id === selectedClass?.teacherId
-  );
-  const headmaster = teachers.find(
-    (t) => t.email?.includes('kepsek') || t.notes?.toLowerCase().includes('kepala')
   );
 
   // Fetch or initialize report card record for notes
@@ -265,12 +468,41 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
     }
   }, [currentReportCard, activeStudent]);
 
+  // Strictly filter ONLY active Diniyah academic subjects and deduplicate by subject name
+  const diniyahSubjects = useMemo(() => {
+    const candidates = subjects.filter(
+      (s) =>
+        (s.type || 'subject') === 'subject' &&
+        s.isActive !== false &&
+        (s.category || '').trim().toLowerCase() === 'diniyah'
+    );
+
+    const byName = new Map<string, typeof candidates[0]>();
+    candidates.forEach((sub) => {
+      const key = sub.name.trim().toLowerCase();
+      const existing = byName.get(key);
+      if (!existing) {
+        byName.set(key, sub);
+      } else {
+        // Prefer the subject record that has actual scores or is not a legacy mock ID
+        const existingHasScores = scores.some((sc) => sc.subjectId === existing.id);
+        const currentHasScores = scores.some((sc) => sc.subjectId === sub.id);
+        if (currentHasScores && !existingHasScores) {
+          byName.set(key, sub);
+        } else if (existing.id === 'sub_aqd' && sub.id !== 'sub_aqd') {
+          byName.set(key, sub);
+        }
+      }
+    });
+
+    return Array.from(byName.values());
+  }, [subjects, scores]);
+
   // Calculate subject scores for all students in class to compute Class Average per Subject
   const classSubjectAverages = useMemo(() => {
     const map: Record<string, { total: number; count: number; averageFormatted: string }> = {};
-    const academicSubjects = subjects.filter((s) => (s.type || 'subject') === 'subject');
 
-    academicSubjects.forEach((sub) => {
+    diniyahSubjects.forEach((sub) => {
       let sum = 0;
       let count = 0;
 
@@ -311,14 +543,13 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
     });
 
     return map;
-  }, [subjects, classStudents, scores, selectedClassId, selectedYearId, selectedYear, selectedSemester, currentAcademicSetting]);
+  }, [diniyahSubjects, classStudents, scores, selectedClassId, selectedYearId, selectedYear, selectedSemester, currentAcademicSetting]);
 
-  // Calculate detailed subject scores for the active selected student
+  // Calculate detailed subject scores for the active selected student (Diniyah only)
   const studentSubjectScores = useMemo(() => {
     if (!activeStudent) return [];
-    const academicSubjects = subjects.filter((s) => (s.type || 'subject') === 'subject');
 
-    return academicSubjects.map((sub) => {
+    return diniyahSubjects.map((sub) => {
       const subScores = scores.filter(
         (sc) =>
           sc.studentId === activeStudent.id &&
@@ -350,24 +581,19 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
         finalScore: calcResult.finalScore,
         formattedScore: calcResult.formattedFinalScore,
         letterScore: getScoreLetter(calcResult.finalScore),
+        terbilangScore: scoreToTerbilang(calcResult.formattedFinalScore, calcResult.finalScore),
         classAverage: classSubjectAverages[sub.id]?.averageFormatted || '-',
         isPassing: calcResult.isPassing
       };
     });
-  }, [activeStudent, subjects, scores, selectedClassId, selectedYearId, selectedYear, selectedSemester, currentAcademicSetting, classSubjectAverages]);
+  }, [activeStudent, diniyahSubjects, scores, selectedClassId, selectedYearId, selectedYear, selectedSemester, currentAcademicSetting, classSubjectAverages]);
 
-  // Group subjects dynamically by category (e.g. "Ilmu Diniyyah", "Ilmu Bahasa", "Umum", "Peminatan", etc.)
+  // Group subjects exclusively under Diniyah
   const groupedSubjects = useMemo(() => {
     const groups: Record<string, typeof studentSubjectScores> = {};
-
-    studentSubjectScores.forEach((item) => {
-      const cat = item.subject.category || 'Mata Pelajaran Umum';
-      if (!groups[cat]) {
-        groups[cat] = [];
-      }
-      groups[cat].push(item);
-    });
-
+    if (studentSubjectScores.length > 0) {
+      groups['Diniyah'] = studentSubjectScores;
+    }
     return groups;
   }, [studentSubjectScores]);
 
@@ -404,6 +630,65 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
 
     return { sakit, izin, alpa, total: attList.length };
   }, [attendance, activeStudent, selectedClassId, selectedYearId, selectedYear, selectedSemester]);
+
+  // Extracurricular activities & scores strictly for the active student in chosen period
+  const studentExtracurriculars = useMemo(() => {
+    if (!activeStudent) return [];
+
+    const eksMasterList = subjects.filter(
+      (s) => s.type === 'extracurricular' && s.isActive !== false
+    );
+
+    // 1. Find extracurricular IDs that this student participates in for the selected period
+    const studentParticipations = extracurricularParticipants.filter((p) => {
+      if (p.studentId !== activeStudent.id) return false;
+      if (p.status === 'inactive') return false;
+      if (selectedClassId && p.classId && p.classId !== selectedClassId) return false;
+      const yearMatches =
+        !p.academicYearId ||
+        p.academicYearId === selectedYearId ||
+        p.academicYearId === selectedYear?.name;
+      if (!yearMatches) return false;
+      if (p.semester && p.semester !== selectedSemester) return false;
+      return true;
+    });
+
+    const participatedEksIds = new Set(studentParticipations.map((p) => p.extracurricularId));
+
+    // 2. Find extracurricular scores saved specifically for this student in the selected period
+    const studentEksScores = extracurricularScores.filter((sc) => {
+      if (sc.studentId !== activeStudent.id) return false;
+      if (selectedClassId && sc.classId && sc.classId !== selectedClassId) return false;
+      const yearMatches =
+        !sc.academicYearId ||
+        sc.academicYearId === selectedYearId ||
+        sc.academicYearId === selectedYear?.name;
+      if (!yearMatches) return false;
+      if (sc.semester && sc.semester !== selectedSemester) return false;
+      return true;
+    });
+
+    // Only include extracurriculars followed by this student
+    return eksMasterList
+      .filter((eks) => participatedEksIds.has(eks.id))
+      .map((eks) => {
+        const scoreRecord = studentEksScores.find((sc) => sc.extracurricularId === eks.id);
+        return {
+          extracurricular: eks,
+          nilai: scoreRecord?.nilai || '-',
+          keterangan: scoreRecord?.keterangan || ''
+        };
+      });
+  }, [
+    activeStudent,
+    subjects,
+    extracurricularParticipants,
+    extracurricularScores,
+    selectedClassId,
+    selectedYearId,
+    selectedYear,
+    selectedSemester
+  ]);
 
   // Save edited notes
   const handleSaveNotes = async () => {
@@ -541,17 +826,20 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
               <select
                 value={selectedClassId}
                 onChange={(e) => {
-                  setSelectedClassId(e.target.value);
-                  // Auto-select first student in that class
-                  const firstInClass = students.find((s) => s.classId === e.target.value);
-                  if (firstInClass) setSelectedStudentId(firstInClass.id);
+                  const newClassId = e.target.value;
+                  setSelectedClassId(newClassId);
+                  // Auto-select first active student in that class
+                  const firstInClass = allActiveStudents.find(
+                    (s) => s.classId === newClassId
+                  );
+                  setSelectedStudentId(firstInClass ? firstInClass.id : '');
                 }}
                 disabled={effectiveRole === 'WALI_KELAS' && !!homeroomClass}
                 className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:bg-slate-100 disabled:text-slate-500"
               >
-                {classes.map((cls) => (
+                {activeClasses.map((cls) => (
                   <option key={cls.id} value={cls.id}>
-                    {cls.name} (Tingkat {cls.gradeLevel})
+                    Kelas {formatReportClassLabel(cls)} — {formatReportProgram(schoolIdentity.programName, cls)}
                   </option>
                 ))}
               </select>
@@ -565,18 +853,50 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
             {/* 2. Student Picker */}
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                Pilih Siswa ({classStudents.length} Siswa):
+                Pilih Siswa ({classStudents.length} Siswa di Kelas {selectedClass?.name || '-'}):
               </label>
               <select
                 value={activeStudent?.id || ''}
-                onChange={(e) => setSelectedStudentId(e.target.value)}
+                onChange={(e) => {
+                  const chosenId = e.target.value;
+                  const chosenStudent = allActiveStudents.find((s) => s.id === chosenId);
+                  if (chosenStudent) {
+                    if (chosenStudent.classId && chosenStudent.classId !== selectedClassId) {
+                      setSelectedClassId(chosenStudent.classId);
+                    }
+                    setSelectedStudentId(chosenStudent.id);
+                  } else {
+                    setSelectedStudentId(chosenId);
+                  }
+                }}
                 className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               >
-                {classStudents.map((st) => (
-                  <option key={st.id} value={st.id}>
-                    {st.nis} - {st.name}
-                  </option>
-                ))}
+                {classStudents.length === 0 ? (
+                  <option value="">-- Belum ada siswa di kelas {selectedClass?.name || ''} --</option>
+                ) : (
+                  <optgroup label={`Siswa Kelas ${selectedClass?.name || ''}`}>
+                    {classStudents.map((st) => (
+                      <option key={st.id} value={st.id}>
+                        {st.name} (NISN: {st.nisn || st.nis || '-'})
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {effectiveRole !== 'WALI_KELAS' &&
+                  allActiveStudents.some((s) => s.classId !== selectedClassId) && (
+                    <optgroup label="Pilih Siswa dari Kelas Lain">
+                      {allActiveStudents
+                        .filter((s) => s.classId !== selectedClassId)
+                        .map((st) => {
+                          const stClass = classes.find((c) => c.id === st.classId);
+                          return (
+                            <option key={st.id} value={st.id}>
+                              {st.name} — Kelas {stClass?.name || '-'} (NISN: {st.nisn || st.nis || '-'})
+                            </option>
+                          );
+                        })}
+                    </optgroup>
+                  )}
               </select>
             </div>
 
@@ -590,8 +910,8 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                 onChange={(e) => setSelectedSemester(e.target.value as 'Ganjil' | 'Genap')}
                 className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               >
-                <option value="Ganjil">Semester Ganjil</option>
-                <option value="Genap">Semester Genap</option>
+                <option value="Ganjil">Ganjil</option>
+                <option value="Genap">Genap</option>
               </select>
             </div>
 
@@ -602,12 +922,19 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
               </label>
               <select
                 value={selectedYearId}
-                onChange={(e) => setSelectedYearId(e.target.value)}
+                onChange={(e) => {
+                  const newYearId = e.target.value;
+                  setSelectedYearId(newYearId);
+                  const foundAy = academicYears.find((ay) => ay.id === newYearId);
+                  if (foundAy?.semester) {
+                    setSelectedSemester(foundAy.semester);
+                  }
+                }}
                 className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               >
                 {academicYears.map((ay) => (
                   <option key={ay.id} value={ay.id}>
-                    {ay.name} {ay.isActive ? '(Aktif)' : ''}
+                    {ay.name} ({ay.semester}) {ay.isActive ? '(Aktif)' : ''}
                   </option>
                 ))}
               </select>
@@ -679,85 +1006,97 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
       {/* ========================================================
           RAPOR SHEET (A4 PORTRAIT TEMPLATE DESIGN)
          ======================================================== */}
-      {!activeStudent ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
-          Tidak ada data siswa yang dipilih atau tersedia di kelas ini.
+      {!activeStudent && (
+        <div className="no-print bg-amber-50 rounded-2xl border border-amber-200 p-3.5 text-center text-xs text-amber-800 font-medium">
+          Belum ada siswa aktif yang terdaftar di Kelas <strong>{formatReportClassLabel(selectedClass)}</strong>. Anda tetap dapat melihat pratinjau identitas program <strong>{formatReportProgram(schoolIdentity.programName, selectedClass)}</strong> di bawah ini, atau pilih siswa dari dropdown <strong>Pilih Siswa</strong>.
         </div>
-      ) : (
-        <div className="flex justify-center">
-          <div
-            id="print-rapor-sheet"
-            className="w-full max-w-[210mm] min-h-[297mm] bg-white p-6 sm:p-10 border border-slate-200 shadow-md rounded-xl text-slate-900 print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-none print:w-full print:rounded-none"
-            style={{
-              fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"
-            }}
-          >
-            {/* ========================================================
-                1. HEADER
-               ======================================================== */}
-            <div className="text-center pb-3 border-b-2 border-slate-900">
-              <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-900">
-                LAPORAN HASIL BELAJAR SISWA
-              </h1>
-              <p className="text-[10px] sm:text-xs text-slate-500 font-semibold tracking-wide uppercase mt-0.5">
-                SMP AKSARA &bull; Kurikulum Akademik Terpadu
-              </p>
-            </div>
+      )}
 
-            {/* Information Grid: Two Columns (Left & Right) */}
-            <div className="grid grid-cols-2 gap-4 py-3 text-[11px] sm:text-xs border-b border-slate-300">
-              {/* Left Column */}
-              <div className="space-y-1">
-                <div className="grid grid-cols-[100px_10px_1fr]">
-                  <span className="font-semibold text-slate-700">Nama Sekolah</span>
-                  <span>:</span>
-                  <span className="font-bold text-slate-900">SMP AKSARA</span>
-                </div>
-                <div className="grid grid-cols-[100px_10px_1fr]">
-                  <span className="font-semibold text-slate-700">Program</span>
-                  <span>:</span>
-                  <span className="text-slate-800">Reguler / Kepesantrenan</span>
-                </div>
-                <div className="grid grid-cols-[100px_10px_1fr]">
-                  <span className="font-semibold text-slate-700">Alamat</span>
-                  <span>:</span>
-                  <span className="text-slate-800 truncate" title={activeStudent.address || 'Kampus SMP AKSARA'}>
-                    {activeStudent.address || 'Kampus SMP AKSARA, Indonesia'}
-                  </span>
-                </div>
-                <div className="grid grid-cols-[100px_10px_1fr]">
-                  <span className="font-semibold text-slate-700">Nama</span>
-                  <span>:</span>
-                  <strong className="font-bold text-slate-900 uppercase">{activeStudent.name}</strong>
-                </div>
+      <div className="flex justify-center">
+        <div
+          id="print-rapor-sheet"
+          className="w-full max-w-[210mm] min-h-[297mm] bg-white p-6 sm:p-10 border border-slate-200 shadow-md rounded-xl text-slate-900 print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-none print:w-full print:rounded-none"
+          style={{
+            fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"
+          }}
+        >
+          {/* ========================================================
+              1. HEADER
+             ======================================================== */}
+          <div className="text-center pb-3 border-b-2 border-slate-900">
+            <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-900">
+              LAPORAN HASIL BELAJAR SISWA
+            </h1>
+            <p className="text-[10px] sm:text-xs text-slate-500 font-semibold tracking-wide uppercase mt-0.5">
+              {schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'} &bull;{' '}
+              {formatReportProgram(schoolIdentity.programName, selectedClass)}
+            </p>
+          </div>
+
+          {/* Information Grid: Two Columns (Left & Right) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 py-3 text-[11px] sm:text-xs border-b border-slate-300">
+            {/* Left Column */}
+            <div className="space-y-1">
+              <div className="grid grid-cols-[100px_10px_1fr]">
+                <span className="font-semibold text-slate-700">Nama Sekolah</span>
+                <span>:</span>
+                <span className="font-bold text-slate-900">
+                  {schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}
+                </span>
               </div>
-
-              {/* Right Column */}
-              <div className="space-y-1">
-                <div className="grid grid-cols-[90px_10px_1fr]">
-                  <span className="font-semibold text-slate-700">Kelas</span>
-                  <span>:</span>
-                  <strong className="font-bold text-slate-900">{selectedClass?.name || '-'}</strong>
-                </div>
-                <div className="grid grid-cols-[90px_10px_1fr]">
-                  <span className="font-semibold text-slate-700">Semester</span>
-                  <span>:</span>
-                  <span className="text-slate-800">{selectedSemester}</span>
-                </div>
-                <div className="grid grid-cols-[90px_10px_1fr]">
-                  <span className="font-semibold text-slate-700">Tahun Ajaran</span>
-                  <span>:</span>
-                  <span className="text-slate-800">{selectedYear?.name || '2026/2027'}</span>
-                </div>
-                <div className="grid grid-cols-[90px_10px_1fr]">
-                  <span className="font-semibold text-slate-700">NISN</span>
-                  <span>:</span>
-                  <span className="font-mono text-slate-800">
-                    {activeStudent.nisn || activeStudent.nis || '-'}
-                  </span>
-                </div>
+              <div className="grid grid-cols-[100px_10px_1fr]">
+                <span className="font-semibold text-slate-700">Program</span>
+                <span>:</span>
+                <span className="font-semibold text-slate-900">
+                  {formatReportProgram(schoolIdentity.programName, selectedClass)}
+                </span>
+              </div>
+              <div className="grid grid-cols-[100px_10px_1fr]">
+                <span className="font-semibold text-slate-700">Alamat</span>
+                <span>:</span>
+                <span className="text-slate-800 leading-snug">
+                  {schoolIdentity.address || '-'}
+                </span>
+              </div>
+              <div className="grid grid-cols-[100px_10px_1fr]">
+                <span className="font-semibold text-slate-700">Nama</span>
+                <span>:</span>
+                <strong className="font-bold text-slate-900">
+                  {activeStudent ? activeStudent.name : '-'}
+                </strong>
               </div>
             </div>
+
+            {/* Right Column */}
+            <div className="space-y-1">
+              <div className="grid grid-cols-[95px_10px_1fr]">
+                <span className="font-semibold text-slate-700">Kelas</span>
+                <span>:</span>
+                <strong className="font-bold text-slate-900">
+                  {formatReportClassLabel(selectedClass)}
+                </strong>
+              </div>
+              <div className="grid grid-cols-[95px_10px_1fr]">
+                <span className="font-semibold text-slate-700">Semester</span>
+                <span>:</span>
+                <span className="text-slate-800">{selectedSemester}</span>
+              </div>
+              <div className="grid grid-cols-[95px_10px_1fr]">
+                <span className="font-semibold text-slate-700">Tahun Ajaran</span>
+                <span>:</span>
+                <span className="text-slate-800">
+                  {selectedYear?.name || activeAcademicYear?.name || '-'}
+                </span>
+              </div>
+              <div className="grid grid-cols-[95px_10px_1fr]">
+                <span className="font-semibold text-slate-700">NISN</span>
+                <span>:</span>
+                <span className="font-mono text-slate-800">
+                  {activeStudent ? activeStudent.nisn || activeStudent.nis || '-' : '-'}
+                </span>
+              </div>
+            </div>
+          </div>
 
             {/* ========================================================
                 2. TABEL NILAI (MAIN GRADES TABLE)
@@ -781,7 +1120,7 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                   </tr>
                   <tr className="bg-blue-800 text-white font-bold text-center border-b border-blue-900 text-[10px]">
                     <th className="border border-slate-400 px-2 py-1 w-16">Angka</th>
-                    <th className="border border-slate-400 px-2 py-1 w-16">Huruf</th>
+                    <th className="border border-slate-400 px-2 py-1 w-40">Terbilang</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -825,8 +1164,8 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                               <td className="border border-slate-300 px-2 py-1.5 text-center font-bold text-slate-900 font-mono">
                                 {sr.formattedScore}
                               </td>
-                              <td className="border border-slate-300 px-2 py-1.5 text-center font-bold text-slate-800 font-mono">
-                                {sr.letterScore}
+                              <td className="border border-slate-300 px-2 py-1.5 text-center font-semibold text-slate-800">
+                                {sr.terbilangScore}
                               </td>
                               <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-700 font-mono">
                                 {sr.classAverage}
@@ -880,22 +1219,33 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Database-sourced extracurricular or standard empty/clean placeholders without dummy data */}
-                    <tr>
-                      <td className="border border-slate-300 px-1.5 py-1 text-center font-mono">1</td>
-                      <td className="border border-slate-300 px-2 py-1 text-slate-700">Pertanian / Perkebunan</td>
-                      <td className="border border-slate-300 px-1.5 py-1 text-center font-semibold">-</td>
-                    </tr>
-                    <tr>
-                      <td className="border border-slate-300 px-1.5 py-1 text-center font-mono">2</td>
-                      <td className="border border-slate-300 px-2 py-1 text-slate-700">Perikanan / Peternakan</td>
-                      <td className="border border-slate-300 px-1.5 py-1 text-center font-semibold">-</td>
-                    </tr>
-                    <tr>
-                      <td className="border border-slate-300 px-1.5 py-1 text-center font-mono">3</td>
-                      <td className="border border-slate-300 px-2 py-1 text-slate-700">Pramuka & Keterampilan</td>
-                      <td className="border border-slate-300 px-1.5 py-1 text-center font-semibold">-</td>
-                    </tr>
+                    {studentExtracurriculars.length === 0 ? (
+                      <tr>
+                        <td className="border border-slate-300 px-1.5 py-1 text-center font-mono text-slate-400">
+                          -
+                        </td>
+                        <td className="border border-slate-300 px-2 py-1 text-slate-400 italic">
+                          Tidak mengikuti ekstrakurikuler
+                        </td>
+                        <td className="border border-slate-300 px-1.5 py-1 text-center font-semibold text-slate-400">
+                          -
+                        </td>
+                      </tr>
+                    ) : (
+                      studentExtracurriculars.map((item, idx) => (
+                        <tr key={item.extracurricular.id}>
+                          <td className="border border-slate-300 px-1.5 py-1 text-center font-mono">
+                            {idx + 1}
+                          </td>
+                          <td className="border border-slate-300 px-2 py-1 text-slate-800 font-medium">
+                            {item.extracurricular.name}
+                          </td>
+                          <td className="border border-slate-300 px-1.5 py-1 text-center font-bold text-slate-900 font-mono">
+                            {item.nilai}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -968,7 +1318,7 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
             <div className="mt-6 pt-2 text-[11px] sm:text-xs">
               {/* Date & Location */}
               <div className="text-right text-slate-700 mb-2">
-                <span>Jakarta, </span>
+                <span>{schoolIdentity.city || 'Jakarta'}, </span>
                 <span>
                   {new Date().toLocaleDateString('id-ID', {
                     day: 'numeric',
@@ -989,7 +1339,7 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                   <div className="h-16" />
                   <div>
                     <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-36">
-                      {activeStudent.parentName || '(..........................................)'}
+                      {activeStudent?.parentName || '(..........................................)'}
                     </p>
                   </div>
                 </div>
@@ -1015,20 +1365,22 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                   </div>
                 </div>
 
-                {/* 3. Mengetahui Mudir */}
+                {/* 3. Mengetahui Mudir / Kepala Sekolah (dari Identitas Sekolah) */}
                 <div className="flex flex-col justify-between">
                   <div>
                     <p className="text-slate-600">Mengetahui</p>
-                    <p className="font-semibold text-slate-800">Mudir / Kepala Sekolah</p>
+                    <p className="font-semibold text-slate-800">
+                      {schoolIdentity.leaderTitle || 'Mudir / Kepala Sekolah'}
+                    </p>
                   </div>
                   <div className="h-16" />
                   <div>
                     <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-36">
-                      {headmaster?.name || 'Dr. H. Mulyadi, M.Pd.'}
+                      {schoolIdentity.mudirName || '(..........................................)'}
                     </p>
-                    {headmaster?.nip && (
+                    {schoolIdentity.mudirNip && (
                       <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                        NIP. {headmaster.nip}
+                        NIP/NIK. {schoolIdentity.mudirNip}
                       </p>
                     )}
                   </div>
@@ -1038,12 +1390,11 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
 
             {/* Document footer code */}
             <div className="mt-6 pt-2 border-t border-slate-200 flex justify-between items-center text-[9px] text-slate-400 font-mono">
-              <span>Buku Rapor AKSARA &bull; No. Seri: RC-{activeStudent.nis}-{selectedSemester.toUpperCase()}</span>
-              <span>Dicetak secara otomatis melalui Sistem Informasi Manajemen Akademik AKSARA</span>
+              <span>Buku Rapor {schoolIdentity.schoolName || 'KantoJA'} &bull; No. Seri: RC-{activeStudent?.nis || 'DRAFT'}-{selectedSemester.toUpperCase()}</span>
+              <span>Dicetak secara otomatis melalui Sistem Informasi Manajemen Akademik</span>
             </div>
           </div>
         </div>
-      )}
     </div>
   );
 };

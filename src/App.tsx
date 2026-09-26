@@ -34,6 +34,7 @@ export default function App() {
   const { currentUser, role, loading } = useAuth();
   const [currentTab, setCurrentTab] = useState<string>(getInitialTab);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
+  const [printTarget, setPrintTarget] = useState<{ studentId?: string; classId?: string }>({});
 
   // Sync URL with tab and auth state
   useEffect(() => {
@@ -152,9 +153,24 @@ export default function App() {
       case 'academic-settings':
         return <AcademicSettingsView userRole={role} />;
       case 'report-cards':
-        return <ReportCardsView userRole={role} onNavigateToPrint={(studentId, classId) => handleNavigate('print-report')} />;
+        return (
+          <ReportCardsView
+            userRole={role}
+            onNavigateToPrint={(studentId, classId) => {
+              setPrintTarget({ studentId, classId });
+              handleNavigate('print-report');
+            }}
+          />
+        );
       case 'print-report':
-        return <PrintReportCardView userRole={role} onBack={() => handleNavigate('report-cards')} />;
+        return (
+          <PrintReportCardView
+            userRole={role}
+            initialStudentId={printTarget.studentId}
+            initialClassId={printTarget.classId}
+            onBack={() => handleNavigate('report-cards')}
+          />
+        );
       case 'my-classes':
         return <MyClassesView />;
       default:

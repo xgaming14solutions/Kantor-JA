@@ -47,6 +47,11 @@ export const ExtracurricularParticipantsView: React.FC<ExtracurricularParticipan
     return subjects.filter((s) => s.type === 'extracurricular' && s.isActive !== false);
   }, [subjects]);
 
+  // Active classes only
+  const activeClasses = useMemo(() => {
+    return classes.filter((c) => c.isActive !== false);
+  }, [classes]);
+
   // Active or first available academic year
   const initialYearId = activeAcademicYear?.id || academicYears[0]?.id || 'ay_2026_2027_1';
   const initialSemester = (activeAcademicYear?.semester || 'Ganjil') as 'Ganjil' | 'Genap';
@@ -78,11 +83,12 @@ export const ExtracurricularParticipantsView: React.FC<ExtracurricularParticipan
 
   // Auto-select class & extracurricular if not selected
   useEffect(() => {
-    if (!selectedClassId && classes.length > 0) {
-      const activeClass = classes.find((c) => c.isActive !== false) || classes[0];
-      setSelectedClassId(activeClass.id);
+    if (!selectedClassId && activeClasses.length > 0) {
+      setSelectedClassId(activeClasses[0].id);
+    } else if (selectedClassId && activeClasses.length > 0 && !activeClasses.some((c) => c.id === selectedClassId)) {
+      setSelectedClassId(activeClasses[0].id);
     }
-  }, [classes, selectedClassId]);
+  }, [activeClasses, selectedClassId]);
 
   useEffect(() => {
     if (!selectedExtracurricularId && extracurriculars.length > 0) {
@@ -98,14 +104,21 @@ export const ExtracurricularParticipantsView: React.FC<ExtracurricularParticipan
       return;
     }
 
-    // Query participants in this exact scope from MasterDataContext
+    // Query participants in this exact scope from MasterDataContext (only active students)
+    const activeStudentIdSet = new Set(
+      students
+        .filter((s) => s.classId === selectedClassId && s.status === 'Aktif' && (s as any).isActive !== false)
+        .map((s) => s.id)
+    );
+
     const matched = extracurricularParticipants.filter(
       (p) =>
         p.extracurricularId === selectedExtracurricularId &&
         p.classId === selectedClassId &&
         p.academicYearId === selectedYearId &&
         p.semester === selectedSemester &&
-        p.status !== 'inactive'
+        p.status !== 'inactive' &&
+        activeStudentIdSet.has(p.studentId)
     );
 
     const ids = matched.map((p) => p.studentId);
@@ -116,14 +129,15 @@ export const ExtracurricularParticipantsView: React.FC<ExtracurricularParticipan
     selectedClassId,
     selectedYearId,
     selectedSemester,
-    extracurricularParticipants
+    extracurricularParticipants,
+    students
   ]);
 
   // Students belonging to the chosen class
   const classStudents = useMemo(() => {
     if (!selectedClassId) return [];
     return students
-      .filter((s) => s.classId === selectedClassId && s.status === 'Aktif')
+      .filter((s) => s.classId === selectedClassId && s.status === 'Aktif' && (s as any).isActive !== false)
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [students, selectedClassId]);
 
@@ -350,10 +364,10 @@ export const ExtracurricularParticipantsView: React.FC<ExtracurricularParticipan
               onChange={(e) => setSelectedClassId(e.target.value)}
               className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer"
             >
-              {classes.length === 0 ? (
-                <option value="">Belum ada kelas</option>
+              {activeClasses.length === 0 ? (
+                <option value="">Belum ada kelas aktif</option>
               ) : (
-                classes.map((c) => (
+                activeClasses.map((c) => (
                   <option key={c.id} value={c.id}>
                     Kelas {c.name} (Tingkat {c.gradeLevel})
                   </option>

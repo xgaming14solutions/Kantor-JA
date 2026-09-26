@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Score } from '../types';
+import { Score, ExtracurricularScore } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
 import {
@@ -31,8 +31,17 @@ import {
   Trash2,
   SlidersHorizontal,
   Calculator,
-  Edit2
+  Edit2,
+  Sparkles,
+  Users
 } from 'lucide-react';
+
+const DEFAULT_EKSKUL_KETERANGAN: Record<string, string> = {
+  A: 'Sangat Baik',
+  B: 'Baik',
+  C: 'Cukup',
+  D: 'Kurang'
+};
 
 export const ScoresView: React.FC = () => {
   const { currentUser, role } = useAuth();
@@ -45,11 +54,18 @@ export const ScoresView: React.FC = () => {
     teacherAssignments,
     scores,
     academicSettings,
+    extracurricularParticipants,
+    extracurricularScores,
     getAcademicSetting,
     saveScore,
     deleteScore,
+    saveExtracurricularScore,
+    deleteExtracurricularScore,
     refreshAll
   } = useMasterData();
+
+  // Assessment Type Selector: 'subject' (Mata Pelajaran) | 'extracurricular' (Ekstrakurikuler)
+  const [assessmentType, setAssessmentType] = useState<'subject' | 'extracurricular'>('subject');
 
   // Active Academic Setting dynamically fetched from Firestore
   const currentAcademicSetting = useMemo(() => {
@@ -87,8 +103,10 @@ export const ScoresView: React.FC = () => {
 
   // 3. Filter Available Subjects strictly from TeacherAssignments for GURU_MAPEL, and prioritize assigned for WALI_KELAS
   const availableSubjects = useMemo(() => {
-    // Only standard academic subjects enter academic score management
-    const academicSubjects = subjects.filter((s) => (s.type || 'subject') === 'subject');
+    // Only active standard academic subjects enter academic score management
+    const academicSubjects = subjects.filter(
+      (s) => (s.type || 'subject') === 'subject' && s.isActive !== false
+    );
 
     if (role === 'GURU_MAPEL') {
       const assignedSubjectIds = new Set(activeTeacherAssignments.map((a) => a.subjectId));
@@ -100,11 +118,11 @@ export const ScoresView: React.FC = () => {
           .filter((a) => !selectedClassId || a.classId === selectedClassId)
           .map((a) => a.subjectId)
       );
-      const assigned = academicSubjects.filter((s) => assignedSubjectIds.has(s.id) && s.isActive !== false);
-      const others = academicSubjects.filter((s) => !assignedSubjectIds.has(s.id) && s.isActive !== false);
+      const assigned = academicSubjects.filter((s) => assignedSubjectIds.has(s.id));
+      const others = academicSubjects.filter((s) => !assignedSubjectIds.has(s.id));
       return [...assigned, ...others];
     }
-    return academicSubjects.filter((s) => s.isActive !== false);
+    return academicSubjects;
   }, [role, activeTeacherAssignments, selectedClassId, subjects]);
 
   // Selected Subject State
@@ -121,15 +139,37 @@ export const ScoresView: React.FC = () => {
     }
   }, [availableSubjects, selectedSubjectId]);
 
-  // 4. Filter Available Classes strictly from TeacherAssignments for teachers
+  // 3B. Filter Available Extracurriculars from master subjects (type === 'extracurricular')
+  const availableExtracurriculars = useMemo(() => {
+    return subjects.filter((s) => s.type === 'extracurricular' && s.isActive !== false);
+  }, [subjects]);
+
+  const [selectedExtracurricularId, setSelectedExtracurricularId] = useState<string>('');
+
+  useEffect(() => {
+    if (availableExtracurriculars.length > 0) {
+      if (!availableExtracurriculars.some((e) => e.id === selectedExtracurricularId)) {
+        setSelectedExtracurricularId(availableExtracurriculars[0].id);
+      }
+    } else {
+      setSelectedExtracurricularId('');
+    }
+  }, [availableExtracurriculars, selectedExtracurricularId]);
+
+  // 4. Filter Available Classes strictly from TeacherAssignments for teachers (or active classes for extracurricular)
   const availableClasses = useMemo(() => {
     if (role === 'GURU_MAPEL') {
       const assignedClassIds = new Set(
         activeTeacherAssignments
-          .filter((a) => !selectedSubjectId || a.subjectId === selectedSubjectId)
+          .filter((a) => assessmentType === 'extracurricular' || !selectedSubjectId || a.subjectId === selectedSubjectId)
           .map((a) => a.classId)
       );
-      return classes.filter((c) => assignedClassIds.has(c.id));
+      const matched = classes.filter((c) => c.isActive !== false && assignedClassIds.has(c.id));
+      return matched.length > 0
+        ? matched
+        : assessmentType === 'extracurricular'
+        ? classes.filter((c) => c.isActive !== false)
+        : [];
     }
     if (role === 'WALI_KELAS') {
       const taughtClassIds = new Set(activeTeacherAssignments.map((a) => a.classId));
@@ -143,7 +183,7 @@ export const ScoresView: React.FC = () => {
       return relevant.length > 0 ? relevant : classes.filter((c) => c.isActive !== false);
     }
     return classes.filter((c) => c.isActive !== false);
-  }, [role, activeTeacherAssignments, selectedSubjectId, classes, effectiveTeacherId]);
+  }, [role, activeTeacherAssignments, selectedSubjectId, classes, effectiveTeacherId, assessmentType]);
 
   // Auto-sync selectedClassId
   useEffect(() => {
@@ -156,8 +196,9 @@ export const ScoresView: React.FC = () => {
     }
   }, [availableClasses, selectedClassId]);
 
-  // Current selected subject & class objects
+  // Current selected subject, extracurricular & class objects
   const currentSubject = subjects.find((s) => s.id === selectedSubjectId) || null;
+  const currentExtracurricular = availableExtracurriculars.find((e) => e.id === selectedExtracurricularId) || null;
   const currentClass = classes.find((c) => c.id === selectedClassId) || null;
 
   // Strict Authorization Barrier:
@@ -186,8 +227,192 @@ export const ScoresView: React.FC = () => {
   const classStudents = useMemo(() => {
     if (!selectedClassId) return [];
     if (role === 'GURU_MAPEL' && !canEditScores) return [];
-    return students.filter((s) => s.classId === selectedClassId && s.status === 'Aktif');
+    return students.filter(
+      (s) =>
+        s.classId === selectedClassId &&
+        s.status === 'Aktif' &&
+        (s as any).isActive !== false
+    );
   }, [students, selectedClassId, role, canEditScores]);
+
+  // Authorization for Extracurricular Scores
+  const canEditExtracurricularScores = useMemo(() => {
+    if (role === 'ADMIN') return true;
+    if (role === 'KEPALA_SEKOLAH') return false;
+    if (role === 'WALI_KELAS' || role === 'GURU_MAPEL') return true;
+    return false;
+  }, [role]);
+
+  // Strictly filter ONLY students registered as participants of selectedExtracurricularId in selectedClassId
+  const extracurricularParticipantStudentIds = useMemo(() => {
+    if (!selectedClassId || !selectedExtracurricularId) return new Set<string>();
+    const matched = extracurricularParticipants.filter((p) => {
+      if (p.extracurricularId !== selectedExtracurricularId) return false;
+      if (p.classId !== selectedClassId) return false;
+      if (p.status === 'inactive') return false;
+      if (activeAcademicYear) {
+        const yearMatches =
+          !p.academicYearId ||
+          p.academicYearId === activeAcademicYear.id ||
+          p.academicYearId === activeAcademicYear.name;
+        if (!yearMatches) return false;
+        if (p.semester && activeAcademicYear.semester && p.semester !== activeAcademicYear.semester) {
+          return false;
+        }
+      }
+      return true;
+    });
+    return new Set(matched.map((p) => p.studentId));
+  }, [extracurricularParticipants, selectedClassId, selectedExtracurricularId, activeAcademicYear]);
+
+  const extracurricularStudents = useMemo(() => {
+    if (!selectedClassId || !selectedExtracurricularId) return [];
+    return students
+      .filter(
+        (s) =>
+          s.classId === selectedClassId &&
+          s.status === 'Aktif' &&
+          (s as any).isActive !== false &&
+          extracurricularParticipantStudentIds.has(s.id)
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [students, selectedClassId, selectedExtracurricularId, extracurricularParticipantStudentIds]);
+
+  const getStudentExtracurricularScore = (studentId: string): ExtracurricularScore | null => {
+    if (!selectedExtracurricularId) return null;
+    return (
+      extracurricularScores.find((sc) => {
+        if (sc.studentId !== studentId) return false;
+        if (sc.extracurricularId !== selectedExtracurricularId) return false;
+        if (selectedClassId && sc.classId && sc.classId !== selectedClassId) return false;
+        if (activeAcademicYear) {
+          const yearMatches =
+            !sc.academicYearId ||
+            sc.academicYearId === activeAcademicYear.id ||
+            sc.academicYearId === activeAcademicYear.name;
+          if (!yearMatches) return false;
+          if (sc.semester && activeAcademicYear.semester && sc.semester !== activeAcademicYear.semester) {
+            return false;
+          }
+        }
+        return true;
+      }) || null
+    );
+  };
+
+  // Extracurricular Input/Edit Modal & Rincian Modal States
+  const [isEksInputModalOpen, setIsEksInputModalOpen] = useState<boolean>(false);
+  const [eksDetailStudentId, setEksDetailStudentId] = useState<string | null>(null);
+  const [eksFormData, setEksFormData] = useState<{
+    studentId: string;
+    nilai: string;
+    keterangan: string;
+  }>({
+    studentId: '',
+    nilai: 'A',
+    keterangan: 'Sangat Baik'
+  });
+  const [eksFormError, setEksFormError] = useState<string | null>(null);
+  const [eksFormSuccess, setEksFormSuccess] = useState<string | null>(null);
+  const [isEksSubmitting, setIsEksSubmitting] = useState<boolean>(false);
+
+  const handleOpenEksInputModal = (targetStudentId?: string) => {
+    setEksFormError(null);
+    setEksFormSuccess(null);
+
+    if (!canEditExtracurricularScores) {
+      return;
+    }
+
+    const studentToSelect = targetStudentId || extracurricularStudents[0]?.id || '';
+    const existing = studentToSelect ? getStudentExtracurricularScore(studentToSelect) : null;
+
+    setEksFormData({
+      studentId: studentToSelect,
+      nilai: existing?.nilai || 'A',
+      keterangan: existing ? (existing.keterangan || '') : 'Sangat Baik'
+    });
+    setIsEksInputModalOpen(true);
+  };
+
+  const handleEksStudentChangeInModal = (newStudentId: string) => {
+    const existing = newStudentId ? getStudentExtracurricularScore(newStudentId) : null;
+    setEksFormData({
+      studentId: newStudentId,
+      nilai: existing?.nilai || 'A',
+      keterangan: existing ? (existing.keterangan || '') : 'Sangat Baik'
+    });
+  };
+
+  const handleEksGradeChangeInModal = (newNilai: string) => {
+    setEksFormData((prev) => {
+      const currentKet = prev.keterangan.trim();
+      const isDefaultKet =
+        currentKet === '' ||
+        Object.values(DEFAULT_EKSKUL_KETERANGAN).includes(currentKet);
+      return {
+        ...prev,
+        nilai: newNilai,
+        keterangan: isDefaultKet ? (DEFAULT_EKSKUL_KETERANGAN[newNilai] || '') : prev.keterangan
+      };
+    });
+  };
+
+  const handleSaveEksScore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEksFormError(null);
+    setEksFormSuccess(null);
+
+    if (!activeAcademicYear) {
+      setEksFormError('Tahun ajaran aktif belum ditentukan.');
+      return;
+    }
+    if (!selectedClassId || !selectedExtracurricularId || !eksFormData.studentId) {
+      setEksFormError('Pilih Kelas, Ekstrakurikuler, dan Siswa peserta terlebih dahulu.');
+      return;
+    }
+    if (!['A', 'B', 'C', 'D'].includes(eksFormData.nilai)) {
+      setEksFormError('Pilih nilai ekstrakurikuler yang valid (A, B, C, atau D).');
+      return;
+    }
+
+    setIsEksSubmitting(true);
+    try {
+      const existing = getStudentExtracurricularScore(eksFormData.studentId);
+      await saveExtracurricularScore({
+        id: existing?.id,
+        studentId: eksFormData.studentId,
+        extracurricularId: selectedExtracurricularId,
+        classId: selectedClassId,
+        academicYearId: activeAcademicYear.id,
+        semester: activeAcademicYear.semester,
+        nilai: eksFormData.nilai,
+        keterangan: eksFormData.keterangan.trim(),
+        teacherId: effectiveTeacherId || currentUser?.teacherId || 't_001'
+      });
+
+      setEksFormSuccess(
+        existing
+          ? `Nilai ekstrakurikuler berhasil diperbarui menjadi ${eksFormData.nilai}.`
+          : `Nilai ekstrakurikuler (${eksFormData.nilai}) berhasil disimpan ke database.`
+      );
+
+      setTimeout(() => {
+        setIsEksInputModalOpen(false);
+        setEksFormSuccess(null);
+      }, 800);
+    } catch (err: any) {
+      console.error('Error saving extracurricular score:', err);
+      setEksFormError(err?.message || 'Gagal menyimpan nilai ekstrakurikuler.');
+    } finally {
+      setIsEksSubmitting(false);
+    }
+  };
+
+  const selectedStudentForEksDetail = useMemo(() => {
+    if (!eksDetailStudentId) return null;
+    return students.find((s) => s.id === eksDetailStudentId) || null;
+  }, [students, eksDetailStudentId]);
 
   // 5. Modal State for "+ Input Nilai Baru"
   const [isInputModalOpen, setIsInputModalOpen] = useState<boolean>(false);
@@ -238,7 +463,14 @@ export const ScoresView: React.FC = () => {
     const initialSubjectId = selectedSubjectId || availableSubjects[0]?.id || '';
     const studentToSelect =
       targetStudentId ||
-      (classStudents.length > 0 ? classStudents[0].id : (students.find(s => s.classId === initialClassId)?.id || ''));
+      (classStudents.length > 0
+        ? classStudents[0].id
+        : students.find(
+            (s) =>
+              s.classId === initialClassId &&
+              s.status === 'Aktif' &&
+              (s as any).isActive !== false
+          )?.id || '');
     const defaultType = targetType || enabledComponents[0]?.code || 'UH';
 
     const existing = scores.find(
@@ -290,7 +522,7 @@ export const ScoresView: React.FC = () => {
           .filter((a) => !formData.subjectId || a.subjectId === formData.subjectId)
           .map((a) => a.classId)
       );
-      return classes.filter((c) => assignedClassIds.has(c.id));
+      return classes.filter((c) => c.isActive !== false && assignedClassIds.has(c.id));
     }
     if (role === 'WALI_KELAS') {
       const assignedClassIds = new Set(
@@ -320,7 +552,12 @@ export const ScoresView: React.FC = () => {
   // Update modal students when class in modal changes
   const modalClassStudents = useMemo(() => {
     if (!formData.classId) return [];
-    return students.filter((s) => s.classId === formData.classId && s.status === 'Aktif');
+    return students.filter(
+      (s) =>
+        s.classId === formData.classId &&
+        s.status === 'Aktif' &&
+        (s as any).isActive !== false
+    );
   }, [students, formData.classId]);
 
   // Ensure formData.studentId is valid when class changes
@@ -741,20 +978,38 @@ export const ScoresView: React.FC = () => {
             </strong>
           </div>
 
-          {(canEditScores || role === 'ADMIN') && (
-            <button
-              id="btn-input-nilai-baru"
-              onClick={() => handleOpenInputModal()}
-              disabled={isTeacher && (availableSubjects.length === 0 || !canEditScores)}
-              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white transition shadow-xs cursor-pointer ${
-                isTeacher && (availableSubjects.length === 0 || !canEditScores)
-                  ? 'bg-slate-400 cursor-not-allowed opacity-70'
-                  : 'bg-indigo-600 hover:bg-indigo-700'
-              }`}
-            >
-              <Plus className="w-4 h-4" />
-              + Input Nilai Baru
-            </button>
+          {assessmentType === 'subject' ? (
+            (canEditScores || role === 'ADMIN') && (
+              <button
+                id="btn-input-nilai-baru"
+                onClick={() => handleOpenInputModal()}
+                disabled={isTeacher && (availableSubjects.length === 0 || !canEditScores)}
+                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white transition shadow-xs cursor-pointer ${
+                  isTeacher && (availableSubjects.length === 0 || !canEditScores)
+                    ? 'bg-slate-400 cursor-not-allowed opacity-70'
+                    : 'bg-indigo-600 hover:bg-indigo-700'
+                }`}
+              >
+                <Plus className="w-4 h-4" />
+                + Input Nilai Baru
+              </button>
+            )
+          ) : (
+            canEditExtracurricularScores && (
+              <button
+                id="btn-input-nilai-ekskul"
+                onClick={() => handleOpenEksInputModal()}
+                disabled={extracurricularStudents.length === 0}
+                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white transition shadow-xs cursor-pointer ${
+                  extracurricularStudents.length === 0
+                    ? 'bg-slate-400 cursor-not-allowed opacity-70'
+                    : 'bg-indigo-600 hover:bg-indigo-700'
+                }`}
+              >
+                <Plus className="w-4 h-4" />
+                + Input Nilai
+              </button>
+            )
           )}
         </div>
       </div>
@@ -841,31 +1096,70 @@ export const ScoresView: React.FC = () => {
 
         <div>
           <label className="block text-[11px] font-semibold text-slate-500 mb-1">
-            MATA PELAJARAN
+            JENIS PENILAIAN
           </label>
           <select
-            id="select-filter-subject"
-            value={selectedSubjectId}
-            onChange={(e) => setSelectedSubjectId(e.target.value)}
-            disabled={availableSubjects.length <= 1 && isTeacher}
-            className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-600 disabled:opacity-80"
+            id="select-filter-assessment-type"
+            value={assessmentType}
+            onChange={(e) => setAssessmentType(e.target.value as 'subject' | 'extracurricular')}
+            className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer"
           >
-            {availableSubjects.length === 0 ? (
-              <option value="">Tidak ada mata pelajaran ditugaskan</option>
-            ) : (
-              availableSubjects.map((s) => {
-                const effKkm = currentAcademicSetting.subjectKkmOverrides?.[s.id] ?? s.kkm;
-                return (
-                  <option key={s.id} value={s.id}>
-                    {s.name} (KKM: {effKkm})
-                  </option>
-                );
-              })
-            )}
+            <option value="subject">Mata Pelajaran</option>
+            <option value="extracurricular">Ekstrakurikuler</option>
           </select>
         </div>
 
-        {currentSubject && (
+        {assessmentType === 'subject' ? (
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+              MATA PELAJARAN
+            </label>
+            <select
+              id="select-filter-subject"
+              value={selectedSubjectId}
+              onChange={(e) => setSelectedSubjectId(e.target.value)}
+              disabled={availableSubjects.length <= 1 && isTeacher}
+              className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-600 disabled:opacity-80"
+            >
+              {availableSubjects.length === 0 ? (
+                <option value="">Tidak ada mata pelajaran ditugaskan</option>
+              ) : (
+                availableSubjects.map((s) => {
+                  const effKkm = currentAcademicSetting.subjectKkmOverrides?.[s.id] ?? s.kkm;
+                  return (
+                    <option key={s.id} value={s.id}>
+                      {s.name} (KKM: {effKkm})
+                    </option>
+                  );
+                })
+              )}
+            </select>
+          </div>
+        ) : (
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+              EKSTRAKURIKULER
+            </label>
+            <select
+              id="select-filter-extracurricular"
+              value={selectedExtracurricularId}
+              onChange={(e) => setSelectedExtracurricularId(e.target.value)}
+              className="px-3 py-1.5 text-xs rounded-xl border border-purple-200 bg-purple-50/40 text-purple-900 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600 cursor-pointer"
+            >
+              {availableExtracurriculars.length === 0 ? (
+                <option value="">Belum ada ekstrakurikuler aktif</option>
+              ) : (
+                availableExtracurriculars.map((eks) => (
+                  <option key={eks.id} value={eks.id}>
+                    {eks.name}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+        )}
+
+        {assessmentType === 'subject' && currentSubject && (
           <div className="ml-auto flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
             <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
             <span>KKM Mapel:</span>
@@ -877,11 +1171,118 @@ export const ScoresView: React.FC = () => {
             )}
           </div>
         )}
+
+        {assessmentType === 'extracurricular' && currentExtracurricular && (
+          <div className="ml-auto flex items-center gap-2 text-xs text-purple-800 bg-purple-50 px-3 py-1.5 rounded-xl border border-purple-200">
+            <Users className="w-3.5 h-3.5 text-purple-600" />
+            <span>Peserta {currentExtracurricular.name}:</span>
+            <strong className="text-purple-950 font-bold">{extracurricularStudents.length} Siswa</strong>
+          </div>
+        )}
       </div>
 
-      {/* Relational Scores Table */}
+      {/* Relational Scores Table (Academic vs Extracurricular) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        {role === 'GURU_MAPEL' && !canEditScores ? (
+        {assessmentType === 'extracurricular' ? (
+          availableExtracurriculars.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-500">
+              Belum ada kegiatan ekstrakurikuler aktif. Silakan tambahkan pada menu Mata Pelajaran &amp; Ekstrakurikuler.
+            </div>
+          ) : extracurricularStudents.length === 0 ? (
+            <div className="p-8 text-center">
+              <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-slate-800">
+                Belum Ada Peserta {currentExtracurricular?.name || 'Ekstrakurikuler'} di Kelas {currentClass?.name || ''}
+              </p>
+              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                Hanya siswa yang terdaftar sebagai peserta {currentExtracurricular?.name || 'ekstrakurikuler ini'} yang ditampilkan. Silakan pilih peserta terlebih dahulu melalui menu <strong>Mata Pelajaran &rarr; Ekstrakurikuler &rarr; Peserta</strong>.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600">
+                <thead className="bg-slate-50 text-slate-700 uppercase font-semibold text-[11px] border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-4">NIS</th>
+                    <th className="py-3 px-4">Nama Siswa</th>
+                    <th className="py-3 px-4 text-center">Nilai</th>
+                    <th className="py-3 px-4">Keterangan</th>
+                    <th className="py-3 px-4 text-center">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {extracurricularStudents.map((st) => {
+                    const eksScore = getStudentExtracurricularScore(st.id);
+                    return (
+                      <tr key={st.id} className="hover:bg-slate-50/60 transition">
+                        <td className="py-3 px-4 font-mono text-slate-500">{st.nis}</td>
+                        <td className="py-3 px-4 font-semibold text-slate-900">
+                          {st.name}
+                          {st.gender && (
+                            <span className="ml-1.5 text-[10px] text-slate-400 font-normal">
+                              ({st.gender})
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {eksScore ? (
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg font-bold text-xs bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              {eksScore.nilai}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-slate-700">
+                          {eksScore?.keterangan ? (
+                            <span className="font-medium text-slate-800">{eksScore.keterangan}</span>
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {canEditExtracurricularScores && (
+                              <button
+                                id={`btn-eks-score-${st.id}`}
+                                onClick={() => handleOpenEksInputModal(st.id)}
+                                className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition inline-flex items-center gap-1 cursor-pointer ${
+                                  eksScore
+                                    ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200'
+                                    : 'text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200'
+                                }`}
+                              >
+                                {eksScore ? (
+                                  <>
+                                    <Edit2 className="w-3 h-3" />
+                                    <span>Edit Nilai</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Plus className="w-3 h-3" />
+                                    <span>+ Input Nilai</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
+                            <button
+                              id={`btn-eks-detail-${st.id}`}
+                              onClick={() => setEksDetailStudentId(st.id)}
+                              className="px-2 py-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Rincian</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : role === 'GURU_MAPEL' && !canEditScores ? (
           <div className="p-10 text-center bg-rose-50/60 border border-rose-200/80 m-4 rounded-xl">
             <ShieldAlert className="w-12 h-12 text-rose-600 mx-auto mb-3" />
             <h4 className="text-base font-bold text-rose-900">AKSES DITOLAK (403 FORBIDDEN)</h4>
@@ -1578,6 +1979,226 @@ export const ScoresView: React.FC = () => {
                 <button
                   id="btn-close-detail"
                   onClick={() => setDetailStudentId(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 3: INPUT / EDIT NILAI EKSTRAKURIKULER */}
+      {/* ========================================================================= */}
+      {isEksInputModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div
+            id="modal-input-nilai-ekskul"
+            className="bg-white w-full max-w-md rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-8"
+          >
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  {getStudentExtracurricularScore(eksFormData.studentId)
+                    ? 'Edit Nilai Ekstrakurikuler'
+                    : 'Input Nilai Ekstrakurikuler'}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {currentExtracurricular?.name || 'Ekstrakurikuler'} • Kelas {currentClass?.name || '-'} ({activeAcademicYear?.name} - {activeAcademicYear?.semester})
+                </p>
+              </div>
+              <button
+                onClick={() => setIsEksInputModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEksScore} className="p-6 space-y-4">
+              {eksFormError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{eksFormError}</span>
+                </div>
+              )}
+
+              {eksFormSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
+                  <Check className="w-4 h-4 shrink-0" />
+                  <span>{eksFormSuccess}</span>
+                </div>
+              )}
+
+              {/* Peserta Ekstrakurikuler */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Siswa Peserta <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  id="eks-form-select-student"
+                  value={eksFormData.studentId}
+                  onChange={(e) => handleEksStudentChangeInModal(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 font-medium focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+                  required
+                >
+                  {extracurricularStudents.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.nis} - {st.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Pilihan Nilai (A / B / C / D) */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Nilai Ekstrakurikuler <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  id="eks-form-select-nilai"
+                  value={eksFormData.nilai}
+                  onChange={(e) => handleEksGradeChangeInModal(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 font-bold focus:ring-2 focus:ring-indigo-600 focus:outline-none cursor-pointer"
+                  required
+                >
+                  <option value="A">A — Sangat Baik</option>
+                  <option value="B">B — Baik</option>
+                  <option value="C">C — Cukup</option>
+                  <option value="D">D — Kurang</option>
+                </select>
+              </div>
+
+              {/* Keterangan (Opsional) */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Keterangan (Opsional)
+                </label>
+                <input
+                  id="eks-form-input-keterangan"
+                  type="text"
+                  value={eksFormData.keterangan}
+                  onChange={(e) => setEksFormData((prev) => ({ ...prev, keterangan: e.target.value }))}
+                  placeholder="Contoh: Sangat Baik / Aktif dalam kegiatan"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 font-medium focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEksInputModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  id="btn-submit-eks-score"
+                  disabled={isEksSubmitting}
+                  className="inline-flex items-center gap-2 px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl transition shadow-xs cursor-pointer"
+                >
+                  {isEksSubmitting ? 'Menyimpan...' : 'Simpan Nilai'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 4: RINCIAN EKSTRAKURIKULER */}
+      {/* ========================================================================= */}
+      {eksDetailStudentId && selectedStudentForEksDetail && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div
+            id="modal-rincian-ekskul"
+            className="bg-white w-full max-w-md rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-8"
+          >
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Rincian Ekstrakurikuler
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Periode: {activeAcademicYear?.name || '2026/2027'} - {activeAcademicYear?.semester || 'Ganjil'}
+                </p>
+              </div>
+              <button
+                onClick={() => setEksDetailStudentId(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {(() => {
+                const eksScore = getStudentExtracurricularScore(selectedStudentForEksDetail.id);
+                return (
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 text-xs">
+                    <div className="flex items-center justify-between border-b border-slate-200/70 pb-2.5">
+                      <span className="text-slate-500 font-medium">Nama Siswa</span>
+                      <div className="text-right">
+                        <strong className="text-slate-900 font-bold block">
+                          {selectedStudentForEksDetail.name}
+                        </strong>
+                        <span className="text-[11px] font-mono text-slate-400">
+                          NIS: {selectedStudentForEksDetail.nis} • Kelas {currentClass?.name || '-'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between border-b border-slate-200/70 pb-2.5">
+                      <span className="text-slate-500 font-medium">Nama Ekstrakurikuler</span>
+                      <strong className="text-purple-900 font-bold">
+                        {currentExtracurricular?.name || '-'}
+                      </strong>
+                    </div>
+
+                    <div className="flex items-center justify-between border-b border-slate-200/70 pb-2.5">
+                      <span className="text-slate-500 font-medium">Nilai</span>
+                      {eksScore ? (
+                        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg font-bold text-sm bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          {eksScore.nilai}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 italic">Belum dinilai</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 font-medium">Keterangan</span>
+                      <span className="font-semibold text-slate-800 text-right max-w-[220px]">
+                        {eksScore?.keterangan || '-'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2">
+                {canEditExtracurricularScores && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const stId = selectedStudentForEksDetail.id;
+                      setEksDetailStudentId(null);
+                      handleOpenEksInputModal(stId);
+                    }}
+                    className="px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition cursor-pointer inline-flex items-center gap-1.5"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    {getStudentExtracurricularScore(selectedStudentForEksDetail.id)
+                      ? 'Edit Nilai'
+                      : '+ Input Nilai'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setEksDetailStudentId(null)}
                   className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
                 >
                   Tutup
