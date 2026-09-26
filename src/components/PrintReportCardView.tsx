@@ -205,32 +205,18 @@ export function scoreToTerbilang(
 }
 
 /**
- * Standard letter score conversion:
- * 90 - 100: A
- * 80 - 89.9: B
- * 70 - 79.9: C
- * 60 - 69.9: D
- * < 60: E
- */
-export function getScoreLetter(score: number | null | undefined): string {
-  if (score === null || score === undefined || isNaN(score)) return '-';
-  if (score >= 90) return 'A';
-  if (score >= 80) return 'B';
-  if (score >= 70) return 'C';
-  if (score >= 60) return 'D';
-  return 'E';
-}
-
-/**
- * Formal predicate mapping for summary box
+ * Formal Arabic predicate mapping for report card:
+ * >= 90 : ممتاز (predikat tertinggi)
+ * >= 80 : جيد جدا (predikat sangat baik)
+ * >= 70 : جيد (predikat baik)
+ * < 70  : مقبول (predikat cukup)
  */
 export function getPredicateText(score: number | null | undefined): string {
   if (score === null || score === undefined || isNaN(score)) return '-';
-  if (score >= 90) return 'Istimewa / Mumtaz (A)';
-  if (score >= 80) return 'Sangat Baik / Jayyid Jiddan (B)';
-  if (score >= 70) return 'Baik / Jayyid (C)';
-  if (score >= 60) return 'Cukup / Maqbul (D)';
-  return 'Kurang / Rasib (E)';
+  if (score >= 90) return 'ممتاز';
+  if (score >= 80) return 'جيد جدا';
+  if (score >= 70) return 'جيد';
+  return 'مقبول';
 }
 
 export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
@@ -580,7 +566,6 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
         calcResult,
         finalScore: calcResult.finalScore,
         formattedScore: calcResult.formattedFinalScore,
-        letterScore: getScoreLetter(calcResult.finalScore),
         terbilangScore: scoreToTerbilang(calcResult.formattedFinalScore, calcResult.finalScore),
         classAverage: classSubjectAverages[sub.id]?.averageFormatted || '-',
         isPassing: calcResult.isPassing
@@ -949,7 +934,10 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
               <span className="font-semibold text-slate-700">Rata-rata Nilai:</span>{' '}
               <strong className="text-indigo-600">{studentTotals.averageScore}</strong> &bull;{' '}
               <span className="font-semibold text-slate-700">Predikat:</span>{' '}
-              <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold text-[11px]">
+              <span
+                className="px-2.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-arabic font-bold text-sm"
+                dir="rtl"
+              >
                 {getPredicateText(studentTotals.rawAverage)}
               </span>
             </div>
@@ -1027,10 +1015,6 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
             <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-900">
               LAPORAN HASIL BELAJAR SISWA
             </h1>
-            <p className="text-[10px] sm:text-xs text-slate-500 font-semibold tracking-wide uppercase mt-0.5">
-              {schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'} &bull;{' '}
-              {formatReportProgram(schoolIdentity.programName, selectedClass)}
-            </p>
           </div>
 
           {/* Information Grid: Two Columns (Left & Right) */}
@@ -1289,10 +1273,10 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                     Predikat
                   </div>
                   <div className="flex-1 flex flex-col items-center justify-center p-2 text-center bg-slate-50/50">
-                    <span className="text-xl sm:text-2xl font-black text-slate-900 font-mono">
-                      {getScoreLetter(studentTotals.rawAverage)}
-                    </span>
-                    <span className="text-[10px] font-semibold text-slate-600 mt-0.5 leading-tight">
+                    <span
+                      className="text-xl sm:text-2xl font-bold text-slate-900 font-arabic leading-relaxed"
+                      dir="rtl"
+                    >
                       {getPredicateText(studentTotals.rawAverage)}
                     </span>
                   </div>
@@ -1386,12 +1370,6 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                   </div>
                 </div>
               </div>
-            </div>
-
-            {/* Document footer code */}
-            <div className="mt-6 pt-2 border-t border-slate-200 flex justify-between items-center text-[9px] text-slate-400 font-mono">
-              <span>Buku Rapor {schoolIdentity.schoolName || 'KantoJA'} &bull; No. Seri: RC-{activeStudent?.nis || 'DRAFT'}-{selectedSemester.toUpperCase()}</span>
-              <span>Dicetak secara otomatis melalui Sistem Informasi Manajemen Akademik</span>
             </div>
           </div>
         </div>
