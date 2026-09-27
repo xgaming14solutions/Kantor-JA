@@ -98,15 +98,18 @@ export const AtkRequestsSection: React.FC<AtkRequestsSectionProps> = ({
     [atkItems, reqItemId]
   );
 
+  const isMudir = role === 'MUDIR' || role === 'mudir';
+  const canViewAllRequests = isAdminOrHeadmaster || isMudir;
+
   // Filter daftar permintaan:
-  // - Admin / Kepala Sekolah melihat seluruh permintaan guru/staff
+  // - Admin / Kepala Sekolah / Mudir melihat seluruh permintaan guru/staff
   // - Guru / Staff hanya melihat permintaan miliknya sendiri
   const visibleRequests = useMemo(() => {
     const myId = currentUser?.id || currentUser?.uid || currentUser?.username || '';
     const myName = (currentUser?.displayName || currentUser?.name || '').toLowerCase().trim();
 
     return atkRequests.filter((r) => {
-      if (!isAdminOrHeadmaster) {
+      if (!canViewAllRequests) {
         const isMine =
           r.pemohonId === myId ||
           (myName && r.pemohonNama.toLowerCase().trim() === myName);
@@ -120,7 +123,7 @@ export const AtkRequestsSection: React.FC<AtkRequestsSectionProps> = ({
       }
       return true;
     });
-  }, [atkRequests, isAdminOrHeadmaster, currentUser, statusFilter, searchQuery]);
+  }, [atkRequests, canViewAllRequests, currentUser, statusFilter, searchQuery]);
 
   const handleSubmitNewRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -336,12 +339,14 @@ export const AtkRequestsSection: React.FC<AtkRequestsSectionProps> = ({
             <div>
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <ClipboardList className="w-5 h-5 text-indigo-600" />
-                {isAdminOrHeadmaster
+                {canViewAllRequests
                   ? '📋 Daftar Seluruh Permintaan & Persetujuan ATK Guru'
                   : '📋 Status & Riwayat Permintaan ATK Saya'}
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                {isAdminOrHeadmaster
+                {isMudir
+                  ? 'Mudir Pesantren dapat memantau seluruh permintaan ATK guru/staf serta status persetujuan dan penyerahannya.'
+                  : isAdminOrHeadmaster
                   ? 'Administrator & Kepala Sekolah dapat menyetujui, menolak, atau menyerahkan barang ATK yang diminta guru.'
                   : 'Pantau status persetujuan dan riwayat pengambilan barang ATK yang telah Anda ajukan.'}
               </p>

@@ -22,9 +22,16 @@ export const AttendanceView: React.FC = () => {
     return getActiveTeacherAssignments(teacherAssignments, effectiveTeacherId, activeAcademicYear);
   }, [teacherAssignments, effectiveTeacherId, activeAcademicYear]);
 
+  const isReadOnlySupervisor = role === 'MUDIR' || role === 'mudir';
+
   // 3. Resolve Authorized Classes strictly: GURU_MAPEL only sees classes in their active assignments
   const authorizedClasses = useMemo(() => {
-    if (role === 'ADMIN' || role === 'KEPALA_SEKOLAH') {
+    if (
+      role === 'ADMIN' ||
+      role === 'KEPALA_SEKOLAH' ||
+      role === 'MUDIR' ||
+      role === 'mudir'
+    ) {
       return classes.filter((c) => c.isActive !== false);
     }
     if (role === 'GURU_MAPEL') {
@@ -73,7 +80,7 @@ export const AttendanceView: React.FC = () => {
   };
 
   const handleStatusChange = async (studentId: string, status: 'Hadir' | 'Sakit' | 'Izin' | 'Alpa') => {
-    if (!isClassAuthorized || !selectedClassId) return;
+    if (!isClassAuthorized || !selectedClassId || isReadOnlySupervisor) return;
 
     const existing = attendance.find((a) => a.studentId === studentId && a.date === date);
     const itemToSave: Attendance = existing
@@ -101,7 +108,9 @@ export const AttendanceView: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight">Presensi & Absensi Siswa</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Pencatatan kehadiran harian siswa per rombongan belajar kewenangan Anda
+            {isReadOnlySupervisor
+              ? 'Pemantauan dan supervisi kehadiran harian siswa/santri lintas rombongan belajar (Mode Pantau Mudir)'
+              : 'Pencatatan kehadiran harian siswa per rombongan belajar kewenangan Anda'}
           </p>
         </div>
 
@@ -114,7 +123,7 @@ export const AttendanceView: React.FC = () => {
             </strong>
           </div>
 
-          {isClassAuthorized && (
+          {isClassAuthorized && !isReadOnlySupervisor && (
             <button
               onClick={handleSaveAll}
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-xs self-start sm:self-auto cursor-pointer"

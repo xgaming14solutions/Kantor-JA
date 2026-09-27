@@ -102,19 +102,25 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
   const handleOpenAdd = (presetRole: UserRole = 'GURU_MAPEL') => {
     setAddForm({
       name:
-        presetRole === 'KEPALA_KESANTRIAN'
+        presetRole === 'MUDIR'
+          ? 'Mudir Pesantren'
+          : presetRole === 'KEPALA_KESANTRIAN'
           ? 'Kepala Kesantrian'
           : presetRole === 'MUSYRIF_KESANTRIAN'
           ? 'Musyrif Kesantrian'
           : '',
       username:
-        presetRole === 'KEPALA_KESANTRIAN'
+        presetRole === 'MUDIR'
+          ? 'mudir'
+          : presetRole === 'KEPALA_KESANTRIAN'
           ? 'kepalakesantrian'
           : presetRole === 'MUSYRIF_KESANTRIAN'
           ? 'musyrifkesantrian'
           : '',
       email:
-        presetRole === 'KEPALA_KESANTRIAN'
+        presetRole === 'MUDIR'
+          ? 'mudir@aksara.sch.id'
+          : presetRole === 'KEPALA_KESANTRIAN'
           ? 'kepalakesantrian@kantoja.sch.id'
           : presetRole === 'MUSYRIF_KESANTRIAN'
           ? 'musyrifkesantrian@kantoja.sch.id'
@@ -218,6 +224,8 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
     // Role validation
     const validRoles: UserRole[] = [
       'ADMIN',
+      'MUDIR',
+      'mudir',
       'KEPALA_SEKOLAH',
       'WALI_KELAS',
       'GURU_MAPEL',
@@ -477,6 +485,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
     const matchesRole =
       roleFilter === 'ALL' ||
       u.role === roleFilter ||
+      (roleFilter === 'MUDIR' && (u.role === 'MUDIR' || u.role === 'mudir')) ||
       (roleFilter === 'KEPALA_KESANTRIAN' &&
         u.role === 'PETUGAS_KESANTRIAN' &&
         u.kesantrianRole !== 'MUSYRIF_KESANTRIAN') ||
@@ -493,6 +502,14 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
           <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 inline-flex items-center gap-1">
             <Shield className="w-3 h-3 text-purple-600" />
             ADMIN
+          </span>
+        );
+      case 'MUDIR':
+      case 'mudir':
+        return (
+          <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1">
+            <ShieldCheck className="w-3 h-3 text-emerald-700" />
+            MUDIR PESANTREN
           </span>
         );
       case 'KEPALA_SEKOLAH':
@@ -563,6 +580,14 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
           <button
             type="button"
+            onClick={() => handleOpenAdd('MUDIR')}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Akun Mudir Pesantren
+          </button>
+          <button
+            type="button"
             onClick={() => handleOpenAdd('KEPALA_KESANTRIAN')}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-200 hover:bg-teal-100 transition cursor-pointer"
           >
@@ -619,11 +644,12 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
           {[
             { id: 'ALL', label: 'Semua Role' },
             { id: 'ADMIN', label: 'Admin' },
+            { id: 'MUDIR', label: 'Mudir Pesantren' },
             { id: 'KEPALA_SEKOLAH', label: 'Kepala Sekolah' },
-            { id: 'WALI_KELAS', label: 'Wali Kelas' },
-            { id: 'GURU_MAPEL', label: 'Guru Mapel' },
             { id: 'KEPALA_KESANTRIAN', label: 'Kepala Kesantrian' },
             { id: 'MUSYRIF_KESANTRIAN', label: 'Musyrif Kesantrian' },
+            { id: 'WALI_KELAS', label: 'Wali Kelas' },
+            { id: 'GURU_MAPEL', label: 'Guru Mapel' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -950,7 +976,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
               {/* Role Dropdown */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Role (Hak Akses) <span className="text-rose-500">*</span>
+                  Role Pengguna (Hak Akses) <span className="text-rose-500">*</span>
                 </label>
                 <select
                   value={addForm.role}
@@ -960,6 +986,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                       role: e.target.value as UserRole,
                       teacherId:
                         e.target.value === 'ADMIN' ||
+                        e.target.value === 'MUDIR' ||
                         e.target.value === 'KEPALA_KESANTRIAN' ||
                         e.target.value === 'MUSYRIF_KESANTRIAN' ||
                         e.target.value === 'PETUGAS_KESANTRIAN'
@@ -969,17 +996,23 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                   }
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
                 >
-                  <option value="GURU_MAPEL">GURU_MAPEL - Guru Mata Pelajaran</option>
-                  <option value="WALI_KELAS">WALI_KELAS - Wali Kelas Rombel</option>
+                  <option value="ADMIN">ADMIN – Administrator Sistem (Akses Penuh)</option>
+                  <option value="MUDIR">MUDIR – Pimpinan Pesantren (Mudir Pesantren)</option>
+                  <option value="KEPALA_SEKOLAH">KEPALA_SEKOLAH – Kepala Sekolah (Operasional Sekolah)</option>
                   <option value="KEPALA_KESANTRIAN">
-                    kepala_kesantrian - Kepala Kesantrian (Penanggung Jawab Kesantrian)
+                    KEPALA_KESANTRIAN – Kepala Kesantrian (Penanggung Jawab Kesantrian)
                   </option>
                   <option value="MUSYRIF_KESANTRIAN">
-                    musyrif_kesantrian - Musyrif Kesantrian (Pelaksana Harian Kesantrian)
+                    MUSYRIF_KESANTRIAN – Musyrif Kesantrian (Pelaksana Harian Kesantrian)
                   </option>
-                  <option value="KEPALA_SEKOLAH">KEPALA_SEKOLAH - Monitoring Sekolah</option>
-                  <option value="ADMIN">ADMIN - Akses Penuh Sistem</option>
+                  <option value="WALI_KELAS">WALI_KELAS – Wali Kelas Rombel</option>
+                  <option value="GURU_MAPEL">GURU_MAPEL – Guru Mata Pelajaran</option>
                 </select>
+                {(addForm.role === 'MUDIR' || addForm.role === 'mudir') && (
+                  <p className="text-[10px] text-emerald-800 mt-1 font-medium">
+                    Mudir Pesantren adalah pimpinan tertinggi lembaga dan pengawas utama lintas unit (Akademik, Kesantrian, Tahfizh, &amp; ATK) tanpa kewenangan teknis pengelolaan akun Admin.
+                  </p>
+                )}
                 {(addForm.role === 'KEPALA_KESANTRIAN' ||
                   addForm.role === 'MUSYRIF_KESANTRIAN' ||
                   addForm.role === 'PETUGAS_KESANTRIAN') && (
@@ -999,6 +1032,8 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                     )}
                   </label>
                   {(addForm.role === 'ADMIN' ||
+                    addForm.role === 'MUDIR' ||
+                    addForm.role === 'mudir' ||
                     addForm.role === 'KEPALA_SEKOLAH' ||
                     addForm.role === 'KEPALA_KESANTRIAN' ||
                     addForm.role === 'MUSYRIF_KESANTRIAN' ||
@@ -1008,7 +1043,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                       addForm.role === 'MUSYRIF_KESANTRIAN' ||
                       addForm.role === 'PETUGAS_KESANTRIAN'
                         ? 'Tidak diperlukan untuk Petugas Kesantrian'
-                        : 'Opsional untuk Admin/Kepsek'}
+                        : 'Opsional untuk Pimpinan/Admin'}
                     </span>
                   )}
                 </div>
@@ -1156,7 +1191,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
               {/* Role Dropdown */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Role (Hak Akses) <span className="text-rose-500">*</span>
+                  Role Pengguna (Hak Akses) <span className="text-rose-500">*</span>
                 </label>
                 <select
                   value={editForm.role}
@@ -1166,6 +1201,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                       role: e.target.value as UserRole,
                       teacherId:
                         e.target.value === 'ADMIN' ||
+                        e.target.value === 'MUDIR' ||
                         e.target.value === 'KEPALA_KESANTRIAN' ||
                         e.target.value === 'MUSYRIF_KESANTRIAN' ||
                         e.target.value === 'PETUGAS_KESANTRIAN'
@@ -1175,17 +1211,23 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                   }
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
                 >
-                  <option value="GURU_MAPEL">GURU_MAPEL - Guru Mata Pelajaran</option>
-                  <option value="WALI_KELAS">WALI_KELAS - Wali Kelas Rombel</option>
+                  <option value="ADMIN">ADMIN – Administrator Sistem (Akses Penuh)</option>
+                  <option value="MUDIR">MUDIR – Pimpinan Pesantren (Mudir Pesantren)</option>
+                  <option value="KEPALA_SEKOLAH">KEPALA_SEKOLAH – Kepala Sekolah (Operasional Sekolah)</option>
                   <option value="KEPALA_KESANTRIAN">
-                    kepala_kesantrian - Kepala Kesantrian (Penanggung Jawab Kesantrian)
+                    KEPALA_KESANTRIAN – Kepala Kesantrian (Penanggung Jawab Kesantrian)
                   </option>
                   <option value="MUSYRIF_KESANTRIAN">
-                    musyrif_kesantrian - Musyrif Kesantrian (Pelaksana Harian Kesantrian)
+                    MUSYRIF_KESANTRIAN – Musyrif Kesantrian (Pelaksana Harian Kesantrian)
                   </option>
-                  <option value="KEPALA_SEKOLAH">KEPALA_SEKOLAH - Monitoring Sekolah</option>
-                  <option value="ADMIN">ADMIN - Akses Penuh Sistem</option>
+                  <option value="WALI_KELAS">WALI_KELAS – Wali Kelas Rombel</option>
+                  <option value="GURU_MAPEL">GURU_MAPEL – Guru Mata Pelajaran</option>
                 </select>
+                {(editForm.role === 'MUDIR' || editForm.role === 'mudir') && (
+                  <p className="text-[10px] text-emerald-800 mt-1 font-medium">
+                    Mudir Pesantren adalah pimpinan tertinggi lembaga dan pengawas utama lintas unit (Akademik, Kesantrian, Tahfizh, &amp; ATK).
+                  </p>
+                )}
               </div>
 
               {/* Guru Terkait */}
@@ -1198,6 +1240,8 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                     )}
                   </label>
                   {(editForm.role === 'ADMIN' ||
+                    editForm.role === 'MUDIR' ||
+                    editForm.role === 'mudir' ||
                     editForm.role === 'KEPALA_SEKOLAH' ||
                     editForm.role === 'KEPALA_KESANTRIAN' ||
                     editForm.role === 'MUSYRIF_KESANTRIAN' ||
@@ -1207,7 +1251,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                       editForm.role === 'MUSYRIF_KESANTRIAN' ||
                       editForm.role === 'PETUGAS_KESANTRIAN'
                         ? 'Tidak diperlukan untuk Petugas Kesantrian'
-                        : 'Opsional untuk Admin/Kepsek'}
+                        : 'Opsional untuk Pimpinan/Admin'}
                     </span>
                   )}
                 </div>

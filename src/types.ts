@@ -5,6 +5,8 @@
 
 export type UserRole =
   | 'ADMIN'
+  | 'MUDIR'
+  | 'mudir'
   | 'KEPALA_SEKOLAH'
   | 'WALI_KELAS'
   | 'GURU_MAPEL'
@@ -423,10 +425,16 @@ export function normalizeUserRole(rawRole?: string | null, user?: Partial<UserPr
     return 'KEPALA_KESANTRIAN';
   }
   if (clean === 'ADMIN') return 'ADMIN';
+  if (clean === 'MUDIR' || clean === 'MUDIR_PESANTREN' || clean === 'MUDIR PESANTREN') return 'MUDIR';
   if (clean === 'KEPALA_SEKOLAH') return 'KEPALA_SEKOLAH';
   if (clean === 'WALI_KELAS') return 'WALI_KELAS';
   if (clean === 'GURU_MAPEL') return 'GURU_MAPEL';
   return (rawRole as UserRole) || 'GURU_MAPEL';
+}
+
+export function isMudirRole(role?: UserRole | string | null): boolean {
+  const r = String(role || '').trim().toUpperCase();
+  return r === 'MUDIR' || r === 'MUDIR_PESANTREN' || r === 'MUDIR PESANTREN';
 }
 
 export function isKesantrianOfficerRole(role?: UserRole | string | null): boolean {
@@ -476,7 +484,8 @@ export function getKesantrianOfficerLabel(
     return 'Kepala Kesantrian';
   }
   if (rawRole === 'ADMIN') return 'Administrator';
-  if (rawRole === 'KEPALA_SEKOLAH') return 'Kepala Sekolah / Mudir';
+  if (rawRole === 'MUDIR') return 'Mudir Pesantren';
+  if (rawRole === 'KEPALA_SEKOLAH') return 'Kepala Sekolah';
   return 'Petugas Kesantrian';
 }
 
@@ -491,6 +500,7 @@ export function isKepalaKesantrianUser(
     rawRole === 'KEPALA_KESANTRIAN' ||
     isKepalaKesantrianRole(user?.role, user) ||
     rawRole === 'ADMIN' ||
+    rawRole === 'MUDIR' ||
     rawRole === 'KEPALA_SEKOLAH'
   );
 }
@@ -632,6 +642,11 @@ export function calculateAtkStockStatus(
 export function isAtkAdminRole(role?: UserRole | string | null): boolean {
   const r = String(role || '').trim().toUpperCase();
   return r === 'ADMIN' || r === 'KEPALA_SEKOLAH';
+}
+
+export function isAtkReadAllRole(role?: UserRole | string | null): boolean {
+  const r = String(role || '').trim().toUpperCase();
+  return r === 'ADMIN' || r === 'MUDIR' || r === 'KEPALA_SEKOLAH';
 }
 
 

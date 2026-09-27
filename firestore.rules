@@ -23,6 +23,10 @@ service cloud.firestore {
       return hasUserDoc() && getUserData().role == 'ADMIN';
     }
 
+    function isMudir() {
+      return hasUserDoc() && (getUserData().role == 'MUDIR' || getUserData().role == 'mudir');
+    }
+
     function isKepalaSekolah() {
       return hasUserDoc() && getUserData().role == 'KEPALA_SEKOLAH';
     }

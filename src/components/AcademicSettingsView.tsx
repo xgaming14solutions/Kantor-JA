@@ -108,7 +108,11 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
   }, [activeAcademicYear?.id, activeAcademicYear?.semester]);
 
   // RBAC Permission Check
-  const hasAccess = effectiveRole === 'KEPALA_SEKOLAH' || effectiveRole === 'ADMIN';
+  const hasAccess =
+    effectiveRole === 'KEPALA_SEKOLAH' ||
+    effectiveRole === 'ADMIN' ||
+    effectiveRole === 'MUDIR' ||
+    effectiveRole === 'mudir';
 
   // Selected Academic Year Object
   const selectedYearObj = academicYears.find((ay) => ay.id === selectedAcademicYearId);

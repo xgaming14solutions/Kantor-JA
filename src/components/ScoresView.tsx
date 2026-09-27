@@ -208,7 +208,7 @@ export const ScoresView: React.FC = () => {
   //   effectiveTeacherId + selectedClassId + selectedSubjectId + activeAcademicYear
   const canEditScores = useMemo(() => {
     if (role === 'ADMIN') return true;
-    if (role === 'KEPALA_SEKOLAH') return false;
+    if (role === 'KEPALA_SEKOLAH' || role === 'MUDIR' || role === 'mudir') return false;
     if (!isTeacher || !effectiveTeacherId || !activeAcademicYear) return false;
     if (!selectedClassId || !selectedSubjectId) return false;
     return validateTeacherAssignmentAuth(
@@ -238,7 +238,7 @@ export const ScoresView: React.FC = () => {
   // Authorization for Extracurricular Scores
   const canEditExtracurricularScores = useMemo(() => {
     if (role === 'ADMIN') return true;
-    if (role === 'KEPALA_SEKOLAH') return false;
+    if (role === 'KEPALA_SEKOLAH' || role === 'MUDIR' || role === 'mudir') return false;
     if (role === 'WALI_KELAS' || role === 'GURU_MAPEL') return true;
     return false;
   }, [role]);

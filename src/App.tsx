@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext';
 import { LoginView } from './components/LoginView';
 import { Sidebar } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
+import { MudirDashboardView } from './components/MudirDashboardView';
 import { StudentsView } from './components/StudentsView';
 import { TeachersView } from './components/TeachersView';
 import { ClassesView } from './components/ClassesView';
@@ -50,7 +51,7 @@ export default function App() {
     // Clean current path from URL
     const path = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
     if (path === 'login' || !path) {
-      const targetTab = role === 'ADMIN' ? 'dashboard' : currentTab;
+      const targetTab = role === 'ADMIN' || role === 'MUDIR' || role === 'mudir' ? 'dashboard' : currentTab;
       if (targetTab !== currentTab) {
         setCurrentTab(targetTab);
       }
@@ -137,7 +138,9 @@ export default function App() {
 
     switch (currentTab) {
       case 'dashboard':
-        return role === 'PETUGAS_KESANTRIAN' ||
+        return role === 'MUDIR' || role === 'mudir' ? (
+          <MudirDashboardView onNavigate={handleNavigate} />
+        ) : role === 'PETUGAS_KESANTRIAN' ||
           role === 'KEPALA_KESANTRIAN' ||
           role === 'MUSYRIF_KESANTRIAN' ||
           role === 'kepala_kesantrian' ||
@@ -218,6 +221,14 @@ export default function App() {
             ADMIN
           </span>
         );
+      case 'MUDIR':
+      case 'mudir':
+        return (
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1">
+            <ShieldCheck className="w-2.5 h-2.5" />
+            MUDIR PESANTREN
+          </span>
+        );
       case 'KEPALA_SEKOLAH':
         return (
           <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200 inline-flex items-center gap-1">
@@ -295,6 +306,8 @@ export default function App() {
                 AKSARA &bull;{' '}
                 {currentTab === 'dashboard' && role === 'ADMIN'
                   ? '🏠 Dashboard Administrator'
+                  : currentTab === 'dashboard' && (role === 'MUDIR' || role === 'mudir')
+                  ? '🏛️ Dashboard Mudir Pesantren'
                   : activeNavItem?.label || 'Sistem Informasi Sekolah'}
               </span>
               <span className="text-sm font-bold text-slate-900 hidden sm:inline">

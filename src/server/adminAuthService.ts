@@ -55,6 +55,8 @@ export async function createAuthUserViaFirebase(data: CreateUserInput): Promise<
   }
   const validRoles: UserRole[] = [
     'ADMIN',
+    'MUDIR',
+    'mudir',
     'KEPALA_SEKOLAH',
     'WALI_KELAS',
     'GURU_MAPEL',
