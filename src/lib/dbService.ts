@@ -58,7 +58,8 @@ export async function testFirestoreConnection(): Promise<boolean> {
     return true;
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration. The client is offline.');
+      // Client is operating in offline/cached mode; handled gracefully by local cache fallback
+      return false;
     }
     return false;
   }

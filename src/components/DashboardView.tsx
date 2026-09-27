@@ -27,6 +27,11 @@ import {
 } from 'lucide-react';
 import { calculateAtkStockStatus, KesantrianRecord } from '../types';
 import { getEffectiveTeacherId, getActiveTeacherAssignments } from '../lib/dbService';
+import {
+  resolveEventEffectiveStatus,
+  formatEventDateRange,
+  getCategoryStyle,
+} from './AcademicCalendarView';
 
 export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({ onNavigate }) => {
   const { currentUser, role } = useAuth();
@@ -44,6 +49,7 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
     mabitPeriods = [],
     atkItems,
     atkRequests,
+    academicCalendarEvents = [],
     allowTeacherViewAtkStock,
   } = useMasterData();
 
@@ -432,6 +438,117 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
     (s) => myTaughtClassIds.includes(s.classId) && s.status === 'Aktif'
   ).length;
 
+  // Agenda Terdekat dari Kalender Akademik (3–5 agenda terdekat mulai hari ini)
+  const upcomingCalendarAgendas = useMemo(() => {
+    const candidates = academicCalendarEvents.filter((ev) => {
+      if (activeAcademicYear && ev.academicYearId) {
+        const matchesYear =
+          ev.academicYearId === activeAcademicYear.id ||
+          ev.academicYearId === activeAcademicYear.name;
+        if (!matchesYear) return false;
+      }
+      const end = ev.endDate && ev.endDate >= ev.startDate ? ev.endDate : ev.startDate;
+      const { effectiveStatus } = resolveEventEffectiveStatus(ev, todayIso);
+      if (effectiveStatus === 'Dibatalkan' || effectiveStatus === 'Selesai') return false;
+      return end >= todayIso;
+    });
+
+    return candidates
+      .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''))
+      .slice(0, 4);
+  }, [academicCalendarEvents, activeAcademicYear, todayIso]);
+
+  const renderUpcomingCalendarWidget = () => (
+    <section className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4">
+        <div>
+          <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <CalendarDays className="w-5 h-5 text-indigo-600" />
+            <span>📅 Agenda Terdekat — Kalender Akademik</span>
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Jadwal kegiatan pembelajaran, asesmen, rapat guru, dan kegiatan pesantren terdekat pada{' '}
+            <strong>{activeYearDisplay}</strong>.
+          </p>
+        </div>
+        <button
+          onClick={() => onNavigate('academic-calendar')}
+          className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition inline-flex items-center gap-1.5 self-start sm:self-center cursor-pointer shadow-xs"
+        >
+          <span>Lihat Kalender Lengkap</span>
+          <ArrowUpRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {upcomingCalendarAgendas.length === 0 ? (
+        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 flex items-center justify-between">
+          <span>Belum ada agenda terdekat yang terjadwal pada periode ini.</span>
+          <button
+            onClick={() => onNavigate('academic-calendar')}
+            className="text-indigo-600 font-semibold hover:underline cursor-pointer"
+          >
+            Buka Kalender &rarr;
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {upcomingCalendarAgendas.map((ev) => {
+            const { effectiveStatus, isToday, daysUntil } = resolveEventEffectiveStatus(
+              ev,
+              todayIso
+            );
+            const style = getCategoryStyle(ev.category);
+            const relativeBadge = isToday
+              ? 'TODAY'
+              : daysUntil === 1
+              ? 'Besok'
+              : daysUntil > 1
+              ? `${daysUntil} hari lagi`
+              : 'Berlangsung';
+
+            return (
+              <button
+                key={ev.id}
+                onClick={() => onNavigate('academic-calendar')}
+                className="text-left p-4 rounded-xl bg-slate-50/70 hover:bg-indigo-50/40 border border-slate-200 hover:border-indigo-300 transition flex flex-col justify-between gap-2.5 cursor-pointer"
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 truncate">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${style.dot}`} />
+                      <span className="truncate">{ev.category}</span>
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                        isToday
+                          ? 'bg-amber-500 text-white'
+                          : effectiveStatus === 'Berlangsung'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                      }`}
+                    >
+                      {relativeBadge}
+                    </span>
+                  </div>
+                  <div className="text-sm font-bold text-slate-900 line-clamp-2 leading-snug">
+                    {ev.title}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200/70 text-[11px] text-slate-500 space-y-0.5">
+                  <div className="font-medium text-slate-700 truncate">
+                    {formatEventDateRange(ev.startDate, ev.endDate)}
+                  </div>
+                  {ev.location && <div className="truncate">📍 {ev.location}</div>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+
   // =========================================================================
   // RENDER: 🏠 DASHBOARD ADMINISTRATOR (SATU DASHBOARD UTAMA TERPADU)
   // =========================================================================
@@ -657,6 +774,7 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
           {/* Pintasan Modul Akademik */}
           <div className="pt-2 flex flex-wrap items-center gap-2">
             {[
+              { label: '📅 Kalender Akademik', tab: 'academic-calendar', icon: CalendarDays },
               { label: 'Data Siswa', tab: 'students', icon: GraduationCap },
               { label: 'Data Guru', tab: 'teachers', icon: Users },
               { label: 'Kelas & Wali', tab: 'classes', icon: DoorOpen },
@@ -680,6 +798,9 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
             })}
           </div>
         </section>
+
+        {/* 3B. AGENDA TERDEKAT — KALENDER AKADEMIK */}
+        {renderUpcomingCalendarWidget()}
 
         {/* 4. RINGKASAN KESANTRIAN (🏫 KESANTRIAN) */}
         <section className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-5">
@@ -1282,6 +1403,9 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
           </div>
         </div>
       )}
+
+      {/* 📅 Agenda Terdekat — Kalender Akademik (untuk Kepala Sekolah, Wali Kelas, Guru Mapel) */}
+      {renderUpcomingCalendarWidget()}
 
       {/* 📦 Ringkasan Cepat ATK & Persediaan Kantor (untuk non-ADMIN) */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">

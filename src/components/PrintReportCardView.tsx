@@ -238,7 +238,8 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
     activeAcademicYear,
     getAcademicSetting,
     reportCards,
-    saveReportCard,
+    studentReportNotes,
+    getStudentReportNote,
     attendance,
     extracurricularParticipants,
     extracurricularScores,
@@ -389,12 +390,6 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
   // Search filter inside student picker
   const [searchStudentQuery, setSearchStudentQuery] = useState<string>('');
 
-  // Editable homeroom notes state for live editing before print
-  const [editableNotes, setEditableNotes] = useState<string>('');
-  const [isEditingNotes, setIsEditingNotes] = useState<boolean>(false);
-  const [isSavingNotes, setIsSavingNotes] = useState<boolean>(false);
-  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
-
   // Active student object
   const activeStudent = useMemo(() => {
     return classStudents.find((s) => s.id === selectedStudentId) || classStudents[0] || null;
@@ -431,28 +426,24 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
     (t) => t.id === selectedClass?.homeroomTeacherId || t.id === selectedClass?.teacherId
   );
 
-  // Fetch or initialize report card record for notes
-  const currentReportCard = useMemo(() => {
+  // Read-only individual student report note strictly bound to studentId + academicYearId + semester
+  const activeStudentReportNote = useMemo(() => {
     if (!activeStudent) return null;
-    return reportCards.find(
-      (rc) =>
-        rc.studentId === activeStudent.id &&
-        rc.classId === selectedClassId &&
-        (rc.academicYearId === selectedYearId || rc.academicYearId === selectedYear?.name) &&
-        rc.semester === selectedSemester
+    return getStudentReportNote(
+      activeStudent.id,
+      selectedYearId,
+      selectedSemester,
+      selectedClassId
     );
-  }, [reportCards, activeStudent, selectedClassId, selectedYearId, selectedYear, selectedSemester]);
-
-  // Sync notes when student or period changes
-  React.useEffect(() => {
-    if (currentReportCard?.homeroomNotes) {
-      setEditableNotes(currentReportCard.homeroomNotes);
-    } else {
-      setEditableNotes(
-        'Ananda menunjukkan kesungguhan dan adab yang baik dalam menuntut ilmu. Tingkatkan keistiqamahan dan pemahaman materi di semester berikutnya.'
-      );
-    }
-  }, [currentReportCard, activeStudent]);
+  }, [
+    activeStudent,
+    selectedYearId,
+    selectedSemester,
+    selectedClassId,
+    studentReportNotes,
+    reportCards,
+    getStudentReportNote
+  ]);
 
   // Strictly filter ONLY active Diniyah academic subjects and deduplicate by subject name
   const diniyahSubjects = useMemo(() => {
@@ -675,43 +666,6 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
     selectedSemester
   ]);
 
-  // Save edited notes
-  const handleSaveNotes = async () => {
-    if (!activeStudent) return;
-    setIsSavingNotes(true);
-    setSaveSuccessMsg(null);
-
-    const rcId = `rc_${activeStudent.id}_${selectedClassId}_${selectedSemester}`;
-    const newRecord: ReportCard = {
-      id: rcId,
-      studentId: activeStudent.id,
-      classId: selectedClassId,
-      academicYearId: selectedYearId,
-      semester: selectedSemester,
-      totalScore: typeof studentTotals.totalScore === 'number' ? studentTotals.totalScore : undefined,
-      averageScore: studentTotals.rawAverage !== null ? Math.round(studentTotals.rawAverage * 10) / 10 : undefined,
-      attendanceSummary: {
-        hadir: 0,
-        sakit: studentAttendance.sakit,
-        izin: studentAttendance.izin,
-        alpa: studentAttendance.alpa,
-      },
-      homeroomNotes: editableNotes.trim(),
-      status: currentReportCard?.status || 'Draft',
-    };
-
-    try {
-      await saveReportCard(newRecord);
-      setSaveSuccessMsg('Catatan wali kelas berhasil disimpan!');
-      setIsEditingNotes(false);
-      setTimeout(() => setSaveSuccessMsg(null), 3000);
-    } catch (err) {
-      console.error('Error saving report notes:', err);
-    } finally {
-      setIsSavingNotes(false);
-    }
-  };
-
   // Print Handler
   const handlePrint = () => {
     window.print();
@@ -926,9 +880,9 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
             </div>
           </div>
 
-          {/* Quick info strip & note editor toggle */}
+          {/* Quick info strip (Read-Only Summary) */}
           <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs">
-            <div className="text-slate-500 flex items-center gap-2">
+            <div className="text-slate-500 flex flex-wrap items-center gap-2">
               <span className="font-semibold text-slate-700">Wali Kelas:</span>{' '}
               {classHomeroomTeacher?.name || '-'} &bull;{' '}
               <span className="font-semibold text-slate-700">Rata-rata Nilai:</span>{' '}
@@ -943,51 +897,19 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsEditingNotes(!isEditingNotes)}
-                className="px-3 py-1 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition text-[11px] font-semibold inline-flex items-center gap-1 cursor-pointer"
-              >
-                <FileText className="w-3 h-3 text-slate-400" />
-                {isEditingNotes ? 'Tutup Catatan' : 'Edit Catatan Wali Kelas'}
-              </button>
+              {activeStudentReportNote?.note?.trim() ? (
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold inline-flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  Catatan Raport Individual Tersedia (Read-Only)
+                </span>
+              ) : (
+                <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium inline-flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-amber-600" />
+                  Catatan Raport belum diisi (Isi melalui menu Data Siswa &rarr; Catatan Raport)
+                </span>
+              )}
             </div>
           </div>
-
-          {/* Collapsible live notes editor */}
-          {isEditingNotes && (
-            <div className="mt-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-              <label className="block text-xs font-bold text-slate-800">
-                Catatan Wali Kelas untuk {activeStudent?.name}:
-              </label>
-              <textarea
-                rows={2}
-                value={editableNotes}
-                onChange={(e) => setEditableNotes(e.target.value)}
-                placeholder="Tuliskan catatan perkembangan dan motivasi belajar siswa..."
-                className="w-full text-xs p-2.5 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700"
-              />
-              <div className="flex items-center justify-between">
-                {saveSuccessMsg ? (
-                  <span className="text-xs font-semibold text-emerald-600 inline-flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    {saveSuccessMsg}
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-slate-400">
-                    Catatan ini akan langsung tercetak pada kotak "Catatan" di rapor siswa.
-                  </span>
-                )}
-                <button
-                  onClick={handleSaveNotes}
-                  disabled={isSavingNotes}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  <Save className="w-3 h-3" />
-                  {isSavingNotes ? 'Menyimpan...' : 'Simpan Catatan'}
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1285,14 +1207,23 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
             </div>
 
             {/* ========================================================
-                9. CATATAN WALI KELAS (FULL WIDTH BOX)
+                9. CATATAN WALI KELAS (FULL WIDTH BOX - READ-ONLY PER STUDENT)
                ======================================================== */}
             <div className="mt-3 border border-slate-400">
               <div className="bg-blue-700 text-white font-bold text-[10px] sm:text-[11px] px-3 py-1">
                 Catatan
               </div>
-              <div className="p-3 text-[11px] text-slate-800 italic min-h-[46px] leading-relaxed">
-                {editableNotes || 'Ananda menunjukkan kesungguhan dan adab yang baik dalam menuntut ilmu. Tingkatkan keistiqamahan dan pemahaman materi di semester berikutnya.'}
+              <div className="p-3 text-[11px] text-slate-800 min-h-[46px] leading-relaxed">
+                {activeStudentReportNote?.note?.trim() ? (
+                  <span className="italic">{activeStudentReportNote.note}</span>
+                ) : (
+                  <>
+                    <span className="no-print text-slate-400 italic">
+                      Belum ada catatan raport untuk {activeStudent?.name || 'santri ini'} pada Semester {selectedSemester} Tahun Ajaran {selectedYear?.name || activeAcademicYear?.name || '-'}.
+                    </span>
+                    <span className="hidden print:inline text-slate-500">-</span>
+                  </>
+                )}
               </div>
             </div>
 

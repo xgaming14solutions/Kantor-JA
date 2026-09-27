@@ -70,6 +70,25 @@ export const NAVIGATION_ITEMS: MenuItem[] = [
   // 📚 AKADEMIK
   // =======================================================
   {
+    id: 'academic-calendar',
+    label: '📅 Kalender Akademik',
+    icon: CalendarDays,
+    allowedRoles: [
+      'ADMIN',
+      'MUDIR',
+      'mudir',
+      'KEPALA_SEKOLAH',
+      'WALI_KELAS',
+      'GURU_MAPEL',
+      'KEPALA_KESANTRIAN',
+      'MUSYRIF_KESANTRIAN',
+      'kepala_kesantrian',
+      'musyrif_kesantrian',
+      'PETUGAS_KESANTRIAN',
+    ],
+    group: 'AKADEMIK',
+  },
+  {
     id: 'students',
     label: 'Data Siswa',
     icon: GraduationCap,

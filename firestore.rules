@@ -103,6 +103,18 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
+    // Transactions: Student Individual Report Notes (Catatan Raport per Santri, Tahun Ajaran, dan Semester)
+    match /studentReportNotes/{noteId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Master & Operational Data: Academic Calendar (Kalender Akademik)
+    match /academicCalendar/{eventId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
     // Academic Settings (Kepala Sekolah & Admin only; school_identity readable for public pesantren profile)
     match /academicSettings/{settingId} {
       allow read: if isSignedIn() || settingId == 'school_identity';

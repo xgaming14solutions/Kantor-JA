@@ -11,6 +11,7 @@ import {
   AcademicSetting,
   AcademicSettingLog,
   ReportCard,
+  StudentReportNote,
   Attendance,
   ExtracurricularParticipant,
   ExtracurricularScore,
@@ -26,7 +27,9 @@ import {
   AtkItem,
   AtkTransaction,
   AtkRequest,
-  isAtkAdminRole
+  isAtkAdminRole,
+  AcademicCalendarEvent,
+  canManageAcademicCalendar
 } from '../types';
 import {
   fetchCollection,
@@ -417,6 +420,7 @@ interface MasterDataContextType {
   academicSettings: AcademicSetting[];
   academicSettingLogs: AcademicSettingLog[];
   reportCards: ReportCard[];
+  studentReportNotes: StudentReportNote[];
   attendance: Attendance[];
   extracurricularParticipants: ExtracurricularParticipant[];
   extracurricularScores: ExtracurricularScore[];
@@ -429,6 +433,7 @@ interface MasterDataContextType {
   atkItems: AtkItem[];
   atkTransactions: AtkTransaction[];
   atkRequests: AtkRequest[];
+  academicCalendarEvents: AcademicCalendarEvent[];
   allowTeacherViewAtkStock: boolean;
   loading: boolean;
   saveAcademicYear: (data: AcademicYear) => Promise<void>;
@@ -450,6 +455,20 @@ interface MasterDataContextType {
   saveScore: (data: Score) => Promise<void>;
   deleteScore: (id: string) => Promise<void>;
   saveReportCard: (data: ReportCard) => Promise<void>;
+  getStudentReportNote: (
+    studentId: string,
+    academicYearId: string,
+    semester: string,
+    classId?: string
+  ) => StudentReportNote | null;
+  saveStudentReportNote: (data: {
+    studentId: string;
+    classId?: string;
+    academicYearId: string;
+    semester: 'Ganjil' | 'Genap' | 'GANJIL' | 'GENAP';
+    note: string;
+    status?: ReportCard['status'];
+  }) => Promise<StudentReportNote>;
   saveAttendance: (data: Attendance) => Promise<void>;
   saveExtracurricularParticipants: (
     extracurricularId: string,
@@ -525,6 +544,8 @@ interface MasterDataContextType {
     catatanAdmin?: string
   ) => Promise<void>;
   cancelAtkRequest: (requestId: string) => Promise<void>;
+  saveAcademicCalendarEvent: (data: AcademicCalendarEvent) => Promise<void>;
+  deleteAcademicCalendarEvent: (id: string) => Promise<void>;
   refreshAll: () => Promise<void>;
 }
 
@@ -543,6 +564,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [academicSettings, setAcademicSettings] = useState<AcademicSetting[]>([]);
   const [academicSettingLogs, setAcademicSettingLogs] = useState<AcademicSettingLog[]>([]);
   const [reportCards, setReportCards] = useState<ReportCard[]>(INITIAL_REPORT_CARDS);
+  const [studentReportNotes, setStudentReportNotes] = useState<StudentReportNote[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>(INITIAL_ATTENDANCE);
   const [extracurricularParticipants, setExtracurricularParticipants] = useState<ExtracurricularParticipant[]>([]);
   const [extracurricularScores, setExtracurricularScores] = useState<ExtracurricularScore[]>([]);
@@ -557,6 +579,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [atkItems, setAtkItems] = useState<AtkItem[]>(INITIAL_ATK_ITEMS);
   const [atkTransactions, setAtkTransactions] = useState<AtkTransaction[]>(INITIAL_ATK_TRANSACTIONS);
   const [atkRequests, setAtkRequests] = useState<AtkRequest[]>(INITIAL_ATK_REQUESTS);
+  const [academicCalendarEvents, setAcademicCalendarEvents] = useState<AcademicCalendarEvent[]>([]);
   const [allowTeacherViewAtkStock, setAllowTeacherViewAtkStockState] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('kantoja_allow_teacher_view_atk_stock');
@@ -597,7 +620,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         rawAtkItems,
         rawAtkTransactions,
         rawAtkRequests,
-        loadedAtkConfig
+        loadedAtkConfig,
+        rawStudentReportNotes,
+        rawAcademicCalendar
       ] = await Promise.all([
         fetchCollection<AcademicYear>('academicYears', INITIAL_ACADEMIC_YEARS),
         fetchCollection<Teacher>('teachers', INITIAL_TEACHERS),
@@ -625,7 +650,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         fetchCollection<AtkItem>('atkItems', INITIAL_ATK_ITEMS),
         fetchCollection<AtkTransaction>('atkTransactions', INITIAL_ATK_TRANSACTIONS),
         fetchCollection<AtkRequest>('atkRequests', INITIAL_ATK_REQUESTS),
-        fetchAtkConfig()
+        fetchAtkConfig(),
+        fetchCollection<StudentReportNote>('studentReportNotes', []),
+        fetchCollection<AcademicCalendarEvent>('academicCalendar', [])
       ]);
 
       // Normalize all academic years to guarantee valid structure
@@ -760,6 +787,17 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         rawLogs.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       );
       setReportCards(rawRepList);
+      setStudentReportNotes(rawStudentReportNotes || []);
+      setAcademicCalendarEvents(
+        (rawAcademicCalendar || [])
+          .map((ev) => ({
+            ...ev,
+            endDate: ev.endDate || ev.startDate,
+            classIds: Array.isArray(ev.classIds) ? ev.classIds : [],
+            status: ev.status || 'Terjadwal',
+          }))
+          .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''))
+      );
       setAttendance(rawAttList);
       setExtracurricularParticipants(rawEksPartList || []);
       setExtracurricularScores(rawEksScoreList || []);
@@ -1206,7 +1244,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     ]);
   };
 
-  // 10. Report Cards & Attendance Actions
+  // 10. Report Cards, Student Individual Report Notes & Attendance Actions
   const saveReportCard = async (data: ReportCard) => {
     setReportCards(prev => {
       const idx = prev.findIndex(r => r.id === data.id);
@@ -1218,6 +1256,165 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       return [data, ...prev];
     });
     await saveDocument('reportCards', data);
+  };
+
+  const getStudentReportNote = (
+    studentId: string,
+    academicYearId: string,
+    semester: string,
+    classId?: string
+  ): StudentReportNote | null => {
+    if (!studentId || !academicYearId || !semester) return null;
+
+    const ayObj = academicYears.find(
+      (ay) => ay.id === academicYearId || ay.name === academicYearId
+    );
+    const targetYearId = ayObj ? ayObj.id : academicYearId;
+    const targetYearName = ayObj ? ayObj.name : academicYearId;
+    const normSemester = semester.trim().toLowerCase() === 'genap' ? 'Genap' : 'Ganjil';
+
+    // 1. Primary source: studentReportNotes collection (strictly per studentId + academicYearId + semester)
+    const directNote = studentReportNotes.find((n) => {
+      if (n.studentId !== studentId) return false;
+      const yearMatches =
+        n.academicYearId === targetYearId ||
+        n.academicYearId === targetYearName ||
+        n.academicYearId === academicYearId;
+      if (!yearMatches) return false;
+      const semMatches = (n.semester || '').trim().toLowerCase() === normSemester.toLowerCase();
+      return semMatches;
+    });
+
+    if (directNote && typeof directNote.note === 'string' && directNote.note.trim().length > 0) {
+      return directNote;
+    }
+
+    // 2. Backward compatibility fallback: check reportCards collection for this exact student + academicYear + semester
+    const matchingRc = reportCards.find((rc) => {
+      if (rc.studentId !== studentId) return false;
+      if (classId && rc.classId && rc.classId !== classId) return false;
+      const yearMatches =
+        rc.academicYearId === targetYearId ||
+        rc.academicYearId === targetYearName ||
+        rc.academicYearId === academicYearId;
+      if (!yearMatches) return false;
+      const semMatches = (rc.semester || '').trim().toLowerCase() === normSemester.toLowerCase();
+      return semMatches && Boolean(rc.homeroomNotes && rc.homeroomNotes.trim().length > 0);
+    });
+
+    if (matchingRc && matchingRc.homeroomNotes) {
+      return {
+        id: `srn_${studentId}_${targetYearId}_${normSemester}`.replace(/[^a-zA-Z0-9_]/g, '_'),
+        studentId,
+        classId: matchingRc.classId || classId,
+        academicYearId: targetYearId,
+        semester: normSemester,
+        note: matchingRc.homeroomNotes,
+        updatedBy: matchingRc.updatedBy || 'Wali Kelas',
+        updatedAt: matchingRc.updatedAt || new Date().toISOString(),
+      };
+    }
+
+    return null;
+  };
+
+  const saveStudentReportNote = async (data: {
+    studentId: string;
+    classId?: string;
+    academicYearId: string;
+    semester: 'Ganjil' | 'Genap' | 'GANJIL' | 'GENAP';
+    note: string;
+    status?: ReportCard['status'];
+  }): Promise<StudentReportNote> => {
+    if (isKesantrianOfficerRole(role) || role === 'MUDIR' || role === 'mudir') {
+      throw new Error('Akses Ditolak: Anda tidak memiliki izin untuk mengubah catatan raport akademik santri.');
+    }
+
+    const ayObj = academicYears.find(
+      (ay) => ay.id === data.academicYearId || ay.name === data.academicYearId
+    );
+    const canonicalYearId = ayObj ? ayObj.id : data.academicYearId;
+    const normSemester: 'Ganjil' | 'Genap' =
+      String(data.semester).trim().toLowerCase() === 'genap' ? 'Genap' : 'Ganjil';
+
+    const studentObj = students.find((s) => s.id === data.studentId);
+    const resolvedClassId = data.classId || studentObj?.classId || '';
+
+    const nowIso = new Date().toISOString();
+    const actorName =
+      currentUser?.displayName || currentUser?.name || currentUser?.username || 'Wali Kelas / Admin';
+    const actorId = currentUser?.uid || currentUser?.id || actorName;
+
+    const noteId = `srn_${data.studentId}_${canonicalYearId}_${normSemester}`.replace(
+      /[^a-zA-Z0-9_]/g,
+      '_'
+    );
+
+    const cleanNote: StudentReportNote = {
+      id: noteId,
+      studentId: data.studentId,
+      classId: resolvedClassId,
+      academicYearId: canonicalYearId,
+      semester: normSemester,
+      note: data.note.trim(),
+      updatedBy: actorId,
+      updatedByName: actorName,
+      updatedByRole: role || 'ADMIN',
+      updatedAt: nowIso,
+    };
+
+    setStudentReportNotes((prev) => {
+      const filtered = prev.filter(
+        (n) =>
+          !(
+            n.studentId === cleanNote.studentId &&
+            (n.academicYearId === canonicalYearId ||
+              (ayObj && n.academicYearId === ayObj.name)) &&
+            String(n.semester).trim().toLowerCase() === normSemester.toLowerCase()
+          ) && n.id !== cleanNote.id
+      );
+      return [cleanNote, ...filtered];
+    });
+
+    await saveDocument('studentReportNotes', cleanNote);
+
+    // Keep reportCards collection synchronized for backward compatibility
+    const existingRc = reportCards.find(
+      (rc) =>
+        rc.studentId === data.studentId &&
+        (rc.academicYearId === canonicalYearId || (ayObj && rc.academicYearId === ayObj.name)) &&
+        String(rc.semester).trim().toLowerCase() === normSemester.toLowerCase()
+    );
+
+    const rcId =
+      existingRc?.id ||
+      `rc_${data.studentId}_${resolvedClassId}_${canonicalYearId}_${normSemester}`.replace(
+        /[^a-zA-Z0-9_]/g,
+        '_'
+      );
+
+    const syncedReportCard: ReportCard = {
+      ...(existingRc || {
+        id: rcId,
+        studentId: data.studentId,
+        classId: resolvedClassId,
+        academicYearId: canonicalYearId,
+        semester: normSemester,
+        status: data.status || 'Draft',
+      }),
+      id: rcId,
+      studentId: data.studentId,
+      classId: resolvedClassId || existingRc?.classId || '',
+      academicYearId: canonicalYearId,
+      semester: normSemester,
+      homeroomNotes: cleanNote.note,
+      status: data.status || existingRc?.status || 'Draft',
+      updatedBy: actorName,
+      updatedAt: nowIso,
+    };
+
+    await saveReportCard(syncedReportCard);
+    return cleanNote;
   };
 
   const saveAttendance = async (data: Attendance) => {
@@ -2159,6 +2356,64 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     await saveDocument('atkRequests', updatedReq);
   };
 
+  // 16. Academic Calendar (Kalender Akademik) Actions
+  const saveAcademicCalendarEvent = async (data: AcademicCalendarEvent): Promise<void> => {
+    if (!canManageAcademicCalendar(role)) {
+      throw new Error('Akses Ditolak: Anda tidak memiliki izin untuk menambah atau mengubah agenda Kalender Akademik.');
+    }
+
+    const nowIso = new Date().toISOString();
+    const actorName =
+      currentUser?.displayName || currentUser?.name || currentUser?.username || 'Administrator';
+    const actorId = currentUser?.uid || currentUser?.id || actorName;
+
+    const cleanEvent: AcademicCalendarEvent = {
+      ...data,
+      id: data.id || `cal_${Date.now()}`,
+      title: data.title.trim(),
+      category: data.category || 'Kegiatan Sekolah',
+      startDate: data.startDate,
+      endDate: data.endDate && data.endDate >= data.startDate ? data.endDate : data.startDate,
+      startTime: (data.startTime || '').trim(),
+      endTime: (data.endTime || '').trim(),
+      academicYearId: data.academicYearId || activeAcademicYear?.id || 'ay_2026_2027_1',
+      semester: data.semester || activeAcademicYear?.semester || 'Ganjil',
+      classIds: Array.isArray(data.classIds) ? data.classIds : [],
+      location: (data.location || '').trim(),
+      personInCharge: (data.personInCharge || '').trim(),
+      description: (data.description || '').trim(),
+      status: data.status || 'Terjadwal',
+      createdBy: data.createdBy || actorId,
+      createdByName: data.createdByName || actorName,
+      createdByRole: data.createdByRole || role || 'ADMIN',
+      createdAt: data.createdAt || nowIso,
+      updatedAt: nowIso,
+    };
+
+    setAcademicCalendarEvents((prev) => {
+      const idx = prev.findIndex((ev) => ev.id === cleanEvent.id);
+      let next: AcademicCalendarEvent[];
+      if (idx >= 0) {
+        next = [...prev];
+        next[idx] = cleanEvent;
+      } else {
+        next = [...prev, cleanEvent];
+      }
+      return next.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+    });
+
+    await saveDocument('academicCalendar', cleanEvent);
+  };
+
+  const deleteAcademicCalendarEvent = async (id: string): Promise<void> => {
+    if (!canManageAcademicCalendar(role)) {
+      throw new Error('Akses Ditolak: Anda tidak memiliki izin untuk menghapus agenda Kalender Akademik.');
+    }
+
+    setAcademicCalendarEvents((prev) => prev.filter((ev) => ev.id !== id));
+    await deleteDocument('academicCalendar', id);
+  };
+
   return (
     <MasterDataContext.Provider
       value={{
@@ -2174,6 +2429,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         academicSettings,
         academicSettingLogs,
         reportCards,
+        studentReportNotes,
         attendance,
         extracurricularParticipants,
         extracurricularScores,
@@ -2186,6 +2442,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         atkItems,
         atkTransactions,
         atkRequests,
+        academicCalendarEvents,
         allowTeacherViewAtkStock,
         loading,
         saveAcademicYear,
@@ -2207,6 +2464,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         saveScore,
         deleteScore,
         saveReportCard,
+        getStudentReportNote,
+        saveStudentReportNote,
         saveAttendance,
         saveExtracurricularParticipants,
         saveExtracurricularScore,
@@ -2235,6 +2494,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         rejectAtkRequest,
         handoverAtkRequest,
         cancelAtkRequest,
+        saveAcademicCalendarEvent,
+        deleteAcademicCalendarEvent,
         refreshAll
       }}
     >

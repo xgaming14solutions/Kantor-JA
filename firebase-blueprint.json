@@ -408,6 +408,50 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "itemId", "itemName", "jumlahDiminta", "keperluan", "pemohonId", "pemohonNama", "tanggal", "status"]
+    },
+    "StudentReportNote": {
+      "title": "StudentReportNote",
+      "description": "Catatan raport individual setiap santri berdasarkan studentId, academicYearId, dan semester",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "classId": { "type": "string" },
+        "academicYearId": { "type": "string" },
+        "semester": { "type": "string", "enum": ["Ganjil", "Genap", "GANJIL", "GENAP"] },
+        "note": { "type": "string" },
+        "updatedBy": { "type": "string" },
+        "updatedByName": { "type": "string" },
+        "updatedByRole": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "studentId", "academicYearId", "semester", "note", "updatedBy", "updatedAt"]
+    },
+    "AcademicCalendarEvent": {
+      "title": "AcademicCalendarEvent",
+      "description": "Agenda pada Kalender Akademik sekolah dan pesantren yang terhubung dengan Tahun Ajaran, Semester, dan Kelas/Rombel",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "academicYearId": { "type": "string" },
+        "semester": { "type": "string", "enum": ["Ganjil", "Genap"] },
+        "location": { "type": "string" },
+        "personInCharge": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["Terjadwal", "Berlangsung", "Selesai", "Dibatalkan"] },
+        "createdBy": { "type": "string" },
+        "createdByName": { "type": "string" },
+        "createdByRole": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "title", "category", "startDate", "endDate", "academicYearId", "semester", "status", "createdBy", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -490,6 +534,14 @@
     "/atkRequests/{requestId}": {
       "schema": "AtkRequest",
       "description": "Permintaan ATK guru/staff dan persetujuan Kepala Sekolah/Admin"
+    },
+    "/studentReportNotes/{noteId}": {
+      "schema": "StudentReportNote",
+      "description": "Catatan raport individual setiap santri per tahun ajaran dan semester"
+    },
+    "/academicCalendar/{eventId}": {
+      "schema": "AcademicCalendarEvent",
+      "description": "Koleksi agenda Kalender Akademik sekolah dan pesantren"
     }
   }
 }

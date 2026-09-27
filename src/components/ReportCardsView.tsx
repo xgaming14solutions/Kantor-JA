@@ -39,10 +39,18 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
     activeAcademicYear,
     getAcademicSetting,
     reportCards,
+    studentReportNotes,
     saveReportCard,
+    getStudentReportNote,
+    saveStudentReportNote,
     attendance,
     schoolIdentity
   } = useMasterData();
+
+  const canEditReportNotes =
+    effectiveRole === 'ADMIN' ||
+    effectiveRole === 'WALI_KELAS' ||
+    effectiveRole === 'KEPALA_SEKOLAH';
 
   // Find homeroom class if current user is Wali Kelas
   const homeroomClass = useMemo(() => {
@@ -235,6 +243,12 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
 
       const att = getStudentAttendance(st.id);
       const reportRecord = getReportCardRecord(st.id);
+      const individualNote = getStudentReportNote(
+        st.id,
+        activeAcademicYear?.id || 'ay_2026_2027_1',
+        activeAcademicYear?.semester || 'Ganjil',
+        selectedClassId
+      );
 
       return {
         student: st,
@@ -248,10 +262,20 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
         remedialCount,
         attendance: att,
         reportStatus: reportRecord?.status || 'Draft',
-        homeroomNotes: reportRecord?.homeroomNotes || 'Tetap pertahankan prestasi dan rajin belajar.',
+        homeroomNotes: individualNote?.note || '',
       };
     });
-  }, [filteredStudents, diniyahSubjects, scores, activeAcademicYear, currentAcademicSetting, attendance, reportCards]);
+  }, [
+    filteredStudents,
+    diniyahSubjects,
+    scores,
+    activeAcademicYear,
+    currentAcademicSetting,
+    attendance,
+    reportCards,
+    studentReportNotes,
+    selectedClassId
+  ]);
 
   // Active student for Modal
   const activeStudentDetail = useMemo(() => {
@@ -259,28 +283,39 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
     return studentSummaries.find((s) => s.student.id === selectedStudentForModal) || null;
   }, [selectedStudentForModal, studentSummaries]);
 
-  // Open modal and pre-fill form
+  // Open modal and pre-fill form with strictly this student's note for the active semester & academic year
   const handleOpenStudentModal = (studentId: string) => {
     setSelectedStudentForModal(studentId);
     const existingRc = getReportCardRecord(studentId);
-    setModalNotes(existingRc?.homeroomNotes || 'Menunjukkan semangat belajar yang baik. Tingkatkan pemahaman materi secara konsisten.');
+    const existingNote = getStudentReportNote(
+      studentId,
+      activeAcademicYear?.id || 'ay_2026_2027_1',
+      activeAcademicYear?.semester || 'Ganjil',
+      selectedClassId
+    );
+    setModalNotes(existingNote?.note || '');
     setModalStatus(existingRc?.status || 'Draft');
     setSaveSuccessMsg(null);
   };
 
-  // Save homeroom notes & report card status
+  // Save homeroom notes & report card status per studentId + academicYearId + semester
   const handleSaveModalNotes = async () => {
-    if (!activeStudentDetail) return;
+    if (!activeStudentDetail || !canEditReportNotes) return;
     setIsSavingNotes(true);
     setSaveSuccessMsg(null);
 
-    const rcId = `rc_${activeStudentDetail.student.id}_${selectedClassId}_${activeAcademicYear?.semester || 'Ganjil'}`;
+    const targetYearId = activeAcademicYear?.id || 'ay_2026_2027_1';
+    const targetSemester = activeAcademicYear?.semester || 'Ganjil';
+    const rcId = `rc_${activeStudentDetail.student.id}_${selectedClassId}_${targetYearId}_${targetSemester}`.replace(
+      /[^a-zA-Z0-9_]/g,
+      '_'
+    );
     const newRecord: ReportCard = {
       id: rcId,
       studentId: activeStudentDetail.student.id,
       classId: selectedClassId,
-      academicYearId: activeAcademicYear?.id || 'ay_2026_2027_1',
-      semester: activeAcademicYear?.semester || 'Ganjil',
+      academicYearId: targetYearId,
+      semester: targetSemester,
       totalScore: activeStudentDetail.totalScore,
       averageScore: activeStudentDetail.rawAverage !== null ? Math.round(activeStudentDetail.rawAverage * 10) / 10 : undefined,
       attendanceSummary: {
@@ -294,8 +329,16 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
     };
 
     try {
+      await saveStudentReportNote({
+        studentId: activeStudentDetail.student.id,
+        classId: selectedClassId,
+        academicYearId: targetYearId,
+        semester: targetSemester,
+        note: modalNotes.trim(),
+        status: modalStatus,
+      });
       await saveReportCard(newRecord);
-      setSaveSuccessMsg('Catatan dan status rapor berhasil disimpan ke database!');
+      setSaveSuccessMsg('Catatan raport santri berhasil disimpan ke database!');
       setTimeout(() => setSaveSuccessMsg(null), 3000);
     } catch (e) {
       console.error('Error saving report card:', e);
@@ -583,7 +626,11 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
                       {item.attendance.hadir} / {item.attendance.sakit} / {item.attendance.izin} / {item.attendance.alpa}
                     </td>
                     <td className="py-3 px-4 max-w-xs truncate text-slate-500 italic text-[11px]">
-                      {item.homeroomNotes}
+                      {item.homeroomNotes ? (
+                        item.homeroomNotes
+                      ) : (
+                        <span className="text-slate-400 not-italic">Belum ada catatan</span>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-center">
                       <span
@@ -869,14 +916,15 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                        Catatan Perkembangan Wali Kelas
+                        Catatan Raport Santri ({activeStudentDetail.student.name})
                       </h4>
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] text-slate-400 font-medium">Status Rapor:</span>
                         <select
                           value={modalStatus}
                           onChange={(e) => setModalStatus(e.target.value as any)}
-                          className="px-2 py-1 text-xs font-semibold rounded-lg border border-slate-200 bg-slate-50"
+                          disabled={!canEditReportNotes}
+                          className="px-2 py-1 text-xs font-semibold rounded-lg border border-slate-200 bg-slate-50 disabled:opacity-60"
                         >
                           <option value="Draft">Draft</option>
                           <option value="Ditinjau">Ditinjau</option>
@@ -889,31 +937,34 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
                       rows={3}
                       value={modalNotes}
                       onChange={(e) => setModalNotes(e.target.value)}
-                      placeholder="Masukkan catatan evaluasi dan motivasi belajar peserta didik..."
-                      className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none text-slate-700"
+                      disabled={!canEditReportNotes}
+                      placeholder="Masukkan catatan evaluasi dan motivasi belajar khusus untuk santri ini..."
+                      className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none text-slate-700 disabled:bg-slate-50 disabled:text-slate-500"
                     />
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between">
+                  <div className="mt-3 flex items-center justify-between gap-2">
                     {saveSuccessMsg ? (
                       <span className="text-xs font-semibold text-emerald-600 inline-flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         {saveSuccessMsg}
                       </span>
                     ) : (
-                      <span className="text-[11px] text-slate-400">
-                        Catatan akan tercetak pada lembar rapor resmi peserta didik.
+                      <span className="text-[11px] text-slate-500">
+                        Catatan ini hanya berlaku untuk santri, semester, dan tahun ajaran yang dipilih.
                       </span>
                     )}
 
-                    <button
-                      onClick={handleSaveModalNotes}
-                      disabled={isSavingNotes}
-                      className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      {isSavingNotes ? 'Menyimpan...' : 'Simpan Catatan'}
-                    </button>
+                    {canEditReportNotes && (
+                      <button
+                        onClick={handleSaveModalNotes}
+                        disabled={isSavingNotes}
+                        className="px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        {isSavingNotes ? 'Menyimpan...' : 'Simpan Catatan'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

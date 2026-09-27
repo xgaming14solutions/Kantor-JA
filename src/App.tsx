@@ -20,6 +20,7 @@ import { MyClassesView } from './components/MyClassesView';
 import { GenericModuleView } from './components/GenericModuleView';
 import { KesantrianView } from './components/KesantrianView';
 import { AtkView } from './components/AtkView';
+import { AcademicCalendarView } from './components/AcademicCalendarView';
 import { Menu, ShieldAlert, School, Shield, GraduationCap, UserCheck, ShieldCheck } from 'lucide-react';
 import { NAVIGATION_ITEMS } from './components/Sidebar';
 
@@ -166,6 +167,8 @@ export default function App() {
       case 'atk-history':
       case 'atk-reports':
         return <AtkView tab={currentTab} onNavigate={handleNavigate} />;
+      case 'academic-calendar':
+        return <AcademicCalendarView userRole={role} />;
       case 'students':
         return <StudentsView userRole={role} />;
       case 'teachers':

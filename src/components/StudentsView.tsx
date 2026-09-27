@@ -17,7 +17,9 @@ import {
   Calendar,
   UserCheck,
   ShieldAlert,
-  DoorOpen
+  DoorOpen,
+  FileText,
+  Save
 } from 'lucide-react';
 
 interface StudentsViewProps {
@@ -35,9 +37,13 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
     activeAcademicYear,
     teacherAssignments = [],
     teachers = [],
+    studentReportNotes = [],
+    reportCards = [],
     loading,
     saveStudent,
     updateStudentStatus,
+    getStudentReportNote,
+    saveStudentReportNote,
   } = useMasterData();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -48,6 +54,20 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [detailStudent, setDetailStudent] = useState<Student | null>(null);
+
+  // State for Individual Student Report Note ("Catatan Raport") modal
+  const [reportNoteStudent, setReportNoteStudent] = useState<Student | null>(null);
+  const [reportNoteYearId, setReportNoteYearId] = useState<string>('');
+  const [reportNoteSemester, setReportNoteSemester] = useState<'Ganjil' | 'Genap'>('Ganjil');
+  const [reportNoteText, setReportNoteText] = useState<string>('');
+  const [isSavingReportNote, setIsSavingReportNote] = useState<boolean>(false);
+  const [reportNoteSuccess, setReportNoteSuccess] = useState<string>('');
+  const [reportNoteError, setReportNoteError] = useState<string>('');
+
+  const canEditReportNote =
+    currentRole === 'ADMIN' ||
+    currentRole === 'WALI_KELAS' ||
+    currentRole === 'KEPALA_SEKOLAH';
 
   // Role-based data access restriction (ID-based)
   const effectiveTeacherId = useMemo(() => {
@@ -268,6 +288,74 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
     }
   };
 
+  // Open Catatan Raport Modal for a specific student
+  const openReportNoteModal = (st: Student, initialYearId?: string, initialSem?: 'Ganjil' | 'Genap') => {
+    const defaultYearId =
+      initialYearId ||
+      activeAcademicYear?.id ||
+      st.academicYearId ||
+      academicYears[0]?.id ||
+      'ay_2026_2027_1';
+    const defaultSem: 'Ganjil' | 'Genap' =
+      initialSem || activeAcademicYear?.semester || 'Ganjil';
+
+    setReportNoteStudent(st);
+    setReportNoteYearId(defaultYearId);
+    setReportNoteSemester(defaultSem);
+    const existing = getStudentReportNote(st.id, defaultYearId, defaultSem, st.classId);
+    setReportNoteText(existing?.note || '');
+    setReportNoteSuccess('');
+    setReportNoteError('');
+  };
+
+  // Handle changing Tahun Ajaran or Semester inside Catatan Raport Modal
+  const handleReportNotePeriodChange = (newYearId: string, newSemester: 'Ganjil' | 'Genap') => {
+    setReportNoteYearId(newYearId);
+    setReportNoteSemester(newSemester);
+    setReportNoteSuccess('');
+    setReportNoteError('');
+    if (reportNoteStudent) {
+      const existing = getStudentReportNote(
+        reportNoteStudent.id,
+        newYearId,
+        newSemester,
+        reportNoteStudent.classId
+      );
+      setReportNoteText(existing?.note || '');
+    }
+  };
+
+  // Save Individual Student Report Note
+  const handleSaveStudentReportNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reportNoteStudent) return;
+    setReportNoteError('');
+    setReportNoteSuccess('');
+
+    try {
+      setIsSavingReportNote(true);
+      await saveStudentReportNote({
+        studentId: reportNoteStudent.id,
+        classId: reportNoteStudent.classId,
+        academicYearId: reportNoteYearId,
+        semester: reportNoteSemester,
+        note: reportNoteText,
+      });
+      const yearObj = academicYears.find((ay) => ay.id === reportNoteYearId);
+      setReportNoteSuccess(
+        `Catatan raport untuk ${reportNoteStudent.name} (Semester ${reportNoteSemester} - TA ${yearObj?.name || reportNoteYearId}) berhasil disimpan.`
+      );
+      setNotice(
+        `Catatan raport ${reportNoteStudent.name} berhasil disimpan untuk Semester ${reportNoteSemester} TA ${yearObj?.name || reportNoteYearId}.`
+      );
+      setTimeout(() => setNotice(''), 4000);
+    } catch (err: any) {
+      setReportNoteError(err?.message || 'Gagal menyimpan catatan raport santri.');
+    } finally {
+      setIsSavingReportNote(false);
+    }
+  };
+
   // Loading state
   if (loading || authLoading) {
     return (
@@ -307,6 +395,8 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
               ? `Mode Guru Mapel: Menampilkan daftar siswa pada rombel yang Anda ajar (${taughtClassIds.length} rombel).`
               : currentRole === 'KEPALA_SEKOLAH'
               ? 'Mode Kepala Sekolah: Akses pantauan data siswa seluruh rombongan belajar.'
+              : currentRole === 'MUDIR' || currentRole === 'mudir'
+              ? 'Mode Mudir Pesantren: Akses pantauan data santri/siswa seluruh rombongan belajar.'
               : 'Daftar seluruh siswa terdaftar dan relasi penempatan rombongan belajar (classId)'}
           </p>
         </div>
@@ -486,9 +576,17 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
                           <button
                             onClick={() => setDetailStudent(s)}
                             className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
-                            title="Detail Siswa"
+                            title="Detail Santri"
                           >
                             <Info className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => openReportNoteModal(s)}
+                            className="px-2 py-1 text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition inline-flex items-center gap-1 cursor-pointer"
+                            title="Catatan Raport Individual Santri"
+                          >
+                            <FileText className="w-3 h-3" />
+                            Catatan Raport
                           </button>
                           {currentRole === 'ADMIN' && (
                             <button
@@ -809,6 +907,45 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
                 </div>
               )}
 
+              {/* Catatan Raport Individual pada Detail Santri */}
+              <div className="pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                    Catatan Raport ({activeAcademicYear?.semester || 'Ganjil'} - {activeAcademicYear?.name || '2026/2027'})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = detailStudent;
+                      setDetailStudent(null);
+                      openReportNoteModal(target);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 font-semibold text-[11px] transition cursor-pointer inline-flex items-center gap-1"
+                  >
+                    <FileText className="w-3 h-3" />
+                    {canEditReportNote ? 'Kelola Catatan Raport' : 'Lihat Catatan Raport'}
+                  </button>
+                </div>
+                {(() => {
+                  const currentNote = getStudentReportNote(
+                    detailStudent.id,
+                    activeAcademicYear?.id || detailStudent.academicYearId || 'ay_2026_2027_1',
+                    activeAcademicYear?.semester || 'Ganjil',
+                    detailStudent.classId
+                  );
+                  return currentNote?.note ? (
+                    <div className="p-2.5 bg-indigo-50/50 border border-indigo-100 rounded-xl text-slate-700 italic text-xs">
+                      "{currentNote.note}"
+                    </div>
+                  ) : (
+                    <div className="p-2.5 bg-slate-50 border border-slate-200/70 rounded-xl text-slate-400 italic text-[11px]">
+                      Belum ada catatan raport untuk periode aktif ini.
+                    </div>
+                  );
+                })()}
+              </div>
+
               {/* Status Action Switcher (Admin only) */}
               {currentRole === 'ADMIN' && (
                 <div className="pt-3 border-t border-slate-100">
@@ -847,6 +984,143 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
                 Tutup
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Catatan Raport Individual per Santri */}
+      {reportNoteStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 my-8 animate-scale-in">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Catatan Raport Santri</h3>
+                  <p className="text-[11px] text-slate-500">
+                    Data catatan evaluasi & perkembangan individual santri
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setReportNoteStudent(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {reportNoteError && (
+              <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{reportNoteError}</span>
+              </div>
+            )}
+
+            {reportNoteSuccess && (
+              <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                <span>{reportNoteSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveStudentReportNote} className="mt-4 space-y-4 text-xs">
+              {/* Nama Santri */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block">
+                  Nama Santri:
+                </span>
+                <div className="font-bold text-sm text-slate-900">{reportNoteStudent.name}</div>
+                <div className="text-[11px] text-slate-500 font-mono">
+                  NIS: {reportNoteStudent.nis || '-'} &bull; NISN: {reportNoteStudent.nisn || '-'} &bull; Kelas{' '}
+                  {getClassName(reportNoteStudent.classId)}
+                </div>
+              </div>
+
+              {/* Semester & Tahun Ajaran */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Semester:</label>
+                  <select
+                    value={reportNoteSemester}
+                    onChange={(e) =>
+                      handleReportNotePeriodChange(
+                        reportNoteYearId,
+                        e.target.value as 'Ganjil' | 'Genap'
+                      )
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600 font-semibold text-slate-800"
+                  >
+                    <option value="Ganjil">Ganjil</option>
+                    <option value="Genap">Genap</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Tahun Ajaran:</label>
+                  <select
+                    value={reportNoteYearId}
+                    onChange={(e) => {
+                      const chosenYearId = e.target.value;
+                      const ayObj = academicYears.find((ay) => ay.id === chosenYearId);
+                      const nextSem = ayObj?.semester || reportNoteSemester;
+                      handleReportNotePeriodChange(chosenYearId, nextSem);
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600 font-semibold text-slate-800"
+                  >
+                    {(academicYears || []).map((ay) => (
+                      <option key={ay.id} value={ay.id}>
+                        {ay.name} ({ay.semester}) {ay.isActive ? '(Aktif)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Catatan Raport Textarea */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Catatan Raport:</label>
+                <textarea
+                  rows={4}
+                  value={reportNoteText}
+                  onChange={(e) => setReportNoteText(e.target.value)}
+                  disabled={!canEditReportNote}
+                  placeholder="Tuliskan catatan perkembangan akademik, adab, dan motivasi belajar khusus untuk santri ini..."
+                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600 text-slate-800 disabled:bg-slate-50 disabled:text-slate-500"
+                />
+              </div>
+
+              {/* Info Notice */}
+              <div className="p-3 rounded-xl bg-indigo-50/70 border border-indigo-100 text-[11px] text-indigo-800 flex items-start gap-2">
+                <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                <span>
+                  Catatan ini hanya berlaku untuk santri, semester, dan tahun ajaran yang dipilih.
+                </span>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReportNoteStudent(null)}
+                  disabled={isSavingReportNote}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 transition cursor-pointer disabled:opacity-50"
+                >
+                  Tutup
+                </button>
+                {canEditReportNote && (
+                  <button
+                    type="submit"
+                    disabled={isSavingReportNote}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    {isSavingReportNote ? 'Menyimpan...' : 'Simpan Catatan'}
+                  </button>
+                )}
+              </div>
+            </form>
           </div>
         </div>
       )}

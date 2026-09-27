@@ -140,6 +140,19 @@ export interface Attendance {
   recordedByTeacherId?: string;
 }
 
+export interface StudentReportNote {
+  id: string; // e.g. srn_{studentId}_{academicYearId}_{semester}
+  studentId: string;
+  classId?: string;
+  academicYearId: string;
+  semester: 'Ganjil' | 'Genap' | 'GANJIL' | 'GENAP';
+  note: string;
+  updatedBy: string;
+  updatedByName?: string;
+  updatedByRole?: string;
+  updatedAt: string;
+}
+
 export interface ReportCard {
   id: string;
   studentId: string;
@@ -157,6 +170,8 @@ export interface ReportCard {
   };
   homeroomNotes?: string;
   headmasterNotes?: string;
+  updatedBy?: string;
+  updatedAt?: string;
   status: 'Draft' | 'Ditinjau' | 'Disahkan' | 'Diterbitkan';
 }
 
@@ -648,6 +663,83 @@ export function isAtkReadAllRole(role?: UserRole | string | null): boolean {
   const r = String(role || '').trim().toUpperCase();
   return r === 'ADMIN' || r === 'MUDIR' || r === 'KEPALA_SEKOLAH';
 }
+
+// ============================================================================
+// MODUL KALENDER AKADEMIK
+// ============================================================================
+
+export type AcademicCalendarCategory =
+  | 'Tahun Ajaran'
+  | 'Awal Semester'
+  | 'Akhir Semester'
+  | 'Kegiatan Pembelajaran'
+  | 'Asesmen / Ujian'
+  | 'Sumatif Tengah Semester'
+  | 'Sumatif Akhir Semester'
+  | 'Libur'
+  | 'Rapat Guru'
+  | 'RAKER'
+  | 'Kegiatan Pesantren'
+  | 'Kegiatan Tahfiz'
+  | 'Penerimaan Santri Baru'
+  | 'Pembagian Raport'
+  | 'Kegiatan Orang Tua/Wali'
+  | 'Kegiatan Sekolah'
+  | 'Lainnya';
+
+export const ACADEMIC_CALENDAR_CATEGORIES: AcademicCalendarCategory[] = [
+  'Tahun Ajaran',
+  'Awal Semester',
+  'Akhir Semester',
+  'Kegiatan Pembelajaran',
+  'Asesmen / Ujian',
+  'Sumatif Tengah Semester',
+  'Sumatif Akhir Semester',
+  'Libur',
+  'Rapat Guru',
+  'RAKER',
+  'Kegiatan Pesantren',
+  'Kegiatan Tahfiz',
+  'Penerimaan Santri Baru',
+  'Pembagian Raport',
+  'Kegiatan Orang Tua/Wali',
+  'Kegiatan Sekolah',
+  'Lainnya',
+];
+
+export type AcademicCalendarStatus =
+  | 'Terjadwal'
+  | 'Berlangsung'
+  | 'Selesai'
+  | 'Dibatalkan';
+
+export interface AcademicCalendarEvent {
+  id: string;
+  title: string;
+  category: AcademicCalendarCategory | (string & {});
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  startTime?: string; // HH:mm
+  endTime?: string; // HH:mm
+  academicYearId: string;
+  semester: 'Ganjil' | 'Genap';
+  classIds: string[]; // Empty array or ['ALL'] means berlaku untuk Semua Kelas
+  location?: string;
+  personInCharge?: string;
+  description?: string;
+  status: AcademicCalendarStatus;
+  createdBy: string;
+  createdByName?: string;
+  createdByRole?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function canManageAcademicCalendar(role?: UserRole | string | null): boolean {
+  const r = String(role || '').trim().toUpperCase();
+  return r === 'ADMIN' || r === 'MUDIR' || r === 'KEPALA_SEKOLAH';
+}
+
 
 
 

@@ -817,12 +817,20 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
                   Progres Pengisian Nilai Guru: <strong>{scoreCompletionPct}%</strong> ({ayScores.length} entri nilai)
                 </span>
                 {onNavigate && (
-                  <button
-                    onClick={() => onNavigate('scores')}
-                    className="text-indigo-600 hover:underline font-semibold inline-flex items-center gap-1 cursor-pointer"
-                  >
-                    <Eye className="w-3.5 h-3.5" /> Pantau Penilaian
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => onNavigate('academic-calendar')}
+                      className="text-indigo-600 hover:underline font-semibold inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <CalendarCheck className="w-3.5 h-3.5" /> Kalender Akademik
+                    </button>
+                    <button
+                      onClick={() => onNavigate('scores')}
+                      className="text-indigo-600 hover:underline font-semibold inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> Pantau Penilaian
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
