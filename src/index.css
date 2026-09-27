@@ -1,7 +1,16 @@
 @import "tailwindcss";
 
+html {
+  scroll-behavior: smooth;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
 .font-arabic {
   font-family: 'Amiri', 'Traditional Arabic', 'Scheherazade New', serif;
+}
+
+.font-display {
+  font-family: 'Cormorant Garamond', 'Amiri', Georgia, serif;
 }
 
 @page {

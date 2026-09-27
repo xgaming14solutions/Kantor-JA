@@ -14,7 +14,19 @@ import {
   Attendance,
   ExtracurricularParticipant,
   ExtracurricularScore,
-  SchoolIdentity
+  SchoolIdentity,
+  KesantrianRecord,
+  KesantrianMedicine,
+  KesantrianViolationCategory,
+  MabitPeriod,
+  isKesantrianOfficerRole,
+  getKesantrianOfficerLabel,
+  isKepalaKesantrianUser,
+  AtkCategory,
+  AtkItem,
+  AtkTransaction,
+  AtkRequest,
+  isAtkAdminRole
 } from '../types';
 import {
   fetchCollection,
@@ -27,7 +39,9 @@ import {
   assertTeacherScoreAccess,
   DEFAULT_SCHOOL_IDENTITY,
   fetchSchoolIdentity,
-  saveSchoolIdentityDoc
+  saveSchoolIdentityDoc,
+  fetchAtkConfig,
+  saveAtkConfig
 } from '../lib/dbService';
 import { useAuth } from './AuthContext';
 import { createDefaultAcademicSetting } from '../lib/academicCalculation';
@@ -43,6 +57,352 @@ import {
   INITIAL_REPORT_CARDS,
   INITIAL_ATTENDANCE
 } from '../lib/mockData';
+
+export const INITIAL_VIOLATION_CATEGORIES: KesantrianViolationCategory[] = [
+  { id: 'vcat_kedisiplinan', name: 'Kedisiplinan', description: 'Pelanggaran waktu, apel, jadwal kegiatan', isActive: true },
+  { id: 'vcat_adab_akhlak', name: 'Adab/Akhlak', description: 'Sikap, tutur kata, dan adab terhadap guru/sesama santri', isActive: true },
+  { id: 'vcat_ibadah', name: 'Ibadah', description: 'Shalat berjamaah, dzikir, tilawah, dan kegiatan ibadah', isActive: true },
+  { id: 'vcat_kehadiran', name: 'Kehadiran', description: 'Ketidakhadiran tanpa keterangan pada kegiatan pesantren', isActive: true },
+  { id: 'vcat_kerapian', name: 'Kerapian', description: 'Seragam, atribut, kebersihan diri dan kamar', isActive: true },
+  { id: 'vcat_tata_tertib', name: 'Tata Tertib', description: 'Aturan umum pondok pesantren dan asrama', isActive: true },
+  { id: 'vcat_keamanan', name: 'Keamanan', description: 'Barang terlarang, keluar komplek tanpa izin, keamanan lingkungan', isActive: true },
+  { id: 'vcat_lainnya', name: 'Lainnya', description: 'Kategori pelanggaran lain di luar daftar utama', isActive: true },
+];
+
+export const INITIAL_ATK_CATEGORIES: AtkCategory[] = [
+  { id: 'atk_cat_atk', name: 'ATK', description: 'Alat tulis kantor umum (pulpen, pensil, penggaris, korektor, dll.)', isActive: true },
+  { id: 'atk_cat_kertas', name: 'Kertas', description: 'Kertas HVS A4/F4, amplop, buku agenda, kertas sertifikat', isActive: true },
+  { id: 'atk_cat_tinta', name: 'Tinta & Printer', description: 'Tinta printer, cartridge, toner, pita printer', isActive: true },
+  { id: 'atk_cat_admin', name: 'Administrasi', description: 'Map snelhecter, ordner/bantex, staples, penjepit kertas, lakban', isActive: true },
+  { id: 'atk_cat_kebersihan', name: 'Kebersihan', description: 'Sapu, pel, cairan pembersih, tisu, pengharum ruangan', isActive: true },
+  { id: 'atk_cat_guru', name: 'Perlengkapan Guru', description: 'Spidol whiteboard, tinta spidol, penghapus papan tulis, buku absen', isActive: true },
+  { id: 'atk_cat_lainnya', name: 'Lainnya', description: 'Kebutuhan operasional kantor dan sekolah lainnya', isActive: true },
+];
+
+export const INITIAL_ATK_ITEMS: AtkItem[] = [
+  {
+    id: 'atk_item_001',
+    code: 'ATK-001',
+    name: 'Kertas HVS A4 75gr',
+    category: 'Kertas',
+    unit: 'rim',
+    stokSaatIni: 5,
+    stokMinimum: 5,
+    lokasiPenyimpanan: 'Ruang TU',
+    hargaPerkiraan: 52000,
+    keterangan: 'Kertas utama cetak dokumen, soal ujian, dan surat menyurat',
+    isActive: true,
+    createdAt: '2026-07-01T08:00:00.000Z',
+    updatedAt: '2026-07-01T08:00:00.000Z',
+  },
+  {
+    id: 'atk_item_002',
+    code: 'ATK-002',
+    name: 'Kertas HVS F4 / Folio 75gr',
+    category: 'Kertas',
+    unit: 'rim',
+    stokSaatIni: 12,
+    stokMinimum: 5,
+    lokasiPenyimpanan: 'Ruang TU',
+    hargaPerkiraan: 58000,
+    keterangan: 'Kertas ukuran folio untuk berkas administrasi & rapor',
+    isActive: true,
+    createdAt: '2026-07-01T08:00:00.000Z',
+    updatedAt: '2026-07-01T08:00:00.000Z',
+  },
+  {
+    id: 'atk_item_003',
+    code: 'ATK-003',
+    name: 'Spidol Board Hitam',
+    category: 'Perlengkapan Guru',
+    unit: 'pcs',
+    stokSaatIni: 18,
+    stokMinimum: 10,
+    lokasiPenyimpanan: 'Ruang TU',
+    hargaPerkiraan: 9500,
+    keterangan: 'Spidol papan tulis whiteboard untuk kegiatan mengajar di kelas',
+    isActive: true,
+    createdAt: '2026-07-01T08:00:00.000Z',
+    updatedAt: '2026-07-01T08:00:00.000Z',
+  },
+  {
+    id: 'atk_item_004',
+    code: 'ATK-004',
+    name: 'Spidol Board Biru',
+    category: 'Perlengkapan Guru',
+    unit: 'pcs',
+    stokSaatIni: 0,
+    stokMinimum: 8,
+    lokasiPenyimpanan: 'Ruang TU',
+    hargaPerkiraan: 9500,
+    keterangan: 'Spidol whiteboard warna biru untuk penekanan materi di papan tulis',
+    isActive: true,
+    createdAt: '2026-07-01T08:00:00.000Z',
+    updatedAt: '2026-07-01T08:00:00.000Z',
+  },
+  {
+    id: 'atk_item_005',
+    code: 'ATK-005',
+    name: 'Tinta Isi Ulang Spidol Whiteboard Hitam',
+    category: 'Perlengkapan Guru',
+    unit: 'botol',
+    stokSaatIni: 3,
+    stokMinimum: 5,
+    lokasiPenyimpanan: 'Ruang TU',
+    hargaPerkiraan: 18500,
+    keterangan: 'Refill tinta spidol whiteboard hitam',
+    isActive: true,
+    createdAt: '2026-07-01T08:00:00.000Z',
+    updatedAt: '2026-07-01T08:00:00.000Z',
+  },
+  {
+    id: 'atk_item_006',
+    code: 'ATK-006',
+    name: 'Penghapus Whiteboard Magnetik',
+    category: 'Perlengkapan Guru',
+    unit: 'buah',
+    stokSaatIni: 14,
+    stokMinimum: 6,
+    lokasiPenyimpanan: 'Ruang TU',
+    hargaPerkiraan: 8000,
+    keterangan: 'Penghapus papan tulis ruang kelas',
+    isActive: true,
+    createdAt: '2026-07-01T08:00:00.000Z',
+    updatedAt: '2026-07-01T08:00:00.000Z',
+  },
+  {
+    id: 'atk_item_007',
+    code: 'ATK-007',
+    name: 'Tinta Printer Epson 003 Hitam',
+    category: 'Tinta & Printer',
+    unit: 'botol',
+    stokSaatIni: 2,
+    stokMinimum: 3,
+    lokasiPenyimpanan: 'Lemari IT / TU',
+    hargaPerkiraan: 85000,
+    keterangan: 'Tinta printer utama ruang TU dan Kepala Sekolah',
+    isActive: true,
+    createdAt: '2026-07-01T08:00:00.000Z',
+    updatedAt: '2026-07-01T08:00:00.000Z',
+  },
+  {
+    id: 'atk_item_008',
+    code: 'ATK-008',
+    name: 'Pulpen Gel Hitam 0.5mm',
+    category: 'ATK',
+    unit: 'kotak',
+    stokSaatIni: 7,
+    stokMinimum: 3,
+    lokasiPenyimpanan: 'Ruang TU',
+    hargaPerkiraan: 28000,
+    keterangan: '1 kotak isi 12 pcs untuk guru dan staf administrasi',
+    isActive: true,
+    createdAt: '2026-07-01T08:00:00.000Z',
+    updatedAt: '2026-07-01T08:00:00.000Z',
+  },
+  {
+    id: 'atk_item_009',
+    code: 'ATK-009',
+    name: 'Map Snelhecter Plastik Folio',
+    category: 'Administrasi',
+    unit: 'pak',
+    stokSaatIni: 9,
+    stokMinimum: 4,
+    lokasiPenyimpanan: 'Lemari Arsip TU',
+    hargaPerkiraan: 36000,
+    keterangan: 'Map penyimpanan dokumen arsip siswa dan kurikulum',
+    isActive: true,
+    createdAt: '2026-07-01T08:00:00.000Z',
+    updatedAt: '2026-07-01T08:00:00.000Z',
+  },
+  {
+    id: 'atk_item_010',
+    code: 'ATK-010',
+    name: 'Ordner / Bantex F4',
+    category: 'Administrasi',
+    unit: 'buah',
+    stokSaatIni: 0,
+    stokMinimum: 6,
+    lokasiPenyimpanan: 'Lemari Arsip TU',
+    hargaPerkiraan: 32000,
+    keterangan: 'Ordner tebal untuk arsip surat masuk/keluar dan keuangan',
+    isActive: true,
+    createdAt: '2026-07-01T08:00:00.000Z',
+    updatedAt: '2026-07-01T08:00:00.000Z',
+  },
+  {
+    id: 'atk_item_011',
+    code: 'ATK-011',
+    name: 'Amplop Putih Kabinet Panjang',
+    category: 'Kertas',
+    unit: 'kotak',
+    stokSaatIni: 2,
+    stokMinimum: 3,
+    lokasiPenyimpanan: 'Ruang TU',
+    hargaPerkiraan: 24000,
+    keterangan: 'Amplop surat resmi undangan wali santri dan dinas',
+    isActive: true,
+    createdAt: '2026-07-01T08:00:00.000Z',
+    updatedAt: '2026-07-01T08:00:00.000Z',
+  },
+  {
+    id: 'atk_item_012',
+    code: 'ATK-012',
+    name: 'Cairan Pembersih Lantai 800ml',
+    category: 'Kebersihan',
+    unit: 'botol',
+    stokSaatIni: 0,
+    stokMinimum: 4,
+    lokasiPenyimpanan: 'Gudang Kebersihan',
+    hargaPerkiraan: 16000,
+    keterangan: 'Kebutuhan kebersihan ruang kantor, kelas, dan mushola',
+    isActive: true,
+    createdAt: '2026-07-01T08:00:00.000Z',
+    updatedAt: '2026-07-01T08:00:00.000Z',
+  },
+];
+
+export const INITIAL_ATK_TRANSACTIONS: AtkTransaction[] = [
+  {
+    id: 'atk_trx_001',
+    type: 'MASUK',
+    itemId: 'atk_item_001',
+    itemCode: 'ATK-001',
+    itemName: 'Kertas HVS A4 75gr',
+    category: 'Kertas',
+    unit: 'rim',
+    jumlah: 10,
+    tanggal: '2026-09-10',
+    waktu: '08:30',
+    stokSebelum: 0,
+    stokSesudah: 10,
+    sumberBarang: 'Pembelian Toko ATK Mulia',
+    hargaSatuan: 52000,
+    nomorNota: 'INV/ATK/2026/091',
+    keterangan: 'Pengadaan rutin awal bulan',
+    petugasId: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
+    petugasNama: 'Administrator AKSARA',
+    petugasRole: 'ADMIN',
+    createdAt: '2026-09-10T08:30:00.000Z',
+  },
+  {
+    id: 'atk_trx_002',
+    type: 'KELUAR',
+    itemId: 'atk_item_001',
+    itemCode: 'ATK-001',
+    itemName: 'Kertas HVS A4 75gr',
+    category: 'Kertas',
+    unit: 'rim',
+    jumlah: 5,
+    tanggal: '2026-09-18',
+    waktu: '10:15',
+    stokSebelum: 10,
+    stokSesudah: 5,
+    penerimaNama: 'Panitia Evaluasi & Kurikulum',
+    keperluan: 'Pencetakan soal latihan dan modul pembelajaran',
+    keterangan: 'Diserahkan untuk penggandaan soal kelas VII - XII',
+    petugasId: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
+    petugasNama: 'Administrator AKSARA',
+    petugasRole: 'ADMIN',
+    createdAt: '2026-09-18T10:15:00.000Z',
+  },
+  {
+    id: 'atk_trx_003',
+    type: 'KELUAR',
+    itemId: 'atk_item_003',
+    itemCode: 'ATK-003',
+    itemName: 'Spidol Board Hitam',
+    category: 'Perlengkapan Guru',
+    unit: 'pcs',
+    jumlah: 2,
+    tanggal: '2026-09-22',
+    waktu: '09:00',
+    stokSebelum: 20,
+    stokSesudah: 18,
+    penerimaNama: 'Ustadz Ahmad Fauzi',
+    keperluan: 'Mengajar di Kelas',
+    requestId: 'atk_req_003',
+    keterangan: 'Penyerahan permintaan ATK guru',
+    petugasId: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
+    petugasNama: 'Administrator AKSARA',
+    petugasRole: 'ADMIN',
+    createdAt: '2026-09-22T09:00:00.000Z',
+  },
+];
+
+export const INITIAL_ATK_REQUESTS: AtkRequest[] = [
+  {
+    id: 'atk_req_001',
+    itemId: 'atk_item_003',
+    itemCode: 'ATK-003',
+    itemName: 'Spidol Board Hitam',
+    category: 'Perlengkapan Guru',
+    unit: 'pcs',
+    jumlahDiminta: 2,
+    keperluan: 'Mengajar',
+    catatan: 'Spidol di kelas VIII sudah habis tintanya',
+    pemohonId: 'teacher_dwi',
+    pemohonNama: 'Dwi Lestari',
+    pemohonRole: 'GURU_MAPEL',
+    tanggal: '2026-09-26',
+    waktu: '08:15',
+    status: 'Menunggu',
+    createdAt: '2026-09-26T08:15:00.000Z',
+    updatedAt: '2026-09-26T08:15:00.000Z',
+  },
+  {
+    id: 'atk_req_002',
+    itemId: 'atk_item_001',
+    itemCode: 'ATK-001',
+    itemName: 'Kertas HVS A4 75gr',
+    category: 'Kertas',
+    unit: 'rim',
+    jumlahDiminta: 2,
+    jumlahDisetujui: 2,
+    keperluan: 'Ujian / Evaluasi Harian',
+    catatan: 'Untuk cetak lembar soal ulangan harian Matematika & IPA',
+    pemohonId: 'teacher_budi',
+    pemohonNama: 'Budi Santoso',
+    pemohonRole: 'WALI_KELAS',
+    tanggal: '2026-09-25',
+    waktu: '11:20',
+    status: 'Disetujui',
+    catatanAdmin: 'Disetujui, silakan ambil di Ruang TU',
+    diprosesOlehId: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
+    diprosesOlehNama: 'Administrator AKSARA',
+    tanggalDiproses: '2026-09-25T13:00:00.000Z',
+    createdAt: '2026-09-25T11:20:00.000Z',
+    updatedAt: '2026-09-25T13:00:00.000Z',
+  },
+  {
+    id: 'atk_req_003',
+    itemId: 'atk_item_003',
+    itemCode: 'ATK-003',
+    itemName: 'Spidol Board Hitam',
+    category: 'Perlengkapan Guru',
+    unit: 'pcs',
+    jumlahDiminta: 2,
+    jumlahDisetujui: 2,
+    keperluan: 'Mengajar',
+    catatan: 'Kebutuhan mengajar pekan ini',
+    pemohonId: 'teacher_fauzi',
+    pemohonNama: 'Ustadz Ahmad Fauzi',
+    pemohonRole: 'GURU_MAPEL',
+    tanggal: '2026-09-22',
+    waktu: '08:00',
+    status: 'Sudah Diberikan',
+    catatanAdmin: 'Sudah diserahkan langsung di Ruang TU',
+    diprosesOlehId: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
+    diprosesOlehNama: 'Administrator AKSARA',
+    tanggalDiproses: '2026-09-22T08:45:00.000Z',
+    diserahkanOlehId: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
+    diserahkanOlehNama: 'Administrator AKSARA',
+    tanggalDiserahkan: '2026-09-22T09:00:00.000Z',
+    transactionId: 'atk_trx_003',
+    createdAt: '2026-09-22T08:00:00.000Z',
+    updatedAt: '2026-09-22T09:00:00.000Z',
+  },
+];
 
 interface MasterDataContextType {
   academicYears: AcademicYear[];
@@ -61,6 +421,15 @@ interface MasterDataContextType {
   extracurricularParticipants: ExtracurricularParticipant[];
   extracurricularScores: ExtracurricularScore[];
   schoolIdentity: SchoolIdentity;
+  kesantrianRecords: KesantrianRecord[];
+  kesantrianMedicines: KesantrianMedicine[];
+  kesantrianViolationCategories: KesantrianViolationCategory[];
+  mabitPeriods: MabitPeriod[];
+  atkCategories: AtkCategory[];
+  atkItems: AtkItem[];
+  atkTransactions: AtkTransaction[];
+  atkRequests: AtkRequest[];
+  allowTeacherViewAtkStock: boolean;
   loading: boolean;
   saveAcademicYear: (data: AcademicYear) => Promise<void>;
   setActiveAcademicYear: (id: string) => Promise<void>;
@@ -100,6 +469,62 @@ interface MasterDataContextType {
     changeNotes?: string[]
   ) => Promise<void>;
   saveSchoolIdentity: (data: Partial<SchoolIdentity>) => Promise<SchoolIdentity>;
+  saveKesantrianRecord: (data: KesantrianRecord) => Promise<void>;
+  deleteKesantrianRecord: (id: string) => Promise<void>;
+  restoreKesantrianRecord: (id: string) => Promise<void>;
+  saveKesantrianMedicine: (data: KesantrianMedicine) => Promise<void>;
+  deleteKesantrianMedicine: (id: string) => Promise<void>;
+  saveKesantrianViolationCategory: (data: KesantrianViolationCategory) => Promise<void>;
+  deleteKesantrianViolationCategory: (
+    id: string
+  ) => Promise<{ action: 'deleted' | 'deactivated'; message: string }>;
+  saveMabitPeriod: (data: MabitPeriod) => Promise<void>;
+  deleteMabitPeriod: (id: string) => Promise<void>;
+  setAllowTeacherViewAtkStock: (allowed: boolean) => void;
+  saveAtkCategory: (data: AtkCategory) => Promise<void>;
+  deleteAtkCategory: (id: string) => Promise<{ action: 'deleted' | 'deactivated'; message: string }>;
+  saveAtkItem: (data: AtkItem, isNewItem?: boolean) => Promise<void>;
+  toggleAtkItemStatus: (id: string) => Promise<void>;
+  recordAtkIncoming: (input: {
+    itemId: string;
+    jumlah: number;
+    tanggal: string;
+    sumberBarang: string;
+    hargaSatuan?: number;
+    nomorNota?: string;
+    keterangan?: string;
+    petugasNama?: string;
+  }) => Promise<AtkTransaction>;
+  recordAtkOutgoing: (input: {
+    itemId: string;
+    jumlah: number;
+    tanggal: string;
+    penerimaId?: string;
+    penerimaNama: string;
+    penerimaRole?: string;
+    keperluan: string;
+    keterangan?: string;
+    requestId?: string;
+    petugasNama?: string;
+  }) => Promise<AtkTransaction>;
+  createAtkRequest: (input: {
+    itemId: string;
+    jumlahDiminta: number;
+    keperluan: string;
+    catatan?: string;
+  }) => Promise<AtkRequest>;
+  approveAtkRequest: (
+    requestId: string,
+    jumlahDisetujui: number,
+    catatanAdmin?: string
+  ) => Promise<void>;
+  rejectAtkRequest: (requestId: string, catatanAdmin: string) => Promise<void>;
+  handoverAtkRequest: (
+    requestId: string,
+    jumlahDiberikan?: number,
+    catatanAdmin?: string
+  ) => Promise<void>;
+  cancelAtkRequest: (requestId: string) => Promise<void>;
   refreshAll: () => Promise<void>;
 }
 
@@ -122,6 +547,24 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [extracurricularParticipants, setExtracurricularParticipants] = useState<ExtracurricularParticipant[]>([]);
   const [extracurricularScores, setExtracurricularScores] = useState<ExtracurricularScore[]>([]);
   const [schoolIdentity, setSchoolIdentity] = useState<SchoolIdentity>(DEFAULT_SCHOOL_IDENTITY);
+  const [kesantrianRecords, setKesantrianRecords] = useState<KesantrianRecord[]>([]);
+  const [kesantrianMedicines, setKesantrianMedicines] = useState<KesantrianMedicine[]>([]);
+  const [kesantrianViolationCategories, setKesantrianViolationCategories] = useState<KesantrianViolationCategory[]>(
+    INITIAL_VIOLATION_CATEGORIES
+  );
+  const [mabitPeriods, setMabitPeriods] = useState<MabitPeriod[]>([]);
+  const [atkCategories, setAtkCategories] = useState<AtkCategory[]>(INITIAL_ATK_CATEGORIES);
+  const [atkItems, setAtkItems] = useState<AtkItem[]>(INITIAL_ATK_ITEMS);
+  const [atkTransactions, setAtkTransactions] = useState<AtkTransaction[]>(INITIAL_ATK_TRANSACTIONS);
+  const [atkRequests, setAtkRequests] = useState<AtkRequest[]>(INITIAL_ATK_REQUESTS);
+  const [allowTeacherViewAtkStock, setAllowTeacherViewAtkStockState] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('kantoja_allow_teacher_view_atk_stock');
+      return saved === null ? true : saved === 'true';
+    } catch {
+      return true;
+    }
+  });
   const [loading, setLoading] = useState<boolean>(true);
 
   // Load all master data collections
@@ -145,7 +588,16 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         rawAttList,
         rawEksPartList,
         rawEksScoreList,
-        loadedSchoolIdentity
+        loadedSchoolIdentity,
+        rawKesantrianRecords,
+        rawKesantrianMedicines,
+        rawViolationCategories,
+        rawMabitPeriods,
+        rawAtkCategories,
+        rawAtkItems,
+        rawAtkTransactions,
+        rawAtkRequests,
+        loadedAtkConfig
       ] = await Promise.all([
         fetchCollection<AcademicYear>('academicYears', INITIAL_ACADEMIC_YEARS),
         fetchCollection<Teacher>('teachers', INITIAL_TEACHERS),
@@ -161,7 +613,19 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         fetchCollection<Attendance>('attendance', INITIAL_ATTENDANCE),
         fetchCollection<ExtracurricularParticipant>('extracurricularParticipants', []),
         fetchCollection<ExtracurricularScore>('extracurricularScores', []),
-        fetchSchoolIdentity()
+        fetchSchoolIdentity(),
+        fetchCollection<KesantrianRecord>('kesantrianRecords', []),
+        fetchCollection<KesantrianMedicine>('kesantrianMedicines', []),
+        fetchCollection<KesantrianViolationCategory>(
+          'kesantrianViolationCategories',
+          INITIAL_VIOLATION_CATEGORIES
+        ),
+        fetchCollection<MabitPeriod>('kesantrianMabitPeriods', []),
+        fetchCollection<AtkCategory>('atkCategories', INITIAL_ATK_CATEGORIES),
+        fetchCollection<AtkItem>('atkItems', INITIAL_ATK_ITEMS),
+        fetchCollection<AtkTransaction>('atkTransactions', INITIAL_ATK_TRANSACTIONS),
+        fetchCollection<AtkRequest>('atkRequests', INITIAL_ATK_REQUESTS),
+        fetchAtkConfig()
       ]);
 
       // Normalize all academic years to guarantee valid structure
@@ -200,11 +664,55 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         academicYearId: s.academicYearId || (activeYear ? activeYear.id : 'ay_2026_2027_1'),
       }));
 
-      // Ensure users have isActive defaults
-      const userList = rawUsers.map(u => ({
-        ...u,
-        isActive: u.isActive !== false,
-      }));
+      // Ensure users have isActive defaults and normalized roles (Kepala Kesantrian & Musyrif Kesantrian as 2 separate accounts)
+      let userList: UserProfile[] = rawUsers.map(u => {
+        const isLegacyKesantrian = u.role === 'PETUGAS_KESANTRIAN';
+        const resolvedRole = isLegacyKesantrian
+          ? u.kesantrianRole === 'MUSYRIF_KESANTRIAN' ||
+            u.username?.toLowerCase().includes('musyrif') ||
+            u.email?.toLowerCase().includes('musyrif')
+            ? 'MUSYRIF_KESANTRIAN'
+            : 'KEPALA_KESANTRIAN'
+          : u.role === 'kepala_kesantrian'
+          ? 'KEPALA_KESANTRIAN'
+          : u.role === 'musyrif_kesantrian'
+          ? 'MUSYRIF_KESANTRIAN'
+          : u.role;
+        return {
+          ...u,
+          role: resolvedRole,
+          isActive: u.isActive !== false,
+        };
+      });
+
+      // Ensure both Kepala Kesantrian and Musyrif Kesantrian exist as 2 distinct user accounts
+      const hasKepalaKesantrian = userList.some(
+        u =>
+          u.role === 'KEPALA_KESANTRIAN' ||
+          u.role === 'kepala_kesantrian' ||
+          u.username?.toLowerCase() === 'kepalakesantrian'
+      );
+      if (!hasKepalaKesantrian) {
+        const defaultKepala = DEMO_USERS.find(u => u.id === 'u_kepala_kesantrian');
+        if (defaultKepala) {
+          userList.push(defaultKepala);
+          saveDocument('users', defaultKepala).catch(() => {});
+        }
+      }
+
+      const hasMusyrifKesantrian = userList.some(
+        u =>
+          u.role === 'MUSYRIF_KESANTRIAN' ||
+          u.role === 'musyrif_kesantrian' ||
+          u.username?.toLowerCase() === 'musyrifkesantrian'
+      );
+      if (!hasMusyrifKesantrian) {
+        const defaultMusyrif = DEMO_USERS.find(u => u.id === 'u_musyrif_kesantrian');
+        if (defaultMusyrif) {
+          userList.push(defaultMusyrif);
+          saveDocument('users', defaultMusyrif).catch(() => {});
+        }
+      }
 
       // Ensure subjects have safe fallback for category, nameArab, and type
       const subList = rawSubList.map(s => ({
@@ -215,8 +723,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         kkm: typeof s.kkm === 'number' ? s.kkm : 75,
       }));
 
-      // Ensure default setting for active year exists (exclude school_identity doc from academic grading settings)
-      let settingsList = rawSettings.filter((s: any) => s.id !== 'school_identity');
+      // Ensure default setting for active year exists (exclude school_identity & atk_config docs from academic grading settings)
+      let settingsList = rawSettings.filter((s: any) => s.id !== 'school_identity' && s.id !== 'atk_config');
       if (activeYear) {
         const activeSettingExists = settingsList.some(
           s => s.academicYearId === activeYear.id && s.semester === activeYear.semester
@@ -230,13 +738,22 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
       }
 
+      const normalizeBrandText = (val?: string) =>
+        val ? String(val).replace(/kanto\s*ja/gi, 'AKSARA') : val;
+
       setAcademicYears(ayList);
       setTeachers(tList);
       setClasses(cList);
       setStudents(stList);
       setSubjects(subList);
       setTeacherAssignments(asgList);
-      setUsers(userList);
+      setUsers(
+        userList.map((u) => ({
+          ...u,
+          name: normalizeBrandText(u.name || u.displayName) || u.name,
+          displayName: normalizeBrandText(u.displayName || u.name) || u.displayName,
+        }))
+      );
       setScores(scList);
       setAcademicSettings(settingsList);
       setAcademicSettingLogs(
@@ -247,6 +764,87 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setExtracurricularParticipants(rawEksPartList || []);
       setExtracurricularScores(rawEksScoreList || []);
       setSchoolIdentity(loadedSchoolIdentity);
+      setKesantrianRecords(
+        (rawKesantrianRecords || []).sort(
+          (a, b) => new Date(b.date || b.createdAt || '').getTime() - new Date(a.date || a.createdAt || '').getTime()
+        )
+      );
+      setKesantrianMedicines(rawKesantrianMedicines || []);
+
+      // Ensure master violation categories exist
+      const vCatList =
+        rawViolationCategories && rawViolationCategories.length > 0
+          ? rawViolationCategories.map((c) => ({ ...c, isActive: c.isActive !== false }))
+          : INITIAL_VIOLATION_CATEGORIES;
+      setKesantrianViolationCategories(vCatList);
+      setMabitPeriods(
+        (rawMabitPeriods || []).sort(
+          (a, b) =>
+            new Date(b.departureDate || b.createdAt || '').getTime() -
+            new Date(a.departureDate || a.createdAt || '').getTime()
+        )
+      );
+
+      // ATK & Persediaan Kantor initialization
+      if (loadedAtkConfig) {
+        setAllowTeacherViewAtkStockState(loadedAtkConfig.allowTeacherViewAtkStock);
+      }
+      const resolvedAtkCategories =
+        rawAtkCategories && rawAtkCategories.length > 0
+          ? rawAtkCategories.map((c) => ({ ...c, isActive: c.isActive !== false }))
+          : INITIAL_ATK_CATEGORIES;
+      setAtkCategories(resolvedAtkCategories);
+
+      const resolvedAtkItems =
+        rawAtkItems && rawAtkItems.length > 0
+          ? rawAtkItems.map((item) => ({
+              ...item,
+              stokSaatIni: Math.max(0, Number(item.stokSaatIni) || 0),
+              stokMinimum: Math.max(0, Number(item.stokMinimum) || 0),
+              isActive: item.isActive !== false,
+            }))
+          : INITIAL_ATK_ITEMS;
+      setAtkItems(resolvedAtkItems);
+
+      // Auto-seed initial ATK items to Firestore if none persisted yet so all roles share consistent data
+      if (!rawAtkItems || rawAtkItems.length === 0) {
+        INITIAL_ATK_ITEMS.forEach((item) => {
+          saveDocument('atkItems', item).catch(() => {});
+        });
+      }
+
+      setAtkTransactions(
+        (rawAtkTransactions && rawAtkTransactions.length > 0
+          ? rawAtkTransactions
+          : INITIAL_ATK_TRANSACTIONS
+        )
+          .map((trx) => ({
+            ...trx,
+            petugasNama: normalizeBrandText(trx.petugasNama) || trx.petugasNama,
+          }))
+          .sort(
+            (a, b) =>
+              new Date(b.createdAt || `${b.tanggal}T${b.waktu || '00:00'}`).getTime() -
+              new Date(a.createdAt || `${a.tanggal}T${a.waktu || '00:00'}`).getTime()
+          )
+      );
+
+      setAtkRequests(
+        (rawAtkRequests && rawAtkRequests.length > 0
+          ? rawAtkRequests
+          : INITIAL_ATK_REQUESTS
+        )
+          .map((req) => ({
+            ...req,
+            diprosesOlehNama: normalizeBrandText(req.diprosesOlehNama),
+            diserahkanOlehNama: normalizeBrandText(req.diserahkanOlehNama),
+          }))
+          .sort(
+            (a, b) =>
+              new Date(b.createdAt || `${b.tanggal}T${b.waktu || '00:00'}`).getTime() -
+              new Date(a.createdAt || `${a.tanggal}T${a.waktu || '00:00'}`).getTime()
+          )
+      );
     } catch (e) {
       console.warn('Error loading master data:', e);
     } finally {
@@ -319,6 +917,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // 3. Student actions
   const saveStudent = async (data: Student) => {
+    if (isKesantrianOfficerRole(role)) {
+      throw new Error('Akses Ditolak: Petugas Kesantrian tidak diizinkan mengubah data utama santri.');
+    }
     setStudents(prev => {
       const idx = prev.findIndex(s => s.id === data.id);
       if (idx >= 0) {
@@ -332,6 +933,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const updateStudentStatus = async (id: string, status: Student['status']) => {
+    if (isKesantrianOfficerRole(role)) {
+      throw new Error('Akses Ditolak: Petugas Kesantrian tidak diizinkan mengubah status utama santri.');
+    }
     const found = students.find(s => s.id === id);
     if (!found) return;
     const updated: Student = { ...found, status };
@@ -455,6 +1059,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // 8. Score actions - Strictly isolated from academic setting configurations
   // SECURITY GUARD: Assert teacher assignment authorization at data-layer
   const saveScore = async (data: Score) => {
+    if (isKesantrianOfficerRole(role)) {
+      throw new Error('Akses Ditolak: Petugas Kesantrian tidak diizinkan menginput atau mengubah nilai akademik.');
+    }
     if (role === 'GURU_MAPEL' || role === 'WALI_KELAS') {
       const effectiveTeacherId =
         currentUser?.teacherId ||
@@ -493,6 +1100,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const deleteScore = async (id: string) => {
+    if (isKesantrianOfficerRole(role)) {
+      throw new Error('Akses Ditolak: Petugas Kesantrian tidak diizinkan menghapus nilai akademik.');
+    }
     const existing = scores.find(s => s.id === id);
     if (existing && (role === 'GURU_MAPEL' || role === 'WALI_KELAS')) {
       const effectiveTeacherId =
@@ -757,6 +1367,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // 13. School Identity & Mudir Configuration Actions
   const saveSchoolIdentity = async (data: Partial<SchoolIdentity>): Promise<SchoolIdentity> => {
+    if (isKesantrianOfficerRole(role)) {
+      throw new Error('Akses Ditolak: Petugas Kesantrian tidak diizinkan mengubah konfigurasi sekolah.');
+    }
     const updaterName = currentUser?.displayName || currentUser?.name || currentUser?.email || 'Administrator';
     const merged: Partial<SchoolIdentity> = {
       ...schoolIdentity,
@@ -768,6 +1381,782 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const saved = await saveSchoolIdentityDoc(merged);
     setSchoolIdentity(saved);
     return saved;
+  };
+
+  // 14. Kesantrian Records, Violation Categories, & Medicines Actions
+  const saveKesantrianRecord = async (data: KesantrianRecord): Promise<void> => {
+    const nowIso = new Date().toISOString();
+    const actorId = currentUser?.id || currentUser?.uid || currentUser?.username || 'kesantrian';
+    const actorName =
+      currentUser?.displayName || currentUser?.name || currentUser?.username || 'Petugas Kesantrian';
+    const actorRoleLabel = getKesantrianOfficerLabel(currentUser);
+    const existing = kesantrianRecords.find((r) => r.id === data.id);
+
+    const recordToSave: KesantrianRecord = {
+      ...data,
+      recordedByUserId:
+        existing?.recordedByUserId || data.recordedByUserId || actorId,
+      recordedByName:
+        existing?.recordedByName || data.recordedByName || data.createdByName || actorName,
+      recordedByRole:
+        existing?.recordedByRole || data.recordedByRole || data.createdByRole || actorRoleLabel,
+      createdBy: existing?.createdBy || data.createdBy || actorId,
+      createdByName:
+        existing?.createdByName || existing?.recordedByName || data.createdByName || data.recordedByName || actorName,
+      createdByRole:
+        existing?.createdByRole || existing?.recordedByRole || data.createdByRole || data.recordedByRole || actorRoleLabel,
+      createdAt: existing?.createdAt || data.createdAt || nowIso,
+      updatedBy: data.updatedBy || actorId,
+      updatedByName: data.updatedByName || actorName,
+      updatedByRole: data.updatedByRole || actorRoleLabel,
+      updatedAt: nowIso,
+      isDeleted: data.isDeleted === true ? true : false,
+    };
+
+    setKesantrianRecords((prev) => {
+      const idx = prev.findIndex((r) => r.id === recordToSave.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = recordToSave;
+        return next;
+      }
+      return [recordToSave, ...prev];
+    });
+    await saveDocument('kesantrianRecords', recordToSave);
+  };
+
+  // Requirement 18: Soft delete so deleted records do not appear in active list, remain auditable by Admin, and never affect student data
+  const deleteKesantrianRecord = async (id: string): Promise<void> => {
+    const existing = kesantrianRecords.find((r) => r.id === id);
+    if (!existing) return;
+    const nowIso = new Date().toISOString();
+    const actorName =
+      currentUser?.displayName || currentUser?.name || currentUser?.username || 'Petugas Kesantrian';
+
+    const softDeleted: KesantrianRecord = {
+      ...existing,
+      isDeleted: true,
+      deletedAt: nowIso,
+      deletedBy: actorName,
+      updatedBy: actorName,
+      updatedAt: nowIso,
+    };
+
+    setKesantrianRecords((prev) => prev.map((r) => (r.id === id ? softDeleted : r)));
+    await saveDocument('kesantrianRecords', softDeleted);
+  };
+
+  const restoreKesantrianRecord = async (id: string): Promise<void> => {
+    const existing = kesantrianRecords.find((r) => r.id === id);
+    if (!existing) return;
+    const nowIso = new Date().toISOString();
+    const actorName =
+      currentUser?.displayName || currentUser?.name || currentUser?.username || 'Administrator';
+
+    const restored: KesantrianRecord = {
+      ...existing,
+      isDeleted: false,
+      updatedBy: actorName,
+      updatedAt: nowIso,
+    };
+
+    setKesantrianRecords((prev) => prev.map((r) => (r.id === id ? restored : r)));
+    await saveDocument('kesantrianRecords', restored);
+  };
+
+  // Requirement 6: Master Kategori Pelanggaran (Admin & Kepala Kesantrian)
+  const saveKesantrianViolationCategory = async (
+    data: KesantrianViolationCategory
+  ): Promise<void> => {
+    if (role !== 'ADMIN' && !isKepalaKesantrianUser(currentUser)) {
+      throw new Error('Akses Ditolak: Hanya Admin atau Kepala Kesantrian yang dapat mengelola Master Kategori Pelanggaran.');
+    }
+    const nowIso = new Date().toISOString();
+    const actorName = currentUser?.displayName || currentUser?.name || 'Administrator';
+    const existing = kesantrianViolationCategories.find((c) => c.id === data.id);
+
+    const catToSave: KesantrianViolationCategory = {
+      ...data,
+      name: data.name.trim(),
+      description: (data.description || '').trim(),
+      isActive: data.isActive !== false,
+      createdAt: existing?.createdAt || data.createdAt || nowIso,
+      createdBy: existing?.createdBy || data.createdBy || actorName,
+      updatedAt: nowIso,
+      updatedBy: actorName,
+    };
+
+    setKesantrianViolationCategories((prev) => {
+      const idx = prev.findIndex((c) => c.id === catToSave.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = catToSave;
+        return next;
+      }
+      return [...prev, catToSave];
+    });
+    await saveDocument('kesantrianViolationCategories', catToSave);
+  };
+
+  const deleteKesantrianViolationCategory = async (
+    id: string
+  ): Promise<{ action: 'deleted' | 'deactivated'; message: string }> => {
+    if (role !== 'ADMIN' && !isKepalaKesantrianUser(currentUser)) {
+      throw new Error('Akses Ditolak: Hanya Admin atau Kepala Kesantrian yang dapat menghapus/menonaktifkan kategori pelanggaran.');
+    }
+    const cat = kesantrianViolationCategories.find((c) => c.id === id);
+    if (!cat) {
+      return { action: 'deleted', message: 'Kategori tidak ditemukan.' };
+    }
+
+    // Requirement 6: Do NOT permanently delete a category if it is already used by any violation record!
+    const isUsedInHistory = kesantrianRecords.some(
+      (r) =>
+        r.type === 'PELANGGARAN' &&
+        (r.violationCategoryId === id ||
+          (r.violationCategoryName || r.category || '').toLowerCase() === cat.name.toLowerCase())
+    );
+
+    if (isUsedInHistory) {
+      const nowIso = new Date().toISOString();
+      const actorName = currentUser?.displayName || currentUser?.name || 'Administrator';
+      const deactivated: KesantrianViolationCategory = {
+        ...cat,
+        isActive: false,
+        updatedAt: nowIso,
+        updatedBy: actorName,
+      };
+      setKesantrianViolationCategories((prev) =>
+        prev.map((c) => (c.id === id ? deactivated : c))
+      );
+      await saveDocument('kesantrianViolationCategories', deactivated);
+      return {
+        action: 'deactivated',
+        message: `Kategori "${cat.name}" sudah digunakan pada riwayat pelanggaran sehingga tidak dihapus permanen, melainkan dinonaktifkan agar riwayat lama tetap terjaga.`,
+      };
+    }
+
+    setKesantrianViolationCategories((prev) => prev.filter((c) => c.id !== id));
+    await deleteDocument('kesantrianViolationCategories', id);
+    return {
+      action: 'deleted',
+      message: `Kategori "${cat.name}" berhasil dihapus.`,
+    };
+  };
+
+  const saveKesantrianMedicine = async (data: KesantrianMedicine): Promise<void> => {
+    const nowIso = new Date().toISOString();
+    const actorId = currentUser?.id || currentUser?.uid || currentUser?.username || 'kesantrian';
+    const actorName =
+      currentUser?.displayName || currentUser?.name || currentUser?.username || 'Petugas Kesantrian';
+    const actorRoleLabel = getKesantrianOfficerLabel(currentUser);
+    const existing = kesantrianMedicines.find((m) => m.id === data.id);
+    const medToSave: KesantrianMedicine = {
+      ...data,
+      createdBy: existing?.createdBy || data.createdBy || actorId,
+      createdByName: existing?.createdByName || data.createdByName || actorName,
+      createdByRole: existing?.createdByRole || data.createdByRole || actorRoleLabel,
+      createdAt: existing?.createdAt || data.createdAt || nowIso,
+      updatedAt: nowIso,
+      updatedBy: actorId,
+      updatedByName: actorName,
+      updatedByRole: actorRoleLabel,
+    };
+    setKesantrianMedicines((prev) => {
+      const idx = prev.findIndex((m) => m.id === medToSave.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = medToSave;
+        return next;
+      }
+      return [medToSave, ...prev];
+    });
+    await saveDocument('kesantrianMedicines', medToSave);
+  };
+
+  const deleteKesantrianMedicine = async (id: string): Promise<void> => {
+    setKesantrianMedicines((prev) => prev.filter((m) => m.id !== id));
+    await deleteDocument('kesantrianMedicines', id);
+  };
+
+  // Mabit Periods (Pencatatan Kepulangan Mabit Santri)
+  const saveMabitPeriod = async (data: MabitPeriod): Promise<void> => {
+    const nowIso = new Date().toISOString();
+    const actorId = currentUser?.id || currentUser?.uid || currentUser?.username || 'kesantrian';
+    const actorName =
+      currentUser?.displayName || currentUser?.name || currentUser?.username || 'Petugas Kesantrian';
+    const actorRoleLabel = getKesantrianOfficerLabel(currentUser);
+    const existing = mabitPeriods.find((p) => p.id === data.id);
+
+    const periodToSave: MabitPeriod = {
+      ...data,
+      participants: Array.isArray(data.participants) ? data.participants : [],
+      createdBy: existing?.createdBy || data.createdBy || actorId,
+      createdByName: existing?.createdByName || data.createdByName || actorName,
+      createdByRole: existing?.createdByRole || data.createdByRole || actorRoleLabel,
+      createdAt: existing?.createdAt || data.createdAt || nowIso,
+      updatedBy: actorId,
+      updatedByName: actorName,
+      updatedByRole: actorRoleLabel,
+      updatedAt: nowIso,
+    };
+
+    setMabitPeriods((prev) => {
+      const idx = prev.findIndex((p) => p.id === periodToSave.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = periodToSave;
+        return next;
+      }
+      return [periodToSave, ...prev];
+    });
+    await saveDocument('kesantrianMabitPeriods', periodToSave);
+  };
+
+  const deleteMabitPeriod = async (id: string): Promise<void> => {
+    setMabitPeriods((prev) => prev.filter((p) => p.id !== id));
+    await deleteDocument('kesantrianMabitPeriods', id);
+  };
+
+  // ==========================================================================
+  // 15. 📦 ATK & PERSEDIAAN KANTOR ACTIONS
+  // ==========================================================================
+
+  const setAllowTeacherViewAtkStock = (allowed: boolean) => {
+    if (!isAtkAdminRole(role)) return;
+    setAllowTeacherViewAtkStockState(allowed);
+    saveAtkConfig(allowed, currentUser?.displayName || currentUser?.name).catch(() => {});
+  };
+
+  const saveAtkCategory = async (data: AtkCategory): Promise<void> => {
+    if (!isAtkAdminRole(role)) {
+      throw new Error('Akses Ditolak: Hanya Administrator atau Kepala Sekolah yang dapat mengelola kategori barang ATK.');
+    }
+    const nowIso = new Date().toISOString();
+    const actorName = currentUser?.displayName || currentUser?.name || 'Administrator';
+    const existing = atkCategories.find((c) => c.id === data.id);
+    const catToSave: AtkCategory = {
+      ...data,
+      name: data.name.trim(),
+      description: (data.description || '').trim(),
+      isActive: data.isActive !== false,
+      createdAt: existing?.createdAt || data.createdAt || nowIso,
+      createdBy: existing?.createdBy || data.createdBy || actorName,
+      updatedAt: nowIso,
+      updatedBy: actorName,
+    };
+    setAtkCategories((prev) => {
+      const idx = prev.findIndex((c) => c.id === catToSave.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = catToSave;
+        return next;
+      }
+      return [...prev, catToSave];
+    });
+    await saveDocument('atkCategories', catToSave);
+  };
+
+  const deleteAtkCategory = async (
+    id: string
+  ): Promise<{ action: 'deleted' | 'deactivated'; message: string }> => {
+    if (!isAtkAdminRole(role)) {
+      throw new Error('Akses Ditolak: Hanya Administrator atau Kepala Sekolah yang dapat menghapus kategori ATK.');
+    }
+    const cat = atkCategories.find((c) => c.id === id);
+    if (!cat) {
+      return { action: 'deleted', message: 'Kategori tidak ditemukan.' };
+    }
+    const isUsed = atkItems.some(
+      (item) => item.category.toLowerCase() === cat.name.toLowerCase()
+    );
+    if (isUsed) {
+      const deactivated: AtkCategory = {
+        ...cat,
+        isActive: false,
+        updatedAt: new Date().toISOString(),
+      };
+      setAtkCategories((prev) => prev.map((c) => (c.id === id ? deactivated : c)));
+      await saveDocument('atkCategories', deactivated);
+      return {
+        action: 'deactivated',
+        message: `Kategori "${cat.name}" sedang digunakan oleh data barang sehingga dinonaktifkan agar histori tetap terjaga.`,
+      };
+    }
+    setAtkCategories((prev) => prev.filter((c) => c.id !== id));
+    await deleteDocument('atkCategories', id);
+    return {
+      action: 'deleted',
+      message: `Kategori "${cat.name}" berhasil dihapus.`,
+    };
+  };
+
+  const saveAtkItem = async (data: AtkItem, isNewItem?: boolean): Promise<void> => {
+    if (!isAtkAdminRole(role)) {
+      throw new Error('Akses Ditolak: Guru/Staff tidak diizinkan mengubah data barang atau stok secara langsung.');
+    }
+    const nowIso = new Date().toISOString();
+    const actorId = currentUser?.id || currentUser?.uid || 'admin';
+    const actorName = currentUser?.displayName || currentUser?.name || 'Administrator';
+    const existing = atkItems.find((i) => i.id === data.id);
+    const hasTransactions = atkTransactions.some((t) => t.itemId === data.id);
+
+    // Bagian 5: Jangan mengubah stok secara manual jika transaksi barang masuk/keluar sudah digunakan
+    const resolvedStock =
+      existing && hasTransactions && !isNewItem
+        ? existing.stokSaatIni
+        : Math.max(0, Number(data.stokSaatIni) || 0);
+
+    const itemToSave: AtkItem = {
+      ...data,
+      code: (data.code || '').trim() || `ATK-${String(atkItems.length + 1).padStart(3, '0')}`,
+      name: data.name.trim(),
+      category: data.category.trim() || 'ATK',
+      unit: data.unit || 'pcs',
+      stokSaatIni: resolvedStock,
+      stokMinimum: Math.max(0, Number(data.stokMinimum) || 0),
+      lokasiPenyimpanan: (data.lokasiPenyimpanan || 'Ruang TU').trim(),
+      hargaPerkiraan:
+        data.hargaPerkiraan !== undefined && data.hargaPerkiraan !== null && Number(data.hargaPerkiraan) >= 0
+          ? Number(data.hargaPerkiraan)
+          : undefined,
+      keterangan: (data.keterangan || '').trim(),
+      isActive: data.isActive !== false,
+      createdAt: existing?.createdAt || data.createdAt || nowIso,
+      createdBy: existing?.createdBy || data.createdBy || actorName,
+      updatedAt: nowIso,
+      updatedBy: actorName,
+    };
+
+    setAtkItems((prev) => {
+      const idx = prev.findIndex((i) => i.id === itemToSave.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = itemToSave;
+        return next;
+      }
+      return [itemToSave, ...prev];
+    });
+    await saveDocument('atkItems', itemToSave);
+
+    // Jika barang baru ditambahkan dengan stok awal > 0, catat otomatis di riwayat barang masuk sebagai Saldo Awal
+    if (!existing && itemToSave.stokSaatIni > 0) {
+      const todayStr = nowIso.slice(0, 10);
+      const timeStr = new Date().toTimeString().slice(0, 5);
+      const initialTrx: AtkTransaction = {
+        id: `atk_trx_init_${Date.now()}`,
+        type: 'MASUK',
+        itemId: itemToSave.id,
+        itemCode: itemToSave.code,
+        itemName: itemToSave.name,
+        category: itemToSave.category,
+        unit: itemToSave.unit,
+        jumlah: itemToSave.stokSaatIni,
+        tanggal: todayStr,
+        waktu: timeStr,
+        stokSebelum: 0,
+        stokSesudah: itemToSave.stokSaatIni,
+        sumberBarang: 'Saldo Awal Persediaan',
+        hargaSatuan: itemToSave.hargaPerkiraan,
+        keterangan: 'Pencatatan stok awal saat penambahan barang baru',
+        petugasId: actorId,
+        petugasNama: actorName,
+        petugasRole: role || 'ADMIN',
+        createdAt: nowIso,
+      };
+      setAtkTransactions((prev) => [initialTrx, ...prev]);
+      await saveDocument('atkTransactions', initialTrx);
+    }
+  };
+
+  const toggleAtkItemStatus = async (id: string): Promise<void> => {
+    if (!isAtkAdminRole(role)) {
+      throw new Error('Akses Ditolak: Hanya Administrator atau Kepala Sekolah yang dapat mengubah status barang.');
+    }
+    const found = atkItems.find((i) => i.id === id);
+    if (!found) return;
+    const updated: AtkItem = {
+      ...found,
+      isActive: !found.isActive,
+      updatedAt: new Date().toISOString(),
+    };
+    setAtkItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
+    await saveDocument('atkItems', updated);
+  };
+
+  const recordAtkIncoming = async (input: {
+    itemId: string;
+    jumlah: number;
+    tanggal: string;
+    sumberBarang: string;
+    hargaSatuan?: number;
+    nomorNota?: string;
+    keterangan?: string;
+    petugasNama?: string;
+  }): Promise<AtkTransaction> => {
+    if (!isAtkAdminRole(role)) {
+      throw new Error('Akses Ditolak: Hanya Administrator atau Kepala Sekolah yang dapat mencatat Barang Masuk.');
+    }
+    const item = atkItems.find((i) => i.id === input.itemId);
+    if (!item) {
+      throw new Error('Barang tidak ditemukan dalam Master Data Barang.');
+    }
+    const qty = Math.floor(Number(input.jumlah) || 0);
+    if (qty <= 0) {
+      throw new Error('Jumlah barang masuk harus lebih dari 0.');
+    }
+
+    const nowIso = new Date().toISOString();
+    const timeStr = new Date().toTimeString().slice(0, 5);
+    const actorId = currentUser?.id || currentUser?.uid || 'admin';
+    const actorName =
+      (input.petugasNama || '').trim() ||
+      currentUser?.displayName ||
+      currentUser?.name ||
+      'Administrator';
+
+    const stokSebelum = Number(item.stokSaatIni) || 0;
+    const stokSesudah = stokSebelum + qty;
+
+    const updatedItem: AtkItem = {
+      ...item,
+      stokSaatIni: stokSesudah,
+      hargaPerkiraan:
+        input.hargaSatuan !== undefined && Number(input.hargaSatuan) > 0
+          ? Number(input.hargaSatuan)
+          : item.hargaPerkiraan,
+      updatedAt: nowIso,
+      updatedBy: actorName,
+    };
+
+    const trx: AtkTransaction = {
+      id: `atk_trx_in_${Date.now()}`,
+      type: 'MASUK',
+      itemId: item.id,
+      itemCode: item.code,
+      itemName: item.name,
+      category: item.category,
+      unit: item.unit,
+      jumlah: qty,
+      tanggal: input.tanggal || nowIso.slice(0, 10),
+      waktu: timeStr,
+      stokSebelum,
+      stokSesudah,
+      sumberBarang: (input.sumberBarang || 'Pembelian Rutin').trim(),
+      hargaSatuan:
+        input.hargaSatuan !== undefined && Number(input.hargaSatuan) > 0
+          ? Number(input.hargaSatuan)
+          : undefined,
+      nomorNota: (input.nomorNota || '').trim() || undefined,
+      keterangan: (input.keterangan || '').trim() || undefined,
+      petugasId: actorId,
+      petugasNama: actorName,
+      petugasRole: role || 'ADMIN',
+      createdAt: nowIso,
+    };
+
+    setAtkItems((prev) => prev.map((i) => (i.id === item.id ? updatedItem : i)));
+    setAtkTransactions((prev) => [trx, ...prev]);
+
+    await Promise.all([
+      saveDocument('atkItems', updatedItem),
+      saveDocument('atkTransactions', trx),
+    ]);
+
+    return trx;
+  };
+
+  const recordAtkOutgoing = async (input: {
+    itemId: string;
+    jumlah: number;
+    tanggal: string;
+    penerimaId?: string;
+    penerimaNama: string;
+    penerimaRole?: string;
+    keperluan: string;
+    keterangan?: string;
+    requestId?: string;
+    petugasNama?: string;
+  }): Promise<AtkTransaction> => {
+    if (!isAtkAdminRole(role)) {
+      throw new Error('Akses Ditolak: Hanya Administrator atau Kepala Sekolah yang dapat mencatat Barang Keluar.');
+    }
+    const item = atkItems.find((i) => i.id === input.itemId);
+    if (!item) {
+      throw new Error('Barang tidak ditemukan dalam Master Data Barang.');
+    }
+    const qty = Math.floor(Number(input.jumlah) || 0);
+    if (qty <= 0) {
+      throw new Error('Jumlah barang keluar harus lebih dari 0.');
+    }
+    const stokSebelum = Number(item.stokSaatIni) || 0;
+    if (qty > stokSebelum) {
+      throw new Error(
+        `Stok "${item.name}" tidak mencukupi! Stok tersedia: ${stokSebelum} ${item.unit}, jumlah yang akan dikeluarkan: ${qty} ${item.unit}.`
+      );
+    }
+
+    const nowIso = new Date().toISOString();
+    const timeStr = new Date().toTimeString().slice(0, 5);
+    const actorId = currentUser?.id || currentUser?.uid || 'admin';
+    const actorName =
+      (input.petugasNama || '').trim() ||
+      currentUser?.displayName ||
+      currentUser?.name ||
+      'Administrator';
+
+    const stokSesudah = stokSebelum - qty;
+
+    const updatedItem: AtkItem = {
+      ...item,
+      stokSaatIni: stokSesudah,
+      updatedAt: nowIso,
+      updatedBy: actorName,
+    };
+
+    const trx: AtkTransaction = {
+      id: `atk_trx_out_${Date.now()}`,
+      type: 'KELUAR',
+      itemId: item.id,
+      itemCode: item.code,
+      itemName: item.name,
+      category: item.category,
+      unit: item.unit,
+      jumlah: qty,
+      tanggal: input.tanggal || nowIso.slice(0, 10),
+      waktu: timeStr,
+      stokSebelum,
+      stokSesudah,
+      penerimaId: input.penerimaId,
+      penerimaNama: (input.penerimaNama || 'Guru / Staf').trim(),
+      penerimaRole: input.penerimaRole,
+      keperluan: (input.keperluan || 'Operasional Sekolah').trim(),
+      requestId: input.requestId,
+      keterangan: (input.keterangan || '').trim() || undefined,
+      petugasId: actorId,
+      petugasNama: actorName,
+      petugasRole: role || 'ADMIN',
+      createdAt: nowIso,
+    };
+
+    setAtkItems((prev) => prev.map((i) => (i.id === item.id ? updatedItem : i)));
+    setAtkTransactions((prev) => [trx, ...prev]);
+
+    await Promise.all([
+      saveDocument('atkItems', updatedItem),
+      saveDocument('atkTransactions', trx),
+    ]);
+
+    return trx;
+  };
+
+  const createAtkRequest = async (input: {
+    itemId: string;
+    jumlahDiminta: number;
+    keperluan: string;
+    catatan?: string;
+  }): Promise<AtkRequest> => {
+    if (!currentUser) {
+      throw new Error('Silakan masuk terlebih dahulu untuk membuat permintaan ATK.');
+    }
+    const item = atkItems.find((i) => i.id === input.itemId);
+    if (!item) {
+      throw new Error('Barang yang dipilih tidak ditemukan.');
+    }
+    const qty = Math.floor(Number(input.jumlahDiminta) || 0);
+    if (qty <= 0) {
+      throw new Error('Jumlah barang yang diminta harus lebih dari 0.');
+    }
+
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const tanggalStr = nowIso.slice(0, 10);
+    const waktuStr = now.toTimeString().slice(0, 5);
+
+    const newReq: AtkRequest = {
+      id: `atk_req_${Date.now()}`,
+      itemId: item.id,
+      itemCode: item.code,
+      itemName: item.name,
+      category: item.category,
+      unit: item.unit,
+      jumlahDiminta: qty,
+      keperluan: (input.keperluan || 'Mengajar').trim(),
+      catatan: (input.catatan || '').trim() || undefined,
+      pemohonId: currentUser.id || currentUser.uid || currentUser.username,
+      pemohonNama: currentUser.displayName || currentUser.name || currentUser.username,
+      pemohonRole: role || currentUser.role || 'GURU_MAPEL',
+      tanggal: tanggalStr,
+      waktu: waktuStr,
+      status: 'Menunggu',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    setAtkRequests((prev) => [newReq, ...prev]);
+    await saveDocument('atkRequests', newReq);
+    return newReq;
+  };
+
+  const approveAtkRequest = async (
+    requestId: string,
+    jumlahDisetujui: number,
+    catatanAdmin?: string
+  ): Promise<void> => {
+    if (!isAtkAdminRole(role)) {
+      throw new Error('Akses Ditolak: Guru/Staff tidak diizinkan menyetujui permintaan ATK.');
+    }
+    const req = atkRequests.find((r) => r.id === requestId);
+    if (!req) {
+      throw new Error('Data permintaan tidak ditemukan.');
+    }
+    const approvedQty = Math.max(1, Math.floor(Number(jumlahDisetujui) || req.jumlahDiminta));
+    const nowIso = new Date().toISOString();
+    const actorId = currentUser?.id || currentUser?.uid || 'admin';
+    const actorName = currentUser?.displayName || currentUser?.name || 'Kepala Sekolah / Admin';
+
+    const updatedReq: AtkRequest = {
+      ...req,
+      status: 'Disetujui',
+      jumlahDisetujui: approvedQty,
+      catatanAdmin: (catatanAdmin ?? req.catatanAdmin ?? '').trim() || undefined,
+      diprosesOlehId: actorId,
+      diprosesOlehNama: actorName,
+      tanggalDiproses: nowIso,
+      updatedAt: nowIso,
+    };
+
+    setAtkRequests((prev) => prev.map((r) => (r.id === requestId ? updatedReq : r)));
+    await saveDocument('atkRequests', updatedReq);
+  };
+
+  const rejectAtkRequest = async (
+    requestId: string,
+    catatanAdmin: string
+  ): Promise<void> => {
+    if (!isAtkAdminRole(role)) {
+      throw new Error('Akses Ditolak: Hanya Administrator atau Kepala Sekolah yang dapat menolak permintaan ATK.');
+    }
+    const req = atkRequests.find((r) => r.id === requestId);
+    if (!req) {
+      throw new Error('Data permintaan tidak ditemukan.');
+    }
+    const nowIso = new Date().toISOString();
+    const actorId = currentUser?.id || currentUser?.uid || 'admin';
+    const actorName = currentUser?.displayName || currentUser?.name || 'Kepala Sekolah / Admin';
+
+    const updatedReq: AtkRequest = {
+      ...req,
+      status: 'Ditolak',
+      catatanAdmin: (catatanAdmin || 'Permintaan belum dapat dipenuhi saat ini.').trim(),
+      diprosesOlehId: actorId,
+      diprosesOlehNama: actorName,
+      tanggalDiproses: nowIso,
+      updatedAt: nowIso,
+    };
+
+    setAtkRequests((prev) => prev.map((r) => (r.id === requestId ? updatedReq : r)));
+    await saveDocument('atkRequests', updatedReq);
+  };
+
+  const handoverAtkRequest = async (
+    requestId: string,
+    jumlahDiberikan?: number,
+    catatanAdmin?: string
+  ): Promise<void> => {
+    if (!isAtkAdminRole(role)) {
+      throw new Error('Akses Ditolak: Hanya Administrator atau Kepala Sekolah yang dapat menyerahkan barang ATK.');
+    }
+    const req = atkRequests.find((r) => r.id === requestId);
+    if (!req) {
+      throw new Error('Data permintaan tidak ditemukan.');
+    }
+    if (req.status === 'Sudah Diberikan') {
+      throw new Error('Permintaan ini sudah berstatus Sudah Diberikan.');
+    }
+    if (req.status === 'Ditolak' || req.status === 'Dibatalkan') {
+      throw new Error(`Permintaan berstatus "${req.status}" tidak dapat diserahkan.`);
+    }
+    const item = atkItems.find((i) => i.id === req.itemId);
+    if (!item) {
+      throw new Error('Barang terkait permintaan ini tidak ditemukan di Master Data.');
+    }
+
+    const finalQty = Math.max(
+      1,
+      Math.floor(Number(jumlahDiberikan) || req.jumlahDisetujui || req.jumlahDiminta)
+    );
+
+    if (item.stokSaatIni < finalQty) {
+      throw new Error(
+        `Stok "${item.name}" tidak mencukupi untuk diserahkan! Stok saat ini: ${item.stokSaatIni} ${item.unit}, dibutuhkan: ${finalQty} ${item.unit}. Silakan catat Barang Masuk terlebih dahulu.`
+      );
+    }
+
+    const nowIso = new Date().toISOString();
+    const actorId = currentUser?.id || currentUser?.uid || 'admin';
+    const actorName = currentUser?.displayName || currentUser?.name || 'Administrator';
+
+    // Catat otomatis sebagai transaksi Barang Keluar & kurangi stokSaatIni
+    const trx = await recordAtkOutgoing({
+      itemId: item.id,
+      jumlah: finalQty,
+      tanggal: nowIso.slice(0, 10),
+      penerimaId: req.pemohonId,
+      penerimaNama: req.pemohonNama,
+      penerimaRole: req.pemohonRole,
+      keperluan: req.keperluan,
+      requestId: req.id,
+      keterangan:
+        (catatanAdmin || req.catatan || `Penyerahan permintaan ATK (${req.pemohonNama})`).trim(),
+      petugasNama: actorName,
+    });
+
+    const updatedReq: AtkRequest = {
+      ...req,
+      status: 'Sudah Diberikan',
+      jumlahDisetujui: finalQty,
+      catatanAdmin: (catatanAdmin ?? req.catatanAdmin ?? '').trim() || undefined,
+      diprosesOlehId: req.diprosesOlehId || actorId,
+      diprosesOlehNama: req.diprosesOlehNama || actorName,
+      tanggalDiproses: req.tanggalDiproses || nowIso,
+      diserahkanOlehId: actorId,
+      diserahkanOlehNama: actorName,
+      tanggalDiserahkan: nowIso,
+      transactionId: trx.id,
+      updatedAt: nowIso,
+    };
+
+    setAtkRequests((prev) => prev.map((r) => (r.id === requestId ? updatedReq : r)));
+    await saveDocument('atkRequests', updatedReq);
+  };
+
+  const cancelAtkRequest = async (requestId: string): Promise<void> => {
+    const req = atkRequests.find((r) => r.id === requestId);
+    if (!req) {
+      throw new Error('Data permintaan tidak ditemukan.');
+    }
+    const isOwner =
+      currentUser &&
+      (req.pemohonId === currentUser.id ||
+        req.pemohonId === currentUser.uid ||
+        req.pemohonId === currentUser.username);
+    if (!isOwner && !isAtkAdminRole(role)) {
+      throw new Error('Akses Ditolak: Anda hanya dapat membatalkan permintaan milik Anda sendiri.');
+    }
+    if (req.status !== 'Menunggu') {
+      throw new Error('Hanya permintaan yang masih berstatus Menunggu yang dapat dibatalkan.');
+    }
+
+    const nowIso = new Date().toISOString();
+    const updatedReq: AtkRequest = {
+      ...req,
+      status: 'Dibatalkan',
+      updatedAt: nowIso,
+    };
+
+    setAtkRequests((prev) => prev.map((r) => (r.id === requestId ? updatedReq : r)));
+    await saveDocument('atkRequests', updatedReq);
   };
 
   return (
@@ -789,6 +2178,15 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         extracurricularParticipants,
         extracurricularScores,
         schoolIdentity,
+        kesantrianRecords,
+        kesantrianMedicines,
+        kesantrianViolationCategories,
+        mabitPeriods,
+        atkCategories,
+        atkItems,
+        atkTransactions,
+        atkRequests,
+        allowTeacherViewAtkStock,
         loading,
         saveAcademicYear,
         setActiveAcademicYear,
@@ -816,6 +2214,27 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         getAcademicSetting,
         saveAcademicSetting,
         saveSchoolIdentity,
+        saveKesantrianRecord,
+        deleteKesantrianRecord,
+        restoreKesantrianRecord,
+        saveKesantrianMedicine,
+        deleteKesantrianMedicine,
+        saveKesantrianViolationCategory,
+        deleteKesantrianViolationCategory,
+        saveMabitPeriod,
+        deleteMabitPeriod,
+        setAllowTeacherViewAtkStock,
+        saveAtkCategory,
+        deleteAtkCategory,
+        saveAtkItem,
+        toggleAtkItemStatus,
+        recordAtkIncoming,
+        recordAtkOutgoing,
+        createAtkRequest,
+        approveAtkRequest,
+        rejectAtkRequest,
+        handoverAtkRequest,
+        cancelAtkRequest,
         refreshAll
       }}
     >

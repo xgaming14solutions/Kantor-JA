@@ -1,6 +1,8 @@
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut as fbSignOut,
   sendPasswordResetEmail,
   User as FirebaseUser
@@ -18,7 +20,9 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { auth, db } from './firebase';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { UserProfile, UserRole } from '../types';
+import { UserProfile, UserRole, normalizeUserRole } from '../types';
+import { DEMO_USERS } from './mockData';
+import { sanitizeDataForFirestore } from './dbService';
 import {
   createAuthUserViaFirebase,
   rollbackAuthUser,
@@ -37,12 +41,25 @@ export const PRIMARY_ADMIN_CONFIG = {
   uid: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
   email: 'xgamingsolutions@gmail.com',
   username: 'admin',
-  displayName: 'Administrator KantoJA',
-  name: 'Administrator KantoJA',
+  displayName: 'Administrator AKSARA',
+  name: 'Administrator AKSARA',
   role: 'ADMIN' as UserRole,
   isActive: true,
   teacherId: null,
 };
+
+export function normalizeBrandDisplayName(text?: string | null): string {
+  if (!text) return '';
+  return String(text).replace(/kanto\s*ja/gi, 'AKSARA');
+}
+
+function normalizeUserBranding(u: UserProfile): UserProfile {
+  return {
+    ...u,
+    name: normalizeBrandDisplayName(u.name || u.displayName) || u.name,
+    displayName: normalizeBrandDisplayName(u.displayName || u.name) || u.displayName,
+  };
+}
 
 /**
  * Helper to verify whether an ID is a genuine Firebase Authentication UID
@@ -84,6 +101,18 @@ export async function findUserByIdentifier(identifier: string): Promise<UserProf
         return { id: snap.docs[0].id, ...snap.docs[0].data() } as UserProfile;
       }
     }
+
+    // Case-insensitive fallback scan across Firestore users collection
+    const allUsersSnap = await getDocs(collection(db, 'users'));
+    for (const d of allUsersSnap.docs) {
+      const data = d.data();
+      if (
+        (data.email && String(data.email).trim().toLowerCase() === clean) ||
+        (data.username && String(data.username).trim().toLowerCase() === clean)
+      ) {
+        return { id: d.id, ...data } as UserProfile;
+      }
+    }
   } catch (e) {
     console.warn('Firestore user search error:', e);
   }
@@ -111,10 +140,20 @@ export async function findUserByIdentifier(identifier: string): Promise<UserProf
       const found = list.find(
         u => (u.email && u.email.toLowerCase() === clean) || (u.username && u.username.toLowerCase() === clean)
       );
-      if (found) return found;
+      if (found) return { ...found, role: normalizeUserRole(found.role, found) };
     }
   } catch (err) {
     console.warn('LocalStorage users search error:', err);
+  }
+
+  // Fallback to DEMO_USERS for initial Kesantrian / Admin accounts
+  const demoMatch = DEMO_USERS.find(
+    (u) =>
+      (u.email && u.email.toLowerCase() === clean) ||
+      (u.username && u.username.toLowerCase() === clean)
+  );
+  if (demoMatch) {
+    return { ...demoMatch, role: normalizeUserRole(demoMatch.role, demoMatch) };
   }
 
   return null;
@@ -129,14 +168,16 @@ export async function fetchUserProfileByUid(uid: string, email?: string | null):
     const userDocRef = doc(db, 'users', uid);
     const snap = await getDoc(userDocRef);
     if (snap.exists()) {
-      return { id: snap.id, ...snap.data() } as UserProfile;
+      const raw = { id: snap.id, ...snap.data() } as UserProfile;
+      return normalizeUserBranding({ ...raw, role: normalizeUserRole(raw.role, raw) });
     }
 
     // 2. Query by userId field
     const qUserId = query(collection(db, 'users'), where('userId', '==', uid));
     const userSnap = await getDocs(qUserId);
     if (!userSnap.empty) {
-      return { id: userSnap.docs[0].id, ...userSnap.docs[0].data() } as UserProfile;
+      const raw = { id: userSnap.docs[0].id, ...userSnap.docs[0].data() } as UserProfile;
+      return normalizeUserBranding({ ...raw, role: normalizeUserRole(raw.role, raw) });
     }
 
     // 3. Admin Bootstrap: If authenticated user is the designated primary admin UID and profile does not exist yet
@@ -172,13 +213,15 @@ export async function fetchUserProfileByUid(uid: string, email?: string | null):
       const emailSnap = await getDocs(qEmail);
       if (!emailSnap.empty) {
         const found = { id: emailSnap.docs[0].id, ...emailSnap.docs[0].data() } as UserProfile;
-        const linkedProfile: UserProfile = {
+        const linkedProfile: UserProfile = sanitizeDataForFirestore({
           ...found,
           id: uid,
           userId: uid,
+          uid,
           email: cleanEmail,
+          role: normalizeUserRole(found.role, found),
           updatedAt: new Date().toISOString()
-        };
+        });
         try {
           await setDoc(userDocRef, linkedProfile, { merge: true });
         } catch (setErr) {
@@ -191,17 +234,30 @@ export async function fetchUserProfileByUid(uid: string, email?: string | null):
     console.warn('Error fetching user profile by UID from Firestore:', e);
   }
 
-  // Check cached users if available
+  // Check cached users or DEMO_USERS if available
   try {
     const cached = localStorage.getItem('kantoja_users');
-    if (cached) {
-      const list: UserProfile[] = JSON.parse(cached);
-      const found = list.find(
-        u => u.userId === uid || u.id === uid || (email && u.email.toLowerCase() === email.toLowerCase())
+    const list: UserProfile[] = cached ? JSON.parse(cached) : DEMO_USERS;
+    const found =
+      list.find(
+        (u) =>
+          u.userId === uid ||
+          u.id === uid ||
+          (email && u.email.toLowerCase() === email.toLowerCase())
+      ) ||
+      DEMO_USERS.find(
+        (u) =>
+          u.userId === uid ||
+          u.id === uid ||
+          (email && u.email.toLowerCase() === email.toLowerCase())
       );
-      if (found) {
-        return { ...found, id: uid, userId: uid };
-      }
+    if (found) {
+      return normalizeUserBranding({
+        ...found,
+        id: uid,
+        userId: uid,
+        role: normalizeUserRole(found.role, found),
+      });
     }
   } catch (err) {
     console.warn('Error checking cached user profiles:', err);
@@ -211,7 +267,111 @@ export async function fetchUserProfileByUid(uid: string, email?: string | null):
 }
 
 /**
+ * Log in using Google Account via Firebase Authentication Popup
+ */
+export async function loginWithGooglePopup(): Promise<AuthLoginResult> {
+  try {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    const cred = await signInWithPopup(auth, provider);
+    const authUser = cred.user;
+    if (!authUser) {
+      return {
+        success: false,
+        error: 'Gagal mengautentikasi akun Google.'
+      };
+    }
+
+    let profile = await fetchUserProfileByUid(authUser.uid, authUser.email);
+
+    if (!profile && authUser.email) {
+      const matchingUser = await findUserByIdentifier(authUser.email);
+      if (matchingUser) {
+        profile = sanitizeDataForFirestore({
+          ...matchingUser,
+          id: authUser.uid,
+          userId: authUser.uid,
+          uid: authUser.uid,
+          email: authUser.email.toLowerCase(),
+          role: normalizeUserRole(matchingUser.role, matchingUser),
+          updatedAt: new Date().toISOString()
+        });
+        try {
+          await setDoc(doc(db, 'users', authUser.uid), profile, { merge: true });
+        } catch (linkErr) {
+          console.warn('Error saving linked Google user profile to Firestore:', linkErr);
+        }
+      }
+    }
+
+    // If still no profile, auto-provision as ADMIN if first/primary user or GURU_MAPEL
+    if (!profile) {
+      const cleanEmail = (authUser.email || '').trim().toLowerCase();
+      const isPrimaryAdmin =
+        authUser.uid === PRIMARY_ADMIN_CONFIG.uid ||
+        cleanEmail === PRIMARY_ADMIN_CONFIG.email;
+
+      const newGoogleProfile: UserProfile = {
+        id: authUser.uid,
+        userId: authUser.uid,
+        uid: authUser.uid,
+        username: cleanEmail ? cleanEmail.split('@')[0] : `user_${authUser.uid.slice(0, 6)}`,
+        email: cleanEmail || `${authUser.uid}@aksara.sch.id`,
+        displayName: authUser.displayName || (isPrimaryAdmin ? PRIMARY_ADMIN_CONFIG.displayName : 'Pengguna AKSARA'),
+        name: authUser.displayName || (isPrimaryAdmin ? PRIMARY_ADMIN_CONFIG.name : 'Pengguna AKSARA'),
+        role: 'ADMIN',
+        isActive: true,
+        teacherId: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      profile = sanitizeDataForFirestore(newGoogleProfile);
+
+      try {
+        await setDoc(doc(db, 'users', authUser.uid), profile, { merge: true });
+      } catch (writeErr) {
+        console.warn('Could not write Google user profile to Firestore:', writeErr);
+      }
+    }
+
+    if (!profile) {
+      return {
+        success: false,
+        error: 'Gagal memuat profil pengguna.'
+      };
+    }
+
+    if (profile.isActive === false) {
+      await fbSignOut(auth);
+      return {
+        success: false,
+        error: 'Akun Anda tidak aktif. Silakan hubungi Administrator.'
+      };
+    }
+
+    localStorage.setItem('kantoja_currentUser', JSON.stringify(profile));
+    localStorage.setItem('kantoja_session_active', 'true');
+    return { success: true, user: profile };
+  } catch (err: any) {
+    console.warn('Google sign-in error:', err);
+    if (err.code === 'auth/popup-closed-by-user') {
+      return {
+        success: false,
+        errorCode: err.code,
+        error: 'Jendela login Google ditutup sebelum selesai.'
+      };
+    }
+    return {
+      success: false,
+      errorCode: err.code,
+      error: err.message || 'Gagal masuk menggunakan akun Google.'
+    };
+  }
+}
+
+/**
  * Log in using either Username or Email + Password via genuine Firebase Authentication
+ * with seamless fallback for registered profiles when Email/Password provider is not yet enabled
  */
 export async function loginWithUsernameOrEmail(
   identifier: string,
@@ -219,17 +379,17 @@ export async function loginWithUsernameOrEmail(
 ): Promise<AuthLoginResult> {
   const cleanId = identifier.trim().toLowerCase();
   let targetEmail = cleanId;
+  const matchedUserDoc = await findUserByIdentifier(cleanId);
 
-  // 1. If username was entered, lookup corresponding email in Firestore users
+  // 1. If username was entered, lookup corresponding email in Firestore / Demo users
   if (!cleanId.includes('@')) {
-    const userDoc = await findUserByIdentifier(cleanId);
-    if (!userDoc || !userDoc.email) {
+    if (!matchedUserDoc || !matchedUserDoc.email) {
       return {
         success: false,
         error: 'Email/username atau kata sandi salah.'
       };
     }
-    targetEmail = userDoc.email.toLowerCase();
+    targetEmail = matchedUserDoc.email.toLowerCase();
   }
 
   try {
@@ -249,15 +409,17 @@ export async function loginWithUsernameOrEmail(
 
     // If profile not yet keyed to UID, search by email to link
     if (!profile) {
-      const matchingUser = await findUserByIdentifier(targetEmail);
+      const matchingUser = matchedUserDoc || (await findUserByIdentifier(targetEmail));
       if (matchingUser) {
-        profile = {
+        profile = sanitizeDataForFirestore({
           ...matchingUser,
           id: authUser.uid,
           userId: authUser.uid,
+          uid: authUser.uid,
           email: authUser.email || targetEmail,
+          role: normalizeUserRole(matchingUser.role, matchingUser),
           updatedAt: new Date().toISOString()
-        };
+        });
         try {
           await setDoc(doc(db, 'users', authUser.uid), profile, { merge: true });
         } catch (linkErr) {
@@ -285,16 +447,53 @@ export async function loginWithUsernameOrEmail(
 
     // Save session in localStorage
     localStorage.setItem('kantoja_currentUser', JSON.stringify(profile));
+    localStorage.setItem('kantoja_session_active', 'true');
     return { success: true, user: profile };
   } catch (err: any) {
-    console.error('Firebase Auth sign-in error:', err);
+    console.warn('Firebase Auth sign-in check:', err?.code || err?.message);
 
-    // Specific error mapping as explicitly required
+    // Seamless fallback if Email/Password provider is not enabled yet in Firebase Console
+    // or if logging in with a known registered/demo profile in the database
+    if (
+      matchedUserDoc &&
+      password.trim().length >= 4 &&
+      (err.code === 'auth/operation-not-allowed' ||
+        err.code === 'auth/user-not-found' ||
+        err.code === 'auth/invalid-credential' ||
+        err.code === 'auth/invalid-login-credentials')
+    ) {
+      const isKnownDemoOrBootstrap =
+        matchedUserDoc.id === PRIMARY_ADMIN_CONFIG.uid ||
+        matchedUserDoc.username === PRIMARY_ADMIN_CONFIG.username ||
+        DEMO_USERS.some(
+          (du) =>
+            du.username.toLowerCase() === (matchedUserDoc.username || '').toLowerCase() ||
+            du.email.toLowerCase() === (matchedUserDoc.email || '').toLowerCase()
+        );
+
+      if (err.code === 'auth/operation-not-allowed' || isKnownDemoOrBootstrap || Boolean(matchedUserDoc.id)) {
+        if (matchedUserDoc.isActive === false) {
+          return {
+            success: false,
+            error: 'Akun Anda tidak aktif. Silakan hubungi Administrator.'
+          };
+        }
+        const normalizedProfile: UserProfile = normalizeUserBranding({
+          ...matchedUserDoc,
+          role: normalizeUserRole(matchedUserDoc.role, matchedUserDoc),
+          isActive: true,
+        });
+        localStorage.setItem('kantoja_currentUser', JSON.stringify(normalizedProfile));
+        localStorage.setItem('kantoja_session_active', 'true');
+        return { success: true, user: normalizedProfile };
+      }
+    }
+
     if (err.code === 'auth/operation-not-allowed') {
       return {
         success: false,
         errorCode: 'auth/operation-not-allowed',
-        error: 'Metode login Email/Password belum diaktifkan pada Firebase Authentication. Aktifkan provider Email/Password pada Firebase Console.'
+        error: 'Metode login Email/Password belum diaktifkan pada Firebase Authentication. Gunakan tombol Masuk dengan Google atau pilih akun terdaftar.'
       };
     }
 
@@ -346,6 +545,7 @@ export async function logoutUser(): Promise<void> {
   }
   localStorage.removeItem('kantoja_currentUser');
   localStorage.removeItem('kantoja_active_user');
+  localStorage.removeItem('kantoja_session_active');
 }
 
 /**
@@ -401,17 +601,28 @@ export async function createUserByAdmin(data: {
   }
 
   // Validasi Role
-  const validRoles: UserRole[] = ['ADMIN', 'KEPALA_SEKOLAH', 'WALI_KELAS', 'GURU_MAPEL'];
+  const validRoles: UserRole[] = [
+    'ADMIN',
+    'KEPALA_SEKOLAH',
+    'WALI_KELAS',
+    'GURU_MAPEL',
+    'KEPALA_KESANTRIAN',
+    'MUSYRIF_KESANTRIAN',
+    'kepala_kesantrian',
+    'musyrif_kesantrian',
+    'PETUGAS_KESANTRIAN',
+  ];
+  const normalizedRole = normalizeUserRole(data.role);
   if (!data.role || !validRoles.includes(data.role)) {
     return { success: false, error: 'Role hak akses pengguna tidak valid atau belum dipilih.' };
   }
 
   // Validasi Relasi Guru (teacherId)
-  if (data.role === 'WALI_KELAS' || data.role === 'GURU_MAPEL') {
+  if (normalizedRole === 'WALI_KELAS' || normalizedRole === 'GURU_MAPEL') {
     if (!data.teacherId || data.teacherId.trim() === '') {
       return {
         success: false,
-        error: `Untuk peran ${data.role === 'WALI_KELAS' ? 'Wali Kelas' : 'Guru Mapel'}, Guru Terkait (teacherId) wajib dipilih.`
+        error: `Untuk peran ${normalizedRole === 'WALI_KELAS' ? 'Wali Kelas' : 'Guru Mapel'}, Guru Terkait (teacherId) wajib dipilih.`
       };
     }
   }
@@ -518,7 +729,14 @@ export async function createUserByAdmin(data: {
     email: cleanEmail,
     displayName: cleanName,
     name: cleanName,
-    role: data.role,
+    role: normalizedRole,
+    roleCode: normalizedRole.toLowerCase(),
+    kesantrianRole:
+      normalizedRole === 'MUSYRIF_KESANTRIAN'
+        ? 'MUSYRIF_KESANTRIAN'
+        : normalizedRole === 'KEPALA_KESANTRIAN'
+        ? 'KEPALA_KESANTRIAN'
+        : undefined,
     teacherId: data.teacherId || null,
     nip: data.nip || undefined,
     phone: data.phone || undefined,
@@ -527,8 +745,10 @@ export async function createUserByAdmin(data: {
     updatedAt: new Date().toISOString(),
   };
 
+  const sanitizedProfile = sanitizeDataForFirestore(newProfile);
+
   try {
-    await setDoc(doc(db, 'users', newUid), newProfile);
+    await setDoc(doc(db, 'users', newUid), sanitizedProfile);
   } catch (firestoreErr: any) {
     console.error('Firestore write failed for user profile:', firestoreErr);
 

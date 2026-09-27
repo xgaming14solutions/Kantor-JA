@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserProfile, UserRole } from '../types';
+import { UserProfile, UserRole, normalizeUserRole } from '../types';
 import { useMasterData } from '../context/MasterDataContext';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -99,13 +99,28 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
 
   // --- Handlers ---
 
-  const handleOpenAdd = () => {
+  const handleOpenAdd = (presetRole: UserRole = 'GURU_MAPEL') => {
     setAddForm({
-      name: '',
-      username: '',
-      email: '',
+      name:
+        presetRole === 'KEPALA_KESANTRIAN'
+          ? 'Kepala Kesantrian'
+          : presetRole === 'MUSYRIF_KESANTRIAN'
+          ? 'Musyrif Kesantrian'
+          : '',
+      username:
+        presetRole === 'KEPALA_KESANTRIAN'
+          ? 'kepalakesantrian'
+          : presetRole === 'MUSYRIF_KESANTRIAN'
+          ? 'musyrifkesantrian'
+          : '',
+      email:
+        presetRole === 'KEPALA_KESANTRIAN'
+          ? 'kepalakesantrian@kantoja.sch.id'
+          : presetRole === 'MUSYRIF_KESANTRIAN'
+          ? 'musyrifkesantrian@kantoja.sch.id'
+          : '',
       password: '',
-      role: 'GURU_MAPEL',
+      role: presetRole,
       teacherId: '',
       isActive: true,
     });
@@ -121,7 +136,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
       name: user.name || user.displayName || '',
       username: user.username || '',
       email: user.email,
-      role: user.role,
+      role: normalizeUserRole(user.role, user),
       teacherId: user.teacherId || '',
       isActive: user.isActive !== false,
     });
@@ -181,7 +196,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
-      setFormError('Format alamat email tidak valid (contoh: guru@kantoja.sch.id).');
+      setFormError('Format alamat email tidak valid (contoh: guru@aksara.sch.id).');
       return;
     }
     // Requirement 8: Check if email already belongs to a user with a genuine Firebase Auth UID
@@ -201,7 +216,15 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
     }
 
     // Role validation
-    const validRoles: UserRole[] = ['ADMIN', 'KEPALA_SEKOLAH', 'WALI_KELAS', 'GURU_MAPEL'];
+    const validRoles: UserRole[] = [
+      'ADMIN',
+      'KEPALA_SEKOLAH',
+      'WALI_KELAS',
+      'GURU_MAPEL',
+      'KEPALA_KESANTRIAN',
+      'MUSYRIF_KESANTRIAN',
+      'PETUGAS_KESANTRIAN',
+    ];
     if (!addForm.role || !validRoles.includes(addForm.role)) {
       setFormError('Role hak akses pengguna tidak valid.');
       return;
@@ -247,7 +270,17 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
         await deleteUser(existingUsernameUser.id);
       }
 
-      await saveUser(res.user);
+      const userWithSubRole: UserProfile = {
+        ...res.user,
+        kesantrianRole:
+          addForm.role === 'MUSYRIF_KESANTRIAN'
+            ? 'MUSYRIF_KESANTRIAN'
+            : addForm.role === 'KEPALA_KESANTRIAN' || addForm.role === 'PETUGAS_KESANTRIAN'
+            ? 'KEPALA_KESANTRIAN'
+            : undefined,
+      };
+
+      await saveUser(userWithSubRole);
 
       // Reset form memory completely so no plaintext password lingers
       setAddForm({
@@ -318,6 +351,12 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
         username: cleanUsername,
         email: editForm.email.trim().toLowerCase(),
         role: editForm.role,
+        kesantrianRole:
+          editForm.role === 'MUSYRIF_KESANTRIAN'
+            ? 'MUSYRIF_KESANTRIAN'
+            : editForm.role === 'KEPALA_KESANTRIAN' || editForm.role === 'PETUGAS_KESANTRIAN'
+            ? 'KEPALA_KESANTRIAN'
+            : undefined,
         teacherId: editForm.teacherId || undefined,
         nip: linkedTeacher?.nip || selectedUser?.nip,
         phone: linkedTeacher?.phone || selectedUser?.phone,
@@ -435,11 +474,19 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
       u.email.toLowerCase().includes(q) ||
       (u.teacherId && u.teacherId.toLowerCase().includes(q));
 
-    const matchesRole = roleFilter === 'ALL' || u.role === roleFilter;
+    const matchesRole =
+      roleFilter === 'ALL' ||
+      u.role === roleFilter ||
+      (roleFilter === 'KEPALA_KESANTRIAN' &&
+        u.role === 'PETUGAS_KESANTRIAN' &&
+        u.kesantrianRole !== 'MUSYRIF_KESANTRIAN') ||
+      (roleFilter === 'MUSYRIF_KESANTRIAN' &&
+        u.role === 'PETUGAS_KESANTRIAN' &&
+        u.kesantrianRole === 'MUSYRIF_KESANTRIAN');
     return matchesSearch && matchesRole;
   });
 
-  const getRoleBadge = (role: UserRole) => {
+  const getRoleBadge = (role: UserRole, user?: UserProfile | null) => {
     switch (role) {
       case 'ADMIN':
         return (
@@ -469,6 +516,31 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
             GURU MAPEL
           </span>
         );
+      case 'KEPALA_KESANTRIAN':
+      case 'kepala_kesantrian':
+        return (
+          <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-teal-50 text-teal-800 border border-teal-300 inline-flex items-center gap-1">
+            <ShieldCheck className="w-3 h-3 text-teal-700" />
+            KEPALA KESANTRIAN (kepala_kesantrian)
+          </span>
+        );
+      case 'MUSYRIF_KESANTRIAN':
+      case 'musyrif_kesantrian':
+        return (
+          <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-cyan-50 text-cyan-800 border border-cyan-300 inline-flex items-center gap-1">
+            <ShieldCheck className="w-3 h-3 text-cyan-700" />
+            MUSYRIF KESANTRIAN (musyrif_kesantrian)
+          </span>
+        );
+      case 'PETUGAS_KESANTRIAN':
+        return (
+          <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-teal-50 text-teal-700 border border-teal-200 inline-flex items-center gap-1">
+            <ShieldCheck className="w-3 h-3 text-teal-600" />
+            {user?.kesantrianRole === 'MUSYRIF_KESANTRIAN'
+              ? 'MUSYRIF KESANTRIAN (musyrif_kesantrian)'
+              : 'KEPALA KESANTRIAN (kepala_kesantrian)'}
+          </span>
+        );
       default:
         return null;
     }
@@ -488,14 +560,32 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
           </p>
         </div>
 
-        <button
-          id="btn-add-user"
-          onClick={handleOpenAdd}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-xs self-start sm:self-auto cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          Tambah Pengguna
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => handleOpenAdd('KEPALA_KESANTRIAN')}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-200 hover:bg-teal-100 transition cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Akun Kepala Kesantrian
+          </button>
+          <button
+            type="button"
+            onClick={() => handleOpenAdd('MUSYRIF_KESANTRIAN')}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-cyan-800 bg-cyan-50 border border-cyan-200 hover:bg-cyan-100 transition cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Akun Musyrif Kesantrian
+          </button>
+          <button
+            id="btn-add-user"
+            onClick={() => handleOpenAdd('GURU_MAPEL')}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-xs cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Tambah Pengguna
+          </button>
+        </div>
       </div>
 
       {/* Notice Alert */}
@@ -532,6 +622,8 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
             { id: 'KEPALA_SEKOLAH', label: 'Kepala Sekolah' },
             { id: 'WALI_KELAS', label: 'Wali Kelas' },
             { id: 'GURU_MAPEL', label: 'Guru Mapel' },
+            { id: 'KEPALA_KESANTRIAN', label: 'Kepala Kesantrian' },
+            { id: 'MUSYRIF_KESANTRIAN', label: 'Musyrif Kesantrian' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -628,7 +720,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                       </td>
 
                       {/* Role */}
-                      <td className="py-3.5 px-4">{getRoleBadge(u.role)}</td>
+                      <td className="py-3.5 px-4">{getRoleBadge(u.role, u)}</td>
 
                       {/* Guru Terkait */}
                       <td className="py-3.5 px-4">
@@ -829,7 +921,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                   <input
                     type="email"
                     required
-                    placeholder="budi@kantoja.sch.id"
+                    placeholder="budi@aksara.sch.id"
                     value={addForm.email}
                     onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
                     className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600"
@@ -866,16 +958,35 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                     setAddForm({
                       ...addForm,
                       role: e.target.value as UserRole,
-                      teacherId: e.target.value === 'ADMIN' ? '' : addForm.teacherId,
+                      teacherId:
+                        e.target.value === 'ADMIN' ||
+                        e.target.value === 'KEPALA_KESANTRIAN' ||
+                        e.target.value === 'MUSYRIF_KESANTRIAN' ||
+                        e.target.value === 'PETUGAS_KESANTRIAN'
+                          ? ''
+                          : addForm.teacherId,
                     })
                   }
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
                 >
                   <option value="GURU_MAPEL">GURU_MAPEL - Guru Mata Pelajaran</option>
                   <option value="WALI_KELAS">WALI_KELAS - Wali Kelas Rombel</option>
+                  <option value="KEPALA_KESANTRIAN">
+                    kepala_kesantrian - Kepala Kesantrian (Penanggung Jawab Kesantrian)
+                  </option>
+                  <option value="MUSYRIF_KESANTRIAN">
+                    musyrif_kesantrian - Musyrif Kesantrian (Pelaksana Harian Kesantrian)
+                  </option>
                   <option value="KEPALA_SEKOLAH">KEPALA_SEKOLAH - Monitoring Sekolah</option>
                   <option value="ADMIN">ADMIN - Akses Penuh Sistem</option>
                 </select>
+                {(addForm.role === 'KEPALA_KESANTRIAN' ||
+                  addForm.role === 'MUSYRIF_KESANTRIAN' ||
+                  addForm.role === 'PETUGAS_KESANTRIAN') && (
+                  <p className="text-[10px] text-teal-700 mt-1 font-medium">
+                    Kepala Kesantrian &amp; Musyrif Kesantrian menangani seluruh santri dari Master Data Siswa (tanpa pembagian santri binaan).
+                  </p>
+                )}
               </div>
 
               {/* Guru Terkait (Dropdown dari master data teachers) */}
@@ -887,8 +998,18 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                       <span className="text-rose-500 ml-1">* Wajib dipilih</span>
                     )}
                   </label>
-                  {(addForm.role === 'ADMIN' || addForm.role === 'KEPALA_SEKOLAH') && (
-                    <span className="text-[10px] text-slate-400">Opsional untuk Admin/Kepsek</span>
+                  {(addForm.role === 'ADMIN' ||
+                    addForm.role === 'KEPALA_SEKOLAH' ||
+                    addForm.role === 'KEPALA_KESANTRIAN' ||
+                    addForm.role === 'MUSYRIF_KESANTRIAN' ||
+                    addForm.role === 'PETUGAS_KESANTRIAN') && (
+                    <span className="text-[10px] text-slate-400">
+                      {addForm.role === 'KEPALA_KESANTRIAN' ||
+                      addForm.role === 'MUSYRIF_KESANTRIAN' ||
+                      addForm.role === 'PETUGAS_KESANTRIAN'
+                        ? 'Tidak diperlukan untuk Petugas Kesantrian'
+                        : 'Opsional untuk Admin/Kepsek'}
+                    </span>
                   )}
                 </div>
 
@@ -1043,13 +1164,25 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                     setEditForm({
                       ...editForm,
                       role: e.target.value as UserRole,
-                      teacherId: e.target.value === 'ADMIN' ? '' : editForm.teacherId,
+                      teacherId:
+                        e.target.value === 'ADMIN' ||
+                        e.target.value === 'KEPALA_KESANTRIAN' ||
+                        e.target.value === 'MUSYRIF_KESANTRIAN' ||
+                        e.target.value === 'PETUGAS_KESANTRIAN'
+                          ? ''
+                          : editForm.teacherId,
                     })
                   }
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
                 >
                   <option value="GURU_MAPEL">GURU_MAPEL - Guru Mata Pelajaran</option>
                   <option value="WALI_KELAS">WALI_KELAS - Wali Kelas Rombel</option>
+                  <option value="KEPALA_KESANTRIAN">
+                    kepala_kesantrian - Kepala Kesantrian (Penanggung Jawab Kesantrian)
+                  </option>
+                  <option value="MUSYRIF_KESANTRIAN">
+                    musyrif_kesantrian - Musyrif Kesantrian (Pelaksana Harian Kesantrian)
+                  </option>
                   <option value="KEPALA_SEKOLAH">KEPALA_SEKOLAH - Monitoring Sekolah</option>
                   <option value="ADMIN">ADMIN - Akses Penuh Sistem</option>
                 </select>
@@ -1064,8 +1197,18 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                       <span className="text-rose-500 ml-1">* Wajib dipilih</span>
                     )}
                   </label>
-                  {(editForm.role === 'ADMIN' || editForm.role === 'KEPALA_SEKOLAH') && (
-                    <span className="text-[10px] text-slate-400">Opsional untuk Admin/Kepsek</span>
+                  {(editForm.role === 'ADMIN' ||
+                    editForm.role === 'KEPALA_SEKOLAH' ||
+                    editForm.role === 'KEPALA_KESANTRIAN' ||
+                    editForm.role === 'MUSYRIF_KESANTRIAN' ||
+                    editForm.role === 'PETUGAS_KESANTRIAN') && (
+                    <span className="text-[10px] text-slate-400">
+                      {editForm.role === 'KEPALA_KESANTRIAN' ||
+                      editForm.role === 'MUSYRIF_KESANTRIAN' ||
+                      editForm.role === 'PETUGAS_KESANTRIAN'
+                        ? 'Tidak diperlukan untuk Petugas Kesantrian'
+                        : 'Opsional untuk Admin/Kepsek'}
+                    </span>
                   )}
                 </div>
 
@@ -1181,7 +1324,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                   <div className="text-xs text-indigo-600 font-mono font-semibold">
                     @{selectedUser.username || selectedUser.id}
                   </div>
-                  <div className="mt-1">{getRoleBadge(selectedUser.role)}</div>
+                  <div className="mt-1">{getRoleBadge(selectedUser.role, selectedUser)}</div>
                 </div>
               </div>
 

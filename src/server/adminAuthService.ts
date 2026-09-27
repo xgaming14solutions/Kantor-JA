@@ -53,7 +53,17 @@ export async function createAuthUserViaFirebase(data: CreateUserInput): Promise<
       error: 'Kata sandi awal minimal 6 karakter sesuai standar keamanan Firebase Authentication.'
     };
   }
-  const validRoles: UserRole[] = ['ADMIN', 'KEPALA_SEKOLAH', 'WALI_KELAS', 'GURU_MAPEL'];
+  const validRoles: UserRole[] = [
+    'ADMIN',
+    'KEPALA_SEKOLAH',
+    'WALI_KELAS',
+    'GURU_MAPEL',
+    'KEPALA_KESANTRIAN',
+    'MUSYRIF_KESANTRIAN',
+    'kepala_kesantrian',
+    'musyrif_kesantrian',
+    'PETUGAS_KESANTRIAN',
+  ];
   if (!data.role || !validRoles.includes(data.role)) {
     return { success: false, error: 'Role hak akses pengguna tidak valid.' };
   }

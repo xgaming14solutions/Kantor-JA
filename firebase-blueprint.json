@@ -12,8 +12,13 @@
         "name": { "type": "string", "description": "Nama lengkap pengguna", "maxLength": 150 },
         "role": {
           "type": "string",
-          "enum": ["ADMIN", "KEPALA_SEKOLAH", "WALI_KELAS", "GURU_MAPEL"],
+          "enum": ["ADMIN", "KEPALA_SEKOLAH", "WALI_KELAS", "GURU_MAPEL", "KEPALA_KESANTRIAN", "MUSYRIF_KESANTRIAN", "kepala_kesantrian", "musyrif_kesantrian", "PETUGAS_KESANTRIAN"],
           "description": "Hak akses otorisasi sistem"
+        },
+        "kesantrianRole": {
+          "type": "string",
+          "enum": ["KEPALA_KESANTRIAN", "MUSYRIF_KESANTRIAN"],
+          "description": "Peran spesifik petugas Kesantrian (Kepala Kesantrian atau Musyrif Kesantrian)"
         },
         "teacherId": { "type": "string", "description": "Relasi ID ke master data teachers", "maxLength": 128 },
         "nip": { "type": "string", "maxLength": 30 },
@@ -226,6 +231,183 @@
         "updatedBy": { "type": "string" }
       },
       "required": ["id", "schoolName"]
+    },
+    "KesantrianRecord": {
+      "title": "KesantrianRecord",
+      "description": "Catatan administrasi kesantrian non-akademik yang terhubung ke master data siswa melalui studentId",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["PELANGGARAN", "SAKIT", "IZIN_PULANG", "MABIT", "OBAT_P3K"] },
+        "studentId": { "type": "string", "description": "Relasi utama ke Student.id pada master data siswa" },
+        "date": { "type": "string" },
+        "semester": { "type": "string", "enum": ["Ganjil", "Genap"] },
+        "academicYearId": { "type": "string" },
+        "academicYearName": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "actionTaken": { "type": "string" },
+        "status": { "type": "string" },
+        "returnDate": { "type": "string" },
+        "recordedByUserId": { "type": "string" },
+        "recordedByName": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "type", "studentId", "date", "semester", "academicYearId", "academicYearName", "title"]
+    },
+    "KesantrianMedicine": {
+      "title": "KesantrianMedicine",
+      "description": "Inventaris obat dan perlengkapan P3K kesantrian",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "stock": { "type": "number" },
+        "unit": { "type": "string" },
+        "notes": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["id", "name", "category", "stock", "unit"]
+    },
+    "KesantrianViolationCategory": {
+      "title": "KesantrianViolationCategory",
+      "description": "Master kategori jenis pelanggaran santri yang dapat dikelola Admin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["id", "name", "isActive"]
+    },
+    "MabitPeriod": {
+      "title": "MabitPeriod",
+      "description": "Periode kepulangan Mabit santri beserta daftar santri peserta (referensi studentId ke Master Data Siswa) dan status kembali",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "periodName": { "type": "string" },
+        "departureDate": { "type": "string" },
+        "departureDay": { "type": "string" },
+        "departureTime": { "type": "string" },
+        "returnDate": { "type": "string" },
+        "returnDay": { "type": "string" },
+        "returnTime": { "type": "string" },
+        "generalNotes": { "type": "string" },
+        "academicYearId": { "type": "string" },
+        "academicYearName": { "type": "string" },
+        "semester": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedBy": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "periodName", "departureDate", "returnDate"]
+    },
+    "AtkCategory": {
+      "title": "AtkCategory",
+      "description": "Master kategori barang ATK dan persediaan kantor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "isActive"]
+    },
+    "AtkItem": {
+      "title": "AtkItem",
+      "description": "Master data barang ATK dan persediaan kantor sekolah",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "unit": { "type": "string" },
+        "stokSaatIni": { "type": "number" },
+        "stokMinimum": { "type": "number" },
+        "lokasiPenyimpanan": { "type": "string" },
+        "hargaPerkiraan": { "type": "number" },
+        "keterangan": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "code", "name", "category", "unit", "stokSaatIni", "stokMinimum", "lokasiPenyimpanan", "isActive"]
+    },
+    "AtkTransaction": {
+      "title": "AtkTransaction",
+      "description": "Riwayat transaksi barang masuk dan keluar ATK kantor/sekolah",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["MASUK", "KELUAR"] },
+        "itemId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "category": { "type": "string" },
+        "unit": { "type": "string" },
+        "jumlah": { "type": "number" },
+        "tanggal": { "type": "string" },
+        "waktu": { "type": "string" },
+        "stokSebelum": { "type": "number" },
+        "stokSesudah": { "type": "number" },
+        "sumberBarang": { "type": "string" },
+        "hargaSatuan": { "type": "number" },
+        "nomorNota": { "type": "string" },
+        "penerimaId": { "type": "string" },
+        "penerimaNama": { "type": "string" },
+        "keperluan": { "type": "string" },
+        "requestId": { "type": "string" },
+        "keterangan": { "type": "string" },
+        "petugasId": { "type": "string" },
+        "petugasNama": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "type", "itemId", "itemName", "jumlah", "tanggal", "stokSebelum", "stokSesudah", "petugasId", "petugasNama"]
+    },
+    "AtkRequest": {
+      "title": "AtkRequest",
+      "description": "Permintaan ATK oleh guru/staff dan status persetujuan serta penyerahan barang",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "itemId": { "type": "string" },
+        "itemName": { "type": "string" },
+        "category": { "type": "string" },
+        "unit": { "type": "string" },
+        "jumlahDiminta": { "type": "number" },
+        "jumlahDisetujui": { "type": "number" },
+        "keperluan": { "type": "string" },
+        "catatan": { "type": "string" },
+        "pemohonId": { "type": "string" },
+        "pemohonNama": { "type": "string" },
+        "pemohonRole": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "waktu": { "type": "string" },
+        "status": { "type": "string", "enum": ["Menunggu", "Disetujui", "Sudah Diberikan", "Ditolak", "Dibatalkan"] },
+        "catatanAdmin": { "type": "string" },
+        "diprosesOlehNama": { "type": "string" },
+        "tanggalDiproses": { "type": "string" },
+        "diserahkanOlehNama": { "type": "string" },
+        "tanggalDiserahkan": { "type": "string" },
+        "transactionId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "itemId", "itemName", "jumlahDiminta", "keperluan", "pemohonId", "pemohonNama", "tanggal", "status"]
     }
   },
   "firestore": {
@@ -276,6 +458,38 @@
     "/extracurricularScores/{scoreId}": {
       "schema": "ExtracurricularScore",
       "description": "Data nilai ekstrakurikuler siswa"
+    },
+    "/kesantrianRecords/{recordId}": {
+      "schema": "KesantrianRecord",
+      "description": "Catatan kejadian kesantrian dengan referensi studentId ke master data siswa"
+    },
+    "/kesantrianMedicines/{medicineId}": {
+      "schema": "KesantrianMedicine",
+      "description": "Inventaris obat dan P3K kesantrian"
+    },
+    "/kesantrianViolationCategories/{categoryId}": {
+      "schema": "KesantrianViolationCategory",
+      "description": "Master kategori pelanggaran santri"
+    },
+    "/kesantrianMabitPeriods/{periodId}": {
+      "schema": "MabitPeriod",
+      "description": "Periode jadwal kepulangan Mabit santri dan pemantauan waktu kembali"
+    },
+    "/atkCategories/{categoryId}": {
+      "schema": "AtkCategory",
+      "description": "Master kategori barang ATK dan persediaan kantor"
+    },
+    "/atkItems/{itemId}": {
+      "schema": "AtkItem",
+      "description": "Master data barang ATK dan persediaan kantor"
+    },
+    "/atkTransactions/{transactionId}": {
+      "schema": "AtkTransaction",
+      "description": "Riwayat transaksi barang masuk dan keluar ATK"
+    },
+    "/atkRequests/{requestId}": {
+      "schema": "AtkRequest",
+      "description": "Permintaan ATK guru/staff dan persetujuan Kepala Sekolah/Admin"
     }
   }
 }

@@ -12,7 +12,8 @@ import {
 } from '../lib/mockData';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
-import { formatReportProgram } from '../lib/dbService';
+import { formatReportProgram, DEFAULT_PESANTREN_FACILITIES } from '../lib/dbService';
+import { PesantrenFacilityItem } from '../types';
 import {
   BookOpen,
   ClipboardList,
@@ -28,14 +29,30 @@ import {
   MapPin,
   Save,
   AlertCircle,
-  Info
+  Info,
+  Phone,
+  Building2
 } from 'lucide-react';
 
 export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
   const { role } = useAuth();
   const { activeAcademicYear, classes, students, schoolIdentity, saveSchoolIdentity } = useMasterData();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    schoolName: string;
+    programName: string;
+    npsn: string;
+    address: string;
+    mudirName: string;
+    mudirNip: string;
+    leaderTitle: string;
+    city: string;
+    whatsapp: string;
+    email: string;
+    socialMedia: string;
+    ppdbInfo: string;
+    facilities: PesantrenFacilityItem[];
+  }>({
     schoolName: schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan',
     programName: schoolIdentity.programName || 'PKBM AL-QOLAM',
     npsn: schoolIdentity.npsn || '',
@@ -46,6 +63,16 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
     mudirNip: schoolIdentity.mudirNip || '',
     leaderTitle: schoolIdentity.leaderTitle || 'Mudir / Kepala Sekolah',
     city: schoolIdentity.city || 'Tulang Bawang Barat',
+    whatsapp: schoolIdentity.whatsapp || '',
+    email: schoolIdentity.email || '',
+    socialMedia: schoolIdentity.socialMedia || '',
+    ppdbInfo:
+      schoolIdentity.ppdbInfo ||
+      'Informasi penerimaan santri baru, persyaratan, tahapan pendaftaran, dan informasi pendidikan dapat diperoleh melalui kanal resmi Pesantren Islam Mutiara Insan.',
+    facilities:
+      Array.isArray(schoolIdentity.facilities) && schoolIdentity.facilities.length > 0
+        ? schoolIdentity.facilities
+        : DEFAULT_PESANTREN_FACILITIES,
   });
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
@@ -64,6 +91,16 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
       mudirNip: schoolIdentity.mudirNip || '',
       leaderTitle: schoolIdentity.leaderTitle || 'Mudir / Kepala Sekolah',
       city: schoolIdentity.city || 'Tulang Bawang Barat',
+      whatsapp: schoolIdentity.whatsapp || '',
+      email: schoolIdentity.email || '',
+      socialMedia: schoolIdentity.socialMedia || '',
+      ppdbInfo:
+        schoolIdentity.ppdbInfo ||
+        'Informasi penerimaan santri baru, persyaratan, tahapan pendaftaran, dan informasi pendidikan dapat diperoleh melalui kanal resmi Pesantren Islam Mutiara Insan.',
+      facilities:
+        Array.isArray(schoolIdentity.facilities) && schoolIdentity.facilities.length > 0
+          ? schoolIdentity.facilities
+          : DEFAULT_PESANTREN_FACILITIES,
     });
   }, [schoolIdentity]);
 
@@ -88,8 +125,13 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
         mudirNip: formData.mudirNip.trim(),
         leaderTitle: formData.leaderTitle.trim() || 'Mudir / Kepala Sekolah',
         city: formData.city.trim() || 'Tulang Bawang Barat',
+        whatsapp: formData.whatsapp.trim(),
+        email: formData.email.trim(),
+        socialMedia: formData.socialMedia.trim(),
+        ppdbInfo: formData.ppdbInfo.trim(),
+        facilities: formData.facilities,
       });
-      setSaveSuccess('Identitas Sekolah, Program, Alamat, dan Data Mudir berhasil disimpan ke database.');
+      setSaveSuccess('Identitas Pesantren, Kontak Publik, Fasilitas, dan Data Mudir berhasil disimpan ke database.');
       setTimeout(() => setSaveSuccess(null), 5000);
     } catch (err: any) {
       setSaveError(err?.message || 'Gagal menyimpan pengaturan identitas sekolah.');
@@ -521,6 +563,114 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
                 className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600"
               />
             </div>
+          </div>
+
+          <div className="border-t border-b border-slate-100 py-3 pt-5">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Phone className="w-4 h-4 text-emerald-700" />
+              3. Kontak Resmi &amp; Informasi Penerimaan Santri (Halaman Profil Publik)
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Ditampilkan pada halaman depan profil resmi Pesantren Islam Mutiara Insan. Kosongkan jika belum tersedia.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Nomor WhatsApp Resmi
+              </label>
+              <input
+                type="text"
+                value={formData.whatsapp}
+                onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
+                placeholder="Belum diatur (opsional)"
+                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Email Resmi Pesantren
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="Belum diatur (opsional)"
+                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Media Sosial Resmi
+              </label>
+              <input
+                type="text"
+                value={formData.socialMedia}
+                onChange={(e) => setFormData({ ...formData, socialMedia: e.target.value })}
+                placeholder="Belum diatur (opsional)"
+                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+              />
+            </div>
+
+            <div className="sm:col-span-3">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Informasi Penerimaan Santri Baru (PPDB)
+              </label>
+              <textarea
+                rows={2}
+                value={formData.ppdbInfo}
+                onChange={(e) => setFormData({ ...formData, ppdbInfo: e.target.value })}
+                placeholder="Informasi pendaftaran santri baru..."
+                className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-b border-slate-100 py-3 pt-5">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-emerald-700" />
+              4. Daftar Fasilitas Pesantren (Halaman Profil Publik)
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Centang fasilitas yang tersedia di pesantren agar tampil pada halaman profil depan.
+            </p>
+          </div>
+
+          <div className="space-y-2.5">
+            {formData.facilities.map((fac, idx) => (
+              <div
+                key={fac.id}
+                className="p-3 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center gap-3"
+              >
+                <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-800 sm:w-56 shrink-0 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={fac.isAvailable}
+                    onChange={(e) => {
+                      const next = [...formData.facilities];
+                      next[idx] = { ...fac, isAvailable: e.target.checked };
+                      setFormData({ ...formData, facilities: next });
+                    }}
+                    className="rounded border-slate-300 text-emerald-700 focus:ring-emerald-600"
+                  />
+                  <span>{fac.name}</span>
+                </label>
+                <input
+                  type="text"
+                  value={fac.description}
+                  onChange={(e) => {
+                    const next = [...formData.facilities];
+                    next[idx] = { ...fac, description: e.target.value };
+                    setFormData({ ...formData, facilities: next });
+                  }}
+                  className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                  placeholder="Deskripsi fasilitas..."
+                />
+              </div>
+            ))}
           </div>
 
           <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">

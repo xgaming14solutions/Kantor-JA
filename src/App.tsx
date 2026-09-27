@@ -17,7 +17,9 @@ import { ReportCardsView } from './components/ReportCardsView';
 import { PrintReportCardView } from './components/PrintReportCardView';
 import { MyClassesView } from './components/MyClassesView';
 import { GenericModuleView } from './components/GenericModuleView';
-import { Menu, ShieldAlert, School, Shield, GraduationCap, UserCheck } from 'lucide-react';
+import { KesantrianView } from './components/KesantrianView';
+import { AtkView } from './components/AtkView';
+import { Menu, ShieldAlert, School, Shield, GraduationCap, UserCheck, ShieldCheck } from 'lucide-react';
 import { NAVIGATION_ITEMS } from './components/Sidebar';
 
 // Helper to parse clean tab from URL path
@@ -48,7 +50,11 @@ export default function App() {
     // Clean current path from URL
     const path = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
     if (path === 'login' || !path) {
-      window.history.replaceState(null, '', `/${currentTab}`);
+      const targetTab = role === 'ADMIN' ? 'dashboard' : currentTab;
+      if (targetTab !== currentTab) {
+        setCurrentTab(targetTab);
+      }
+      window.history.replaceState(null, '', `/${targetTab}`);
     } else {
       // Check if URL matches a valid nav item
       const matchingItem = NAVIGATION_ITEMS.find((item) => item.id === path);
@@ -131,7 +137,32 @@ export default function App() {
 
     switch (currentTab) {
       case 'dashboard':
-        return <DashboardView onNavigate={handleNavigate} />;
+        return role === 'PETUGAS_KESANTRIAN' ||
+          role === 'KEPALA_KESANTRIAN' ||
+          role === 'MUSYRIF_KESANTRIAN' ||
+          role === 'kepala_kesantrian' ||
+          role === 'musyrif_kesantrian' ? (
+          <KesantrianView tab="dashboard" onNavigate={handleNavigate} />
+        ) : (
+          <DashboardView onNavigate={handleNavigate} />
+        );
+      case 'kesantrian-dashboard':
+      case 'kesantrian-pelanggaran':
+      case 'kesantrian-sakit':
+      case 'kesantrian-izin':
+      case 'kesantrian-mabit':
+      case 'kesantrian-obat':
+      case 'kesantrian-laporan':
+        return <KesantrianView tab={currentTab} onNavigate={handleNavigate} />;
+      case 'atk-dashboard':
+      case 'atk-items':
+      case 'atk-incoming':
+      case 'atk-outgoing':
+      case 'atk-requests':
+      case 'atk-restock':
+      case 'atk-history':
+      case 'atk-reports':
+        return <AtkView tab={currentTab} onNavigate={handleNavigate} />;
       case 'students':
         return <StudentsView userRole={role} />;
       case 'teachers':
@@ -208,6 +239,31 @@ export default function App() {
             GURU MAPEL
           </span>
         );
+      case 'KEPALA_KESANTRIAN':
+      case 'kepala_kesantrian':
+        return (
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-100 text-teal-800 border border-teal-300 inline-flex items-center gap-1">
+            <ShieldCheck className="w-2.5 h-2.5" />
+            KEPALA KESANTRIAN
+          </span>
+        );
+      case 'MUSYRIF_KESANTRIAN':
+      case 'musyrif_kesantrian':
+        return (
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-cyan-100 text-cyan-800 border border-cyan-300 inline-flex items-center gap-1">
+            <ShieldCheck className="w-2.5 h-2.5" />
+            MUSYRIF KESANTRIAN
+          </span>
+        );
+      case 'PETUGAS_KESANTRIAN':
+        return (
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-100 text-teal-700 border border-teal-200 inline-flex items-center gap-1">
+            <ShieldCheck className="w-2.5 h-2.5" />
+            {currentUser?.kesantrianRole === 'MUSYRIF_KESANTRIAN'
+              ? 'MUSYRIF KESANTRIAN'
+              : 'KEPALA KESANTRIAN'}
+          </span>
+        );
       default:
         return null;
     }
@@ -236,7 +292,10 @@ export default function App() {
             </button>
             <div className="flex flex-col">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                AKSARA &bull; {activeNavItem?.label || 'Sistem Informasi Sekolah'}
+                AKSARA &bull;{' '}
+                {currentTab === 'dashboard' && role === 'ADMIN'
+                  ? '🏠 Dashboard Administrator'
+                  : activeNavItem?.label || 'Sistem Informasi Sekolah'}
               </span>
               <span className="text-sm font-bold text-slate-900 hidden sm:inline">
                 Sistem Informasi Manajemen Akademik dan Administrasi Sekolah

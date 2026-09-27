@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   setDoc,
   updateDoc,
@@ -10,7 +11,58 @@ import {
   where,
   writeBatch
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { auth, db } from './firebase';
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string;
+    email?: string | null;
+    emailVerified?: boolean;
+    isAnonymous?: boolean;
+  };
+}
+
+export function formatFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null
+): FirestoreErrorInfo {
+  return {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+    },
+    operationType,
+    path,
+  };
+}
+
+export async function testFirestoreConnection(): Promise<boolean> {
+  try {
+    await getDocFromServer(doc(db, 'users', 'ping_check'));
+    return true;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration. The client is offline.');
+    }
+    return false;
+  }
+}
 import {
   UserProfile,
   AcademicYear,
@@ -22,7 +74,8 @@ import {
   Score,
   Attendance,
   ReportCard,
-  SchoolIdentity
+  SchoolIdentity,
+  PesantrenFacilityItem
 } from '../types';
 import {
   INITIAL_ACADEMIC_YEARS,
@@ -39,6 +92,9 @@ import {
 
 // Helper to seed initial data into Firestore if empty
 export async function seedDatabaseIfEmpty(): Promise<boolean> {
+  if (!auth.currentUser) {
+    return false;
+  }
   try {
     // Check if academicYears exists
     const aySnap = await getDocs(collection(db, 'academicYears'));
@@ -102,8 +158,8 @@ export async function seedDatabaseIfEmpty(): Promise<boolean> {
       uid: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
       username: 'admin',
       email: 'xgamingsolutions@gmail.com',
-      displayName: 'Administrator KantoJA',
-      name: 'Administrator KantoJA',
+      displayName: 'Administrator AKSARA',
+      name: 'Administrator AKSARA',
       role: 'ADMIN' as const,
       nip: '198501012010011001',
       phone: '081234567890',
@@ -283,23 +339,32 @@ export function normalizeScore(raw: any): Score {
   return result;
 }
 
+function sanitizeValueForFirestore(val: any): any {
+  if (val === undefined) return undefined;
+  if (val === null || typeof val !== 'object') return val;
+  if (val instanceof Date) return val.toISOString();
+  if (Array.isArray(val)) {
+    return val
+      .map((item) => sanitizeValueForFirestore(item))
+      .filter((item) => item !== undefined);
+  }
+  const clean: Record<string, any> = {};
+  for (const [k, v] of Object.entries(val)) {
+    const sv = sanitizeValueForFirestore(v);
+    if (sv !== undefined) {
+      clean[k] = sv;
+    }
+  }
+  return clean;
+}
+
 /**
- * Strips all `undefined` values from an object recursively.
+ * Strips all `undefined` values from an object and its nested arrays/objects recursively.
  * Critical for Firestore since setDoc/updateDoc throw exceptions on `undefined`.
  */
 export function sanitizeDataForFirestore<T extends Record<string, any>>(obj: T): T {
   if (!obj || typeof obj !== 'object') return obj;
-  const clean: any = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (value !== undefined) {
-      if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-        clean[key] = sanitizeDataForFirestore(value);
-      } else {
-        clean[key] = value;
-      }
-    }
-  }
-  return clean as T;
+  return sanitizeValueForFirestore(obj) as T;
 }
 
 function safeGetItem(key: string): string | null {
@@ -365,17 +430,22 @@ export async function fetchCollection<T extends { id: string }>(
     console.warn('LocalStorage read error:', err);
   }
 
-  // Fetch genuine Firestore collection
+  // Fetch genuine Firestore collection (users collection allows public read; others require Firebase Auth)
   let firestoreItems: T[] | null = null;
   let firestoreReadSucceeded = false;
-  try {
-    const snap = await getDocs(collection(db, collectionName));
-    firestoreReadSucceeded = true;
-    firestoreItems = snap.docs
-      .map(d => ({ id: d.id, ...d.data() } as unknown as T))
-      .filter(item => !isRemovedDummyRecord(item));
-  } catch (e) {
-    console.warn(`Firestore read failed for collection ${collectionName}, relying on local cache:`, e);
+  if (auth.currentUser || collectionName === 'users') {
+    try {
+      const snap = await getDocs(collection(db, collectionName));
+      firestoreReadSucceeded = true;
+      firestoreItems = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as unknown as T))
+        .filter(item => !isRemovedDummyRecord(item));
+    } catch (e) {
+      console.warn(
+        `Firestore read fallback for ${collectionName}:`,
+        formatFirestoreError(e, OperationType.LIST, collectionName)
+      );
+    }
   }
 
   let items: T[] = [];
@@ -408,11 +478,16 @@ export async function saveDocument<T extends { id: string }>(
 ): Promise<void> {
   const sanitized = sanitizeDataForFirestore(data as any);
 
-  // 1. Write to Firestore with merge: true (await genuine database persistence)
-  try {
-    await setDoc(doc(db, collectionName, sanitized.id), sanitized, { merge: true });
-  } catch (e) {
-    console.error(`Firestore write error for ${collectionName}/${sanitized.id}:`, e);
+  // 1. Write to Firestore with merge: true when authenticated in Firebase Auth
+  if (auth.currentUser) {
+    try {
+      await setDoc(doc(db, collectionName, sanitized.id), sanitized, { merge: true });
+    } catch (e) {
+      console.warn(
+        `Firestore write fallback for ${collectionName}/${sanitized.id}:`,
+        formatFirestoreError(e, OperationType.WRITE, `${collectionName}/${sanitized.id}`)
+      );
+    }
   }
 
   // 2. Update local cache immediately
@@ -433,10 +508,15 @@ export async function saveDocument<T extends { id: string }>(
 
 // Delete document from Firestore & Local Storage
 export async function deleteDocument(collectionName: string, id: string): Promise<void> {
-  try {
-    await deleteDoc(doc(db, collectionName, id));
-  } catch (e) {
-    console.warn(`Firestore delete error for ${collectionName}/${id}:`, e);
+  if (auth.currentUser) {
+    try {
+      await deleteDoc(doc(db, collectionName, id));
+    } catch (e) {
+      console.warn(
+        `Firestore delete fallback for ${collectionName}/${id}:`,
+        formatFirestoreError(e, OperationType.DELETE, `${collectionName}/${id}`)
+      );
+    }
   }
 
   try {
@@ -463,21 +543,68 @@ export async function setActiveAcademicYearDoc(
     };
   });
 
-  try {
-    const batch = writeBatch(db);
-    updatedYears.forEach(year => {
-      // Save complete normalized object so name, semester, and dates are never stripped in Firestore
-      batch.set(doc(db, 'academicYears', year.id), year, { merge: true });
-    });
-    await batch.commit();
-  } catch (e) {
-    console.warn('Failed to batch update active academic year in Firestore:', e);
+  if (auth.currentUser) {
+    try {
+      const batch = writeBatch(db);
+      updatedYears.forEach(year => {
+        // Save complete normalized object so name, semester, and dates are never stripped in Firestore
+        batch.set(doc(db, 'academicYears', year.id), year, { merge: true });
+      });
+      await batch.commit();
+    } catch (e) {
+      console.warn('Failed to batch update active academic year in Firestore:', e);
+    }
   }
 
   safeSetItem('kantoja_academicYears', JSON.stringify(updatedYears));
 
   return updatedYears;
 }
+
+export const DEFAULT_PESANTREN_FACILITIES: PesantrenFacilityItem[] = [
+  {
+    id: 'fac_ruang_belajar',
+    name: 'Ruang Belajar',
+    description: 'Ruang kelas kondusif dan tertata rapi untuk menunjang kegiatan pembelajaran akademik dan diniyah santri.',
+    isAvailable: true,
+  },
+  {
+    id: 'fac_asrama_santri',
+    name: 'Asrama Santri',
+    description: 'Tempat tinggal santri yang bersih, teratur, dan didampingi oleh musyrif dalam pembinaan keseharian.',
+    isAvailable: true,
+  },
+  {
+    id: 'fac_area_ibadah',
+    name: 'Area Ibadah',
+    description: 'Pusat pelaksanaan shalat berjamaah lima waktu, dzikir, kajian keislaman, dan pembinaan ruhiyah santri.',
+    isAvailable: true,
+  },
+  {
+    id: 'fac_ruang_tahfiz',
+    name: 'Ruang Tahfiz',
+    description: 'Area khusus halaqah Al-Qur’an untuk kegiatan tahsin, setoran ziyadah, murajaah, dan ujian tasmi’.',
+    isAvailable: true,
+  },
+  {
+    id: 'fac_area_kegiatan',
+    name: 'Area Kegiatan Santri',
+    description: 'Lingkungan terbuka dan ruang bersama untuk aktivitas kemandirian, olahraga, serta kegiatan kepesantrenan.',
+    isAvailable: true,
+  },
+  {
+    id: 'fac_uks',
+    name: 'UKS / Layanan Kesehatan',
+    description: 'Fasilitas pemantauan kesehatan dasar, penanganan pertama santri sakit, serta pengelolaan obat & P3K.',
+    isAvailable: true,
+  },
+  {
+    id: 'fac_pendukung_belajar',
+    name: 'Fasilitas Pendukung Pembelajaran',
+    description: 'Sarana penunjang kegiatan belajar mengajar, literasi keislaman, dan administrasi pendidikan pesantren.',
+    isAvailable: true,
+  },
+];
 
 export const DEFAULT_SCHOOL_IDENTITY: SchoolIdentity = {
   id: 'school_identity',
@@ -488,7 +615,12 @@ export const DEFAULT_SCHOOL_IDENTITY: SchoolIdentity = {
   mudirName: '',
   mudirNip: '',
   leaderTitle: 'Mudir / Kepala Sekolah',
-  city: 'Tulang Bawang Barat'
+  city: 'Tulang Bawang Barat',
+  whatsapp: '',
+  email: '',
+  socialMedia: '',
+  ppdbInfo: 'Informasi penerimaan santri baru, persyaratan, tahapan pendaftaran, dan informasi pendidikan dapat diperoleh melalui kanal resmi Pesantren Islam Mutiara Insan.',
+  facilities: DEFAULT_PESANTREN_FACILITIES,
 };
 
 /**
@@ -613,6 +745,21 @@ export function normalizeSchoolIdentity(raw: any): SchoolIdentity {
       String(raw.leaderTitle ?? raw.jabatanPimpinan ?? DEFAULT_SCHOOL_IDENTITY.leaderTitle).trim() ||
       'Mudir / Kepala Sekolah',
     city: isLegacyCity ? DEFAULT_SCHOOL_IDENTITY.city : rawCity,
+    whatsapp: String(raw.whatsapp ?? '').trim(),
+    email: String(raw.email ?? '').trim(),
+    socialMedia: String(raw.socialMedia ?? '').trim(),
+    ppdbInfo:
+      String(raw.ppdbInfo ?? '').trim() ||
+      DEFAULT_SCHOOL_IDENTITY.ppdbInfo,
+    facilities:
+      Array.isArray(raw.facilities) && raw.facilities.length > 0
+        ? raw.facilities.map((f: any, idx: number) => ({
+            id: String(f.id || `fac_${idx + 1}`),
+            name: String(f.name || '').trim(),
+            description: String(f.description || '').trim(),
+            isAvailable: f.isAvailable !== false,
+          }))
+        : DEFAULT_PESANTREN_FACILITIES,
     updatedAt: raw.updatedAt ? String(raw.updatedAt) : undefined,
     updatedBy: raw.updatedBy ? String(raw.updatedBy) : undefined
   };
@@ -635,20 +782,22 @@ export async function fetchSchoolIdentity(): Promise<SchoolIdentity> {
     const snap = await getDoc(doc(db, 'academicSettings', 'school_identity'));
     if (snap.exists()) {
       const firestoreIdentity = normalizeSchoolIdentity({ id: snap.id, ...snap.data() });
-      // If cachedIdentity has a newer updatedAt than Firestore, sync cachedIdentity to Firestore
+      // If cachedIdentity has a newer updatedAt than Firestore, sync cachedIdentity to Firestore when authenticated
       if (
         cachedIdentity?.updatedAt &&
         (!firestoreIdentity.updatedAt || cachedIdentity.updatedAt > firestoreIdentity.updatedAt)
       ) {
-        setDoc(doc(db, 'academicSettings', 'school_identity'), sanitizeDataForFirestore(cachedIdentity), {
-          merge: true
-        }).catch(() => {});
+        if (auth.currentUser) {
+          setDoc(doc(db, 'academicSettings', 'school_identity'), sanitizeDataForFirestore(cachedIdentity), {
+            merge: true
+          }).catch(() => {});
+        }
         safeSetItem('kantoja_school_identity', JSON.stringify(cachedIdentity));
         return cachedIdentity;
       }
       safeSetItem('kantoja_school_identity', JSON.stringify(firestoreIdentity));
       return firestoreIdentity;
-    } else {
+    } else if (auth.currentUser) {
       // Seed initial school_identity document into Firestore so it exists persistently
       const initialToSave = cachedIdentity || { ...DEFAULT_SCHOOL_IDENTITY };
       safeSetItem('kantoja_school_identity', JSON.stringify(initialToSave));
@@ -666,6 +815,48 @@ export async function fetchSchoolIdentity(): Promise<SchoolIdentity> {
   return fallback;
 }
 
+export async function fetchAtkConfig(): Promise<{ allowTeacherViewAtkStock: boolean }> {
+  let localVal = true;
+  const saved = safeGetItem('kantoja_allow_teacher_view_atk_stock');
+  if (saved !== null) {
+    localVal = saved === 'true';
+  }
+  if (auth.currentUser) {
+    try {
+      const snap = await getDoc(doc(db, 'academicSettings', 'atk_config'));
+      if (snap.exists()) {
+        const data = snap.data();
+        const remoteVal = data?.allowTeacherViewAtkStock !== false;
+        safeSetItem('kantoja_allow_teacher_view_atk_stock', String(remoteVal));
+        return { allowTeacherViewAtkStock: remoteVal };
+      }
+    } catch {
+      // fallback to localVal
+    }
+  }
+  return { allowTeacherViewAtkStock: localVal };
+}
+
+export async function saveAtkConfig(allowTeacherViewAtkStock: boolean, updatedBy?: string): Promise<void> {
+  safeSetItem('kantoja_allow_teacher_view_atk_stock', String(allowTeacherViewAtkStock));
+  if (auth.currentUser) {
+    try {
+      await setDoc(
+        doc(db, 'academicSettings', 'atk_config'),
+        sanitizeDataForFirestore({
+          id: 'atk_config',
+          allowTeacherViewAtkStock,
+          updatedAt: new Date().toISOString(),
+          updatedBy: updatedBy || 'Administrator',
+        }),
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn('Could not persist atk_config to Firestore:', e);
+    }
+  }
+}
+
 export async function saveSchoolIdentityDoc(data: Partial<SchoolIdentity>): Promise<SchoolIdentity> {
   const cleanProgram = String(data.programName ?? DEFAULT_SCHOOL_IDENTITY.programName)
     .replace(/\s*\(\s*paket\s+[abc]\s*\)\s*$/i, '')
@@ -681,6 +872,16 @@ export async function saveSchoolIdentityDoc(data: Partial<SchoolIdentity>): Prom
     mudirNip: String(data.mudirNip ?? '').trim(),
     leaderTitle: String(data.leaderTitle ?? 'Mudir / Kepala Sekolah').trim() || 'Mudir / Kepala Sekolah',
     city: String(data.city ?? DEFAULT_SCHOOL_IDENTITY.city).trim() || DEFAULT_SCHOOL_IDENTITY.city,
+    whatsapp: String(data.whatsapp ?? '').trim(),
+    email: String(data.email ?? '').trim(),
+    socialMedia: String(data.socialMedia ?? '').trim(),
+    ppdbInfo:
+      String(data.ppdbInfo ?? DEFAULT_SCHOOL_IDENTITY.ppdbInfo ?? '').trim() ||
+      DEFAULT_SCHOOL_IDENTITY.ppdbInfo,
+    facilities:
+      Array.isArray(data.facilities) && data.facilities.length > 0
+        ? data.facilities
+        : DEFAULT_PESANTREN_FACILITIES,
     updatedAt: new Date().toISOString(),
     updatedBy: data.updatedBy
   };

@@ -3,6 +3,7 @@ import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
 import {
+  Home,
   LayoutDashboard,
   Users,
   GraduationCap,
@@ -19,7 +20,18 @@ import {
   LogOut,
   X,
   School,
-  Printer
+  Printer,
+  ShieldAlert,
+  HeartPulse,
+  Moon,
+  Pill,
+  ShieldCheck,
+  Package,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  ShoppingCart,
+  History,
+  BarChart3
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -27,113 +39,324 @@ export interface MenuItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   allowedRoles: UserRole[];
+  group?: 'MAIN' | 'AKADEMIK' | 'KESANTRIAN' | 'ATK' | 'PENGATURAN';
 }
 
 export const NAVIGATION_ITEMS: MenuItem[] = [
-  // Dashboard for all
+  // =======================================================
+  // 🏠 DASHBOARD UTAMA
+  // =======================================================
   {
     id: 'dashboard',
     label: 'Dashboard',
-    icon: LayoutDashboard,
-    allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH', 'WALI_KELAS', 'GURU_MAPEL'],
+    icon: Home,
+    allowedRoles: [
+      'ADMIN',
+      'KEPALA_SEKOLAH',
+      'WALI_KELAS',
+      'GURU_MAPEL',
+      'KEPALA_KESANTRIAN',
+      'MUSYRIF_KESANTRIAN',
+      'kepala_kesantrian',
+      'musyrif_kesantrian',
+      'PETUGAS_KESANTRIAN',
+    ],
+    group: 'MAIN',
   },
-  // Data Siswa
+
+  // =======================================================
+  // 📚 AKADEMIK
+  // =======================================================
   {
     id: 'students',
     label: 'Data Siswa',
     icon: GraduationCap,
     allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH', 'WALI_KELAS'],
+    group: 'AKADEMIK',
   },
-  // Data Guru
   {
     id: 'teachers',
     label: 'Data Guru',
     icon: Users,
     allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH'],
+    group: 'AKADEMIK',
   },
-  // Kelas & Wali (Admin) or Kelas (Kepala Sekolah)
   {
     id: 'classes',
     label: 'Kelas & Wali',
     icon: DoorOpen,
     allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH'],
+    group: 'AKADEMIK',
   },
-  // Mata Pelajaran
   {
     id: 'subjects',
     label: 'Mata Pelajaran',
     icon: BookOpen,
     allowedRoles: ['ADMIN'],
+    group: 'AKADEMIK',
   },
-  // Penugasan Guru
   {
     id: 'assignments',
     label: 'Penugasan Guru',
     icon: ClipboardList,
     allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH', 'GURU_MAPEL', 'WALI_KELAS'],
+    group: 'AKADEMIK',
   },
-  // Kelas & Mapel Saya
   {
     id: 'my-classes',
     label: 'Kelas & Mapel Saya',
     icon: BookOpen,
     allowedRoles: ['GURU_MAPEL', 'WALI_KELAS'],
+    group: 'AKADEMIK',
   },
-  // Nilai Siswa
   {
     id: 'scores',
-    label: 'Nilai Siswa',
+    label: 'Penilaian',
     icon: FileSpreadsheet,
     allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH', 'WALI_KELAS', 'GURU_MAPEL'],
+    group: 'AKADEMIK',
   },
-  // Absensi
   {
     id: 'attendance',
     label: 'Absensi',
     icon: CalendarCheck,
     allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH', 'WALI_KELAS', 'GURU_MAPEL'],
+    group: 'AKADEMIK',
   },
-  // Rapor
   {
     id: 'report-cards',
-    label: 'Rapor',
+    label: 'Raport',
     icon: Award,
     allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH', 'WALI_KELAS'],
+    group: 'AKADEMIK',
   },
-  // Cetak Rapor (Template Cetak Resmi A4)
   {
     id: 'print-report',
-    label: 'Cetak Rapor',
+    label: 'Cetak Raport',
     icon: Printer,
     allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH', 'WALI_KELAS'],
+    group: 'AKADEMIK',
   },
-  // Pengaturan Akademik (Kepala Sekolah & Admin)
+
+  // =======================================================
+  // 🏫 KESANTRIAN
+  // =======================================================
+  {
+    id: 'kesantrian-dashboard',
+    label: 'Ringkasan Kesantrian',
+    icon: ShieldCheck,
+    allowedRoles: [
+      'KEPALA_KESANTRIAN',
+      'MUSYRIF_KESANTRIAN',
+      'kepala_kesantrian',
+      'musyrif_kesantrian',
+      'PETUGAS_KESANTRIAN',
+      'ADMIN',
+      'KEPALA_SEKOLAH',
+    ],
+    group: 'KESANTRIAN',
+  },
+  {
+    id: 'kesantrian-pelanggaran',
+    label: 'Pelanggaran',
+    icon: ShieldAlert,
+    allowedRoles: [
+      'KEPALA_KESANTRIAN',
+      'MUSYRIF_KESANTRIAN',
+      'kepala_kesantrian',
+      'musyrif_kesantrian',
+      'PETUGAS_KESANTRIAN',
+      'ADMIN',
+      'KEPALA_SEKOLAH',
+    ],
+    group: 'KESANTRIAN',
+  },
+  {
+    id: 'kesantrian-sakit',
+    label: 'Santri Sakit',
+    icon: HeartPulse,
+    allowedRoles: [
+      'KEPALA_KESANTRIAN',
+      'MUSYRIF_KESANTRIAN',
+      'kepala_kesantrian',
+      'musyrif_kesantrian',
+      'PETUGAS_KESANTRIAN',
+      'ADMIN',
+      'KEPALA_SEKOLAH',
+    ],
+    group: 'KESANTRIAN',
+  },
+  {
+    id: 'kesantrian-izin',
+    label: 'Izin/Pulang',
+    icon: DoorOpen,
+    allowedRoles: [
+      'KEPALA_KESANTRIAN',
+      'MUSYRIF_KESANTRIAN',
+      'kepala_kesantrian',
+      'musyrif_kesantrian',
+      'PETUGAS_KESANTRIAN',
+      'ADMIN',
+      'KEPALA_SEKOLAH',
+    ],
+    group: 'KESANTRIAN',
+  },
+  {
+    id: 'kesantrian-mabit',
+    label: 'Mabit',
+    icon: Moon,
+    allowedRoles: [
+      'KEPALA_KESANTRIAN',
+      'MUSYRIF_KESANTRIAN',
+      'kepala_kesantrian',
+      'musyrif_kesantrian',
+      'PETUGAS_KESANTRIAN',
+      'ADMIN',
+      'KEPALA_SEKOLAH',
+    ],
+    group: 'KESANTRIAN',
+  },
+  {
+    id: 'kesantrian-obat',
+    label: 'Obat & P3K',
+    icon: Pill,
+    allowedRoles: [
+      'KEPALA_KESANTRIAN',
+      'MUSYRIF_KESANTRIAN',
+      'kepala_kesantrian',
+      'musyrif_kesantrian',
+      'PETUGAS_KESANTRIAN',
+      'ADMIN',
+      'KEPALA_SEKOLAH',
+    ],
+    group: 'KESANTRIAN',
+  },
+  {
+    id: 'kesantrian-laporan',
+    label: 'Laporan Kesantrian',
+    icon: FileSpreadsheet,
+    allowedRoles: [
+      'KEPALA_KESANTRIAN',
+      'MUSYRIF_KESANTRIAN',
+      'kepala_kesantrian',
+      'musyrif_kesantrian',
+      'PETUGAS_KESANTRIAN',
+      'ADMIN',
+      'KEPALA_SEKOLAH',
+    ],
+    group: 'KESANTRIAN',
+  },
+
+  // =======================================================
+  // 📦 ATK & PERSEDIAAN
+  // =======================================================
+  {
+    id: 'atk-dashboard',
+    label: 'Ringkasan Persediaan',
+    icon: Package,
+    allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH'],
+    group: 'ATK',
+  },
+  {
+    id: 'atk-items',
+    label: 'Daftar Barang',
+    icon: ClipboardList,
+    allowedRoles: [
+      'ADMIN',
+      'KEPALA_SEKOLAH',
+      'WALI_KELAS',
+      'GURU_MAPEL',
+      'KEPALA_KESANTRIAN',
+      'MUSYRIF_KESANTRIAN',
+      'kepala_kesantrian',
+      'musyrif_kesantrian',
+      'PETUGAS_KESANTRIAN',
+    ],
+    group: 'ATK',
+  },
+  {
+    id: 'atk-requests',
+    label: 'Permintaan ATK',
+    icon: FileSpreadsheet,
+    allowedRoles: [
+      'ADMIN',
+      'KEPALA_SEKOLAH',
+      'WALI_KELAS',
+      'GURU_MAPEL',
+      'KEPALA_KESANTRIAN',
+      'MUSYRIF_KESANTRIAN',
+      'kepala_kesantrian',
+      'musyrif_kesantrian',
+      'PETUGAS_KESANTRIAN',
+    ],
+    group: 'ATK',
+  },
+  {
+    id: 'atk-incoming',
+    label: 'Barang Masuk',
+    icon: ArrowDownCircle,
+    allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH'],
+    group: 'ATK',
+  },
+  {
+    id: 'atk-outgoing',
+    label: 'Barang Keluar',
+    icon: ArrowUpCircle,
+    allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH'],
+    group: 'ATK',
+  },
+  {
+    id: 'atk-restock',
+    label: 'Pengadaan',
+    icon: ShoppingCart,
+    allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH'],
+    group: 'ATK',
+  },
+  {
+    id: 'atk-history',
+    label: 'Riwayat Transaksi',
+    icon: History,
+    allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH'],
+    group: 'ATK',
+  },
+  {
+    id: 'atk-reports',
+    label: 'Laporan ATK',
+    icon: BarChart3,
+    allowedRoles: ['ADMIN', 'KEPALA_SEKOLAH'],
+    group: 'ATK',
+  },
+
+  // =======================================================
+  // ⚙️ PENGATURAN
+  // =======================================================
+  {
+    id: 'users',
+    label: 'Pengguna & Role',
+    icon: UserCog,
+    allowedRoles: ['ADMIN'],
+    group: 'PENGATURAN',
+  },
+  {
+    id: 'settings',
+    label: 'Identitas Sekolah',
+    icon: Settings,
+    allowedRoles: ['ADMIN'],
+    group: 'PENGATURAN',
+  },
   {
     id: 'academic-settings',
     label: 'Pengaturan Akademik',
     icon: SlidersHorizontal,
     allowedRoles: ['KEPALA_SEKOLAH', 'ADMIN'],
+    group: 'PENGATURAN',
   },
-  // Tahun Ajaran
   {
     id: 'academic-years',
     label: 'Tahun Ajaran',
     icon: CalendarDays,
     allowedRoles: ['ADMIN'],
-  },
-  // Pengguna
-  {
-    id: 'users',
-    label: 'Pengguna',
-    icon: UserCog,
-    allowedRoles: ['ADMIN'],
-  },
-  // Pengaturan
-  {
-    id: 'settings',
-    label: 'Pengaturan',
-    icon: Settings,
-    allowedRoles: ['ADMIN'],
+    group: 'PENGATURAN',
   },
 ];
 
@@ -155,17 +378,42 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   if (!role) return null;
 
+  const isKesantrianOnlyRole =
+    role === 'KEPALA_KESANTRIAN' ||
+    role === 'MUSYRIF_KESANTRIAN' ||
+    role === 'kepala_kesantrian' ||
+    role === 'musyrif_kesantrian' ||
+    role === 'PETUGAS_KESANTRIAN';
+
   // Filter navigation items strictly based on RBAC
-  const visibleItems = NAVIGATION_ITEMS.filter((item) =>
-    item.allowedRoles.includes(role)
-  );
+  const visibleItems = NAVIGATION_ITEMS.filter((item) => {
+    if (isKesantrianOnlyRole && item.id === 'kesantrian-dashboard') return false;
+    return item.allowedRoles.includes(role);
+  });
+
+  const kesantrianSubRoleText =
+    currentUser?.kesantrianRole === 'MUSYRIF_KESANTRIAN'
+      ? 'Musyrif Kesantrian'
+      : currentUser?.kesantrianRole === 'KEPALA_KESANTRIAN'
+      ? 'Kepala Kesantrian'
+      : 'Kepala Kesantrian';
 
   const roleBadge = {
     ADMIN: { text: 'Admin', color: 'bg-rose-50 text-rose-700 border-rose-200' },
     KEPALA_SEKOLAH: { text: 'Kepala Sekolah', color: 'bg-amber-50 text-amber-700 border-amber-200' },
     WALI_KELAS: { text: 'Wali Kelas', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
     GURU_MAPEL: { text: 'Guru Mapel', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  }[role];
+    KEPALA_KESANTRIAN: { text: 'Kepala Kesantrian', color: 'bg-teal-50 text-teal-800 border-teal-300' },
+    MUSYRIF_KESANTRIAN: { text: 'Musyrif Kesantrian', color: 'bg-cyan-50 text-cyan-800 border-cyan-300' },
+    kepala_kesantrian: { text: 'Kepala Kesantrian', color: 'bg-teal-50 text-teal-800 border-teal-300' },
+    musyrif_kesantrian: { text: 'Musyrif Kesantrian', color: 'bg-cyan-50 text-cyan-800 border-cyan-300' },
+    PETUGAS_KESANTRIAN: { text: kesantrianSubRoleText, color: 'bg-teal-50 text-teal-700 border-teal-200' },
+  }[role] || { text: 'Kepala Kesantrian', color: 'bg-teal-50 text-teal-800 border-teal-300' };
+
+  const firstAkademikId = visibleItems.find((vi) => vi.group === 'AKADEMIK')?.id;
+  const firstKesantrianId = visibleItems.find((vi) => vi.group === 'KESANTRIAN')?.id;
+  const firstAtkId = visibleItems.find((vi) => vi.group === 'ATK')?.id;
+  const firstPengaturanId = visibleItems.find((vi) => vi.group === 'PENGATURAN')?.id;
 
   return (
     <>
@@ -226,29 +474,72 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Navigation Links */}
         <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
           {visibleItems.map((item) => {
-            const Icon = item.icon;
+            const Icon = item.icon === Home && role !== 'ADMIN' ? LayoutDashboard : item.icon;
             const isActive = currentTab === item.id;
+            const displayLabel =
+              item.id === 'dashboard'
+                ? role === 'ADMIN'
+                  ? '🏠 Dashboard'
+                  : isKesantrianOnlyRole
+                  ? 'Dashboard Kesantrian'
+                  : 'Dashboard'
+                : item.label;
+
+            const showAkademikDivider = firstAkademikId === item.id;
+            const showKesantrianDivider = !isKesantrianOnlyRole && firstKesantrianId === item.id;
+            const showAtkDivider = firstAtkId === item.id;
+            const showPengaturanDivider = firstPengaturanId === item.id;
+
             return (
-              <button
-                key={item.id}
-                id={`menu-${item.id}`}
-                onClick={() => {
-                  setCurrentTab(item.id);
-                  onClose();
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-xl transition ${
-                  isActive
-                    ? 'bg-indigo-50 text-indigo-600 font-semibold'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <Icon
-                  className={`w-4 h-4 flex-shrink-0 ${
-                    isActive ? 'text-indigo-600' : 'text-slate-400'
+              <React.Fragment key={item.id}>
+                {showAkademikDivider && (
+                  <div className="pt-3 pb-1 px-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 border-t border-slate-100 pt-2.5">
+                      📚 AKADEMIK
+                    </div>
+                  </div>
+                )}
+                {showKesantrianDivider && (
+                  <div className="pt-3 pb-1 px-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-teal-600 border-t border-slate-100 pt-2.5">
+                      🏫 KESANTRIAN
+                    </div>
+                  </div>
+                )}
+                {showAtkDivider && (
+                  <div className="pt-3 pb-1 px-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 border-t border-slate-100 pt-2.5">
+                      📦 ATK & PERSEDIAAN
+                    </div>
+                  </div>
+                )}
+                {showPengaturanDivider && (
+                  <div className="pt-3 pb-1 px-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 border-t border-slate-100 pt-2.5">
+                      ⚙️ PENGATURAN
+                    </div>
+                  </div>
+                )}
+                <button
+                  id={`menu-${item.id}`}
+                  onClick={() => {
+                    setCurrentTab(item.id);
+                    onClose();
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-xl transition cursor-pointer ${
+                    isActive
+                      ? 'bg-indigo-50 text-indigo-600 font-semibold'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   }`}
-                />
-                <span className="truncate">{item.label}</span>
-              </button>
+                >
+                  <Icon
+                    className={`w-4 h-4 flex-shrink-0 ${
+                      isActive ? 'text-indigo-600' : 'text-slate-400'
+                    }`}
+                  />
+                  <span className="truncate">{displayLabel}</span>
+                </button>
+              </React.Fragment>
             );
           })}
         </nav>

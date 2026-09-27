@@ -425,7 +425,7 @@ export const TeachersView: React.FC<TeachersViewProps> = ({ userRole }) => {
                   </label>
                   <input
                     type="email"
-                    placeholder="nama@kantoja.sch.id"
+                    placeholder="nama@aksara.sch.id"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-600"
