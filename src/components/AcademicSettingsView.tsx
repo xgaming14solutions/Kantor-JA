@@ -82,6 +82,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
   const [newCompCode, setNewCompCode] = useState<string>('');
   const [newCompName, setNewCompName] = useState<string>('');
   const [newCompWeight, setNewCompWeight] = useState<number>(10);
+  const [compFormError, setCompFormError] = useState<string | null>(null);
 
   // Interactive Live Simulator State
   const [simTugas, setSimTugas] = useState<number | ''>(80);
@@ -243,13 +244,14 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
   };
 
   const handleAddComponent = () => {
+    setCompFormError(null);
     if (!newCompCode.trim() || !newCompName.trim()) {
-      alert('Kode dan Nama komponen tidak boleh kosong');
+      setCompFormError('Kode dan Nama komponen tidak boleh kosong.');
       return;
     }
     const cleanCode = newCompCode.trim().toUpperCase().replace(/\s+/g, '_');
     if (draftSetting.components.some((c) => c.code === cleanCode)) {
-      alert(`Komponen dengan kode "${cleanCode}" sudah ada.`);
+      setCompFormError(`Komponen dengan kode "${cleanCode}" sudah ada.`);
       return;
     }
 
@@ -270,19 +272,11 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
     setNewCompCode('');
     setNewCompName('');
     setNewCompWeight(10);
+    setCompFormError(null);
     setIsAddingComponent(false);
   };
 
   const handleRemoveComponent = (code: string) => {
-    if (DEFAULT_ASSESSMENT_COMPONENTS.some((d) => d.code === code)) {
-      if (
-        !confirm(
-          `Komponen ${code} adalah komponen standar sekolah. Anda cukup menonaktifkannya jika tidak ingin digunakan. Apakah Anda tetap ingin menghapusnya?`
-        )
-      ) {
-        return;
-      }
-    }
     setDraftSetting((prev) => ({
       ...prev,
       components: prev.components.filter((c) => c.code !== code)
@@ -290,23 +284,21 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
   };
 
   const handleResetToDefault = () => {
-    if (
-      confirm(
-        'Kembalikan seluruh komponen dan bobot ke standar awal sekolah (Tugas 20%, UH 30%, STS 20%, SAS 30%)?'
-      )
-    ) {
-      const defaultSetting = createDefaultAcademicSetting(
-        selectedAcademicYearId,
-        selectedSemester
-      );
-      setDraftSetting((prev) => ({
-        ...prev,
-        calculationMethod: defaultSetting.calculationMethod,
-        components: defaultSetting.components,
-        rounding: defaultSetting.rounding,
-        passingGradeStatus: defaultSetting.passingGradeStatus
-      }));
-    }
+    const defaultSetting = createDefaultAcademicSetting(
+      selectedAcademicYearId,
+      selectedSemester
+    );
+    setDraftSetting((prev) => ({
+      ...prev,
+      calculationMethod: defaultSetting.calculationMethod,
+      components: defaultSetting.components,
+      rounding: defaultSetting.rounding,
+      passingGradeStatus: defaultSetting.passingGradeStatus
+    }));
+    setSaveErrorMessage(null);
+    setSaveSuccessMessage(
+      'Komponen dan bobot dikembalikan ke standar awal sekolah (Tugas 20%, UH 30%, STS 20%, SAS 30%). Klik "Simpan Perubahan" untuk menerapkan.'
+    );
   };
 
   const handleSubjectKkmChange = (subjectId: string, value: string) => {
@@ -326,12 +318,13 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
   };
 
   const handleResetAllKkm = () => {
-    if (confirm('Kembalikan seluruh KKM mata pelajaran ke KKM standar master data?')) {
-      setDraftSetting((prev) => ({
-        ...prev,
-        subjectKkmOverrides: {}
-      }));
-    }
+    setDraftSetting((prev) => ({
+      ...prev,
+      subjectKkmOverrides: {}
+    }));
+    setSaveSuccessMessage(
+      'Seluruh KKM mata pelajaran telah dikembalikan ke KKM standar master data. Klik "Simpan Perubahan" untuk menerapkan.'
+    );
   };
 
   // Submit Save
@@ -389,36 +382,36 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 w-full max-w-full min-w-0 overflow-x-hidden box-border">
       {/* Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
+      <div className="w-full flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs box-border">
+        <div className="space-y-1 min-w-0">
+          <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
               <SlidersHorizontal className="w-5 h-5" />
             </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                Pengaturan Akademik
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-700">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex flex-wrap items-center gap-2">
+                <span>Pengaturan Akademik</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-700 shrink-0">
                   Kepala Sekolah
                 </span>
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
                 Atur bobot nilai, KKM, komponen penilaian, dan formula kelulusan sekolah secara fleksibel.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Academic Period Selector */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl p-1 gap-1">
+        {/* Academic Period Selector & Primary Actions */}
+        <div className="w-full lg:w-auto flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 shrink-0">
+          <div className="w-full sm:w-auto grid grid-cols-1 sm:grid-cols-2 items-center bg-slate-50 border border-slate-200 rounded-xl p-1.5 sm:p-1 gap-1.5 sm:gap-1">
             <select
               id="select-academic-year"
               value={selectedAcademicYearId}
               onChange={(e) => setSelectedAcademicYearId(e.target.value)}
-              className="text-xs font-semibold bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              className="w-full text-xs font-semibold bg-white border border-slate-200 rounded-lg px-3 py-2 sm:px-2.5 sm:py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-600"
             >
               {academicYears.map((ay) => (
                 <option key={ay.id} value={ay.id}>
@@ -431,52 +424,76 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
               id="select-semester"
               value={selectedSemester}
               onChange={(e) => setSelectedSemester(e.target.value as 'Ganjil' | 'Genap')}
-              className="text-xs font-semibold bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              className="w-full text-xs font-semibold bg-white border border-slate-200 rounded-lg px-3 py-2 sm:px-2.5 sm:py-1.5 text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-600"
             >
               <option value="Ganjil">Semester Ganjil</option>
               <option value="Genap">Semester Genap</option>
             </select>
           </div>
 
-          <button
-            onClick={() => setIsConfirmModalOpen(true)}
-            disabled={!isTotalWeightValid || isSaving}
-            className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 rounded-xl transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:cursor-not-allowed"
-          >
-            <Save className="w-3.5 h-3.5" />
-            Simpan Pengaturan
-          </button>
+          <div className="w-full sm:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('weights');
+                setIsAddingComponent(true);
+              }}
+              className="w-full sm:w-auto px-3.5 py-2.5 sm:py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 shrink-0" />
+              <span>+ Tambah Komponen</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResetToDefault}
+              className="w-full sm:w-auto px-3.5 py-2.5 sm:py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              <span>Reset</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsConfirmModalOpen(true)}
+              disabled={!isTotalWeightValid || isSaving}
+              className="w-full sm:w-auto px-4 py-2.5 sm:py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 rounded-xl transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer disabled:cursor-not-allowed"
+            >
+              <Save className="w-3.5 h-3.5 shrink-0" />
+              <span>Simpan Perubahan</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Period Info & Status Banner */}
-      <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 font-semibold text-slate-800">
+      <div className="w-full bg-slate-50 rounded-2xl border border-slate-200 p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 text-xs box-border">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5 font-semibold text-slate-800">
             <span>Periode Terpilih:</span>
             <span className="text-indigo-600 font-bold">
               {selectedYearObj?.name || selectedAcademicYearId} — {selectedSemester}
             </span>
           </div>
           {isPeriodActive ? (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
-              <CheckCircle2 className="w-3 h-3" />
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
+              <CheckCircle2 className="w-3 h-3 shrink-0" />
               Periode Aktif Sekolah
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-200 text-slate-700">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-200 text-slate-700 shrink-0">
               Arsip / Periode Lain
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-4 text-slate-500 text-[11px]">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-500 text-[11px]">
           <div>
             Versi Pengaturan: <strong className="text-slate-800 font-mono">v{draftSetting.version || 1}</strong>
           </div>
           {draftSetting.updatedAt && (
             <div className="flex items-center gap-1">
-              <Clock className="w-3 h-3 text-slate-400" />
+              <Clock className="w-3 h-3 text-slate-400 shrink-0" />
               <span>
                 Diperbarui: {new Date(draftSetting.updatedAt).toLocaleDateString('id-ID')}
               </span>
@@ -487,34 +504,39 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
 
       {/* Success / Error Alerts */}
       {saveSuccessMessage && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3.5 rounded-2xl text-xs flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{saveSuccessMessage}</span>
+        <div className="w-full bg-emerald-50 border border-emerald-200 text-emerald-800 p-3.5 rounded-2xl text-xs flex items-start sm:items-center gap-2 box-border">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5 sm:mt-0" />
+          <span className="break-words min-w-0">{saveSuccessMessage}</span>
         </div>
       )}
       {saveErrorMessage && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3.5 rounded-2xl text-xs flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-          <span>{saveErrorMessage}</span>
+        <div className="w-full bg-rose-50 border border-rose-200 text-rose-800 p-3.5 rounded-2xl text-xs flex items-start sm:items-center gap-2 box-border">
+          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5 sm:mt-0" />
+          <span className="break-words min-w-0">{saveErrorMessage}</span>
         </div>
       )}
 
-      {/* Tabs Navigation */}
-      <div className="border-b border-slate-200">
-        <nav className="flex space-x-2">
+      {/* Tabs Navigation — 2x2 responsive grid on mobile, horizontal tabs on tablet/desktop (zero horizontal overflow) */}
+      <div className="w-full max-w-full bg-white sm:bg-transparent p-1.5 sm:p-0 rounded-2xl sm:rounded-none border border-slate-200 sm:border-0 sm:border-b box-border">
+        <nav className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1.5 sm:gap-2 w-full">
           <button
+            type="button"
             onClick={() => setActiveTab('weights')}
-            className={`py-2.5 px-4 text-xs font-semibold rounded-t-xl transition flex items-center gap-2 border-b-2 ${
+            className={`w-full sm:w-auto py-2.5 px-2.5 sm:px-4 text-[11px] sm:text-xs font-semibold rounded-xl sm:rounded-t-xl sm:rounded-b-none transition flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 sm:border-b-2 min-w-0 cursor-pointer ${
               activeTab === 'weights'
-                ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50'
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                ? 'bg-indigo-600 text-white sm:bg-indigo-50/50 sm:text-indigo-600 sm:border-indigo-600'
+                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 sm:bg-transparent sm:text-slate-500 sm:hover:text-slate-700 sm:hover:bg-slate-50 sm:border-transparent'
             }`}
           >
-            <Layers className="w-3.5 h-3.5" />
-            Bobot & Komponen Penilaian
+            <Layers className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Bobot &amp; Komponen</span>
             <span
-              className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                isTotalWeightValid ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+              className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold shrink-0 ${
+                activeTab === 'weights'
+                  ? 'bg-white/20 text-white sm:bg-emerald-100 sm:text-emerald-700'
+                  : isTotalWeightValid
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-rose-100 text-rose-700'
               }`}
             >
               {totalWeight}%
@@ -522,44 +544,47 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('kkm')}
-            className={`py-2.5 px-4 text-xs font-semibold rounded-t-xl transition flex items-center gap-2 border-b-2 ${
+            className={`w-full sm:w-auto py-2.5 px-2.5 sm:px-4 text-[11px] sm:text-xs font-semibold rounded-xl sm:rounded-t-xl sm:rounded-b-none transition flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 sm:border-b-2 min-w-0 cursor-pointer ${
               activeTab === 'kkm'
-                ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50'
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                ? 'bg-indigo-600 text-white sm:bg-indigo-50/50 sm:text-indigo-600 sm:border-indigo-600'
+                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 sm:bg-transparent sm:text-slate-500 sm:hover:text-slate-700 sm:hover:bg-slate-50 sm:border-transparent'
             }`}
           >
-            <BookOpen className="w-3.5 h-3.5" />
-            KKM Mata Pelajaran
+            <BookOpen className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">KKM Mata Pelajaran</span>
             {Object.keys(draftSetting.subjectKkmOverrides || {}).length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                {Object.keys(draftSetting.subjectKkmOverrides || {}).length} Kustom
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 shrink-0">
+                {Object.keys(draftSetting.subjectKkmOverrides || {}).length}
               </span>
             )}
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('method')}
-            className={`py-2.5 px-4 text-xs font-semibold rounded-t-xl transition flex items-center gap-2 border-b-2 ${
+            className={`w-full sm:w-auto py-2.5 px-2.5 sm:px-4 text-[11px] sm:text-xs font-semibold rounded-xl sm:rounded-t-xl sm:rounded-b-none transition flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 sm:border-b-2 min-w-0 cursor-pointer ${
               activeTab === 'method'
-                ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50'
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                ? 'bg-indigo-600 text-white sm:bg-indigo-50/50 sm:text-indigo-600 sm:border-indigo-600'
+                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 sm:bg-transparent sm:text-slate-500 sm:hover:text-slate-700 sm:hover:bg-slate-50 sm:border-transparent'
             }`}
           >
-            <Calculator className="w-3.5 h-3.5" />
-            Metode & Pembulatan
+            <Calculator className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Metode &amp; Pembulatan</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('history')}
-            className={`py-2.5 px-4 text-xs font-semibold rounded-t-xl transition flex items-center gap-2 border-b-2 ${
+            className={`w-full sm:w-auto py-2.5 px-2.5 sm:px-4 text-[11px] sm:text-xs font-semibold rounded-xl sm:rounded-t-xl sm:rounded-b-none transition flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 sm:border-b-2 min-w-0 cursor-pointer ${
               activeTab === 'history'
-                ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50'
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                ? 'bg-indigo-600 text-white sm:bg-indigo-50/50 sm:text-indigo-600 sm:border-indigo-600'
+                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 sm:bg-transparent sm:text-slate-500 sm:hover:text-slate-700 sm:hover:bg-slate-50 sm:border-transparent'
             }`}
           >
-            <History className="w-3.5 h-3.5" />
-            Riwayat Perubahan
+            <History className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">Riwayat Perubahan</span>
           </button>
         </nav>
       </div>
@@ -568,56 +593,56 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
       {/* TAB 1: BOBOT & KOMPONEN PENILAIAN */}
       {/* ========================================================================= */}
       {activeTab === 'weights' && (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6 w-full max-w-full min-w-0">
           {/* Total Bobot Progress Card */}
           <div
-            className={`p-4 rounded-2xl border transition-all ${
+            className={`w-full p-4 rounded-2xl border transition-all box-border ${
               isTotalWeightValid
                 ? 'bg-emerald-50/60 border-emerald-200'
                 : 'bg-rose-50/60 border-rose-200'
             }`}
           >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
+              <div className="space-y-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
                     Status Validasi Total Bobot:
                   </h4>
                   {isTotalWeightValid ? (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                      100% — Tepat Sesuai Aturan
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                      <span>100% — Tepat Sesuai Aturan</span>
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                      <AlertTriangle className="w-3 h-3 text-rose-600" />
-                      {totalWeight}% — Total Belum 100%
+                      <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                      <span>{totalWeight}% — Total Belum 100%</span>
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-600">
+                <p className="text-[11px] text-slate-600 leading-relaxed">
                   {isTotalWeightValid
                     ? 'Seluruh komponen aktif memiliki proporsi bobot yang sah dan siap diterapkan ke seluruh nilai siswa.'
                     : `Total bobot saat ini adalah ${totalWeight}%. Aturan sekolah mewajibkan total bobot bernilai tepat 100% sebelum dapat disimpan.`}
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto shrink-0">
                 <button
                   type="button"
                   onClick={handleResetToDefault}
-                  className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 rounded-xl border border-slate-200 transition flex items-center gap-1 cursor-pointer"
+                  className="w-full sm:w-auto px-3 py-2 sm:py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 rounded-xl border border-slate-200 transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <RotateCcw className="w-3 h-3 text-slate-500" />
-                  Standar 20/30/20/30
+                  <RotateCcw className="w-3 h-3 text-slate-500 shrink-0" />
+                  <span>Standar 20/30/20/30</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsAddingComponent(true)}
-                  className="px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-200 transition flex items-center gap-1 cursor-pointer"
+                  className="w-full sm:w-auto px-3 py-2 sm:py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-200 transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <Plus className="w-3 h-3" />
-                  Tambah Komponen
+                  <Plus className="w-3 h-3 shrink-0" />
+                  <span>Tambah Komponen</span>
                 </button>
               </div>
             </div>
@@ -646,15 +671,46 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                   );
                 })}
             </div>
+
+            {/* Active Component Weight Badges Summary */}
+            <div className="mt-3 pt-2.5 border-t border-slate-200/70 flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span className="font-semibold text-slate-600 mr-1">Rumus Bobot Aktif:</span>
+              {draftSetting.components
+                .filter((c) => c.enabled)
+                .map((comp) => (
+                  <span
+                    key={comp.code}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700 font-medium"
+                  >
+                    <span>{comp.code}:</span>
+                    <strong className="font-mono text-indigo-700">{comp.weight}%</strong>
+                  </span>
+                ))}
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-bold font-mono ${
+                  isTotalWeightValid
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                    : 'bg-rose-100 text-rose-800 border border-rose-200'
+                }`}
+              >
+                Total = {totalWeight}%
+              </span>
+            </div>
           </div>
 
           {/* New Custom Component Drawer / Form */}
           {isAddingComponent && (
-            <div className="bg-indigo-50/50 rounded-2xl border border-indigo-200 p-4 space-y-3">
+            <div className="w-full bg-indigo-50/50 rounded-2xl border border-indigo-200 p-4 space-y-3 box-border">
               <h4 className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
-                <Plus className="w-3.5 h-3.5" />
-                Tambah Komponen Penilaian Baru
+                <Plus className="w-3.5 h-3.5 shrink-0" />
+                <span>Tambah Komponen Penilaian Baru</span>
               </h4>
+              {compFormError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{compFormError}</span>
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 mb-1">
@@ -665,7 +721,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                     value={newCompCode}
                     onChange={(e) => setNewCompCode(e.target.value.toUpperCase())}
                     placeholder="KODE"
-                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+                    className="w-full px-3 py-2 sm:py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-600 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -677,7 +733,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                     value={newCompName}
                     onChange={(e) => setNewCompName(e.target.value)}
                     placeholder="Contoh: Tugas Proyek Mandiri"
-                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+                    className="w-full px-3 py-2 sm:py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-600 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -690,22 +746,25 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                     max="100"
                     value={newCompWeight}
                     onChange={(e) => setNewCompWeight(Number(e.target.value))}
-                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+                    className="w-full px-3 py-2 sm:py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-600 focus:outline-none"
                   />
                 </div>
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddingComponent(false)}
-                  className="px-3 py-1 text-xs text-slate-600 hover:bg-slate-100 rounded-lg transition"
+                  onClick={() => {
+                    setCompFormError(null);
+                    setIsAddingComponent(false);
+                  }}
+                  className="w-full sm:w-auto px-3 py-2 sm:py-1 text-xs text-slate-600 hover:bg-slate-100 rounded-lg transition text-center cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="button"
                   onClick={handleAddComponent}
-                  className="px-3 py-1 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition"
+                  className="w-full sm:w-auto px-3 py-2 sm:py-1 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition text-center cursor-pointer"
                 >
                   Tambahkan Komponen
                 </button>
@@ -713,18 +772,122 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
             </div>
           )}
 
-          {/* Components Table */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
+          {/* Components Container: Mobile Card View (< md) + Desktop Table View (>= md) */}
+          <div className="w-full max-w-full bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden box-border">
+            {/* MOBILE CARD VIEW (< md) */}
+            <div className="md:hidden divide-y divide-slate-200 w-full">
+              {draftSetting.components.map((comp, idx) => (
+                <div
+                  key={comp.code}
+                  className={`p-3.5 space-y-3 w-full box-border ${
+                    !comp.enabled ? 'opacity-60 bg-slate-50/50' : 'bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="inline-flex items-center gap-2 cursor-pointer min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={comp.enabled}
+                        onChange={(e) =>
+                          handleUpdateComponent(idx, 'enabled', e.target.checked)
+                        }
+                        className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 cursor-pointer shrink-0"
+                      />
+                      <span className="text-xs font-bold text-slate-800 truncate">
+                        {comp.enabled ? 'Aktif' : 'Nonaktif'}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md font-mono text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+                        Kode: {comp.code}
+                      </span>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveComponent(comp.code)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer shrink-0"
+                      title="Hapus Komponen"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+                      Nama Komponen Penilaian
+                    </label>
+                    <input
+                      type="text"
+                      value={comp.name}
+                      disabled={!comp.enabled}
+                      onChange={(e) =>
+                        handleUpdateComponent(idx, 'name', e.target.value)
+                      }
+                      className="w-full px-3 py-2 text-xs font-semibold text-slate-900 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-600 focus:outline-none disabled:bg-slate-100 box-border"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 pt-0.5">
+                    <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-semibold text-slate-600">
+                        Bobot (%)
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={comp.weight}
+                          disabled={!comp.enabled}
+                          onChange={(e) =>
+                            handleUpdateComponent(
+                              idx,
+                              'weight',
+                              Math.max(0, Math.min(100, Number(e.target.value)))
+                            )
+                          }
+                          className="w-14 px-2 py-1 text-center text-xs font-bold text-slate-800 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-600 focus:outline-none disabled:bg-slate-100"
+                        />
+                        <span className="text-xs font-bold text-slate-500">%</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-semibold text-slate-600 leading-tight">
+                        Nilai Akhir
+                      </span>
+                      <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={comp.includedInFinalScore}
+                          disabled={!comp.enabled}
+                          onChange={(e) =>
+                            handleUpdateComponent(
+                              idx,
+                              'includedInFinalScore',
+                              e.target.checked
+                            )
+                          }
+                          className="sr-only peer"
+                        />
+                        <div className="relative w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-indigo-600"></div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* DESKTOP / TABLET TABLE VIEW (>= md) */}
+            <div className="hidden md:block w-full max-w-full overflow-x-auto">
               <table className="w-full text-left text-xs text-slate-600">
                 <thead className="bg-slate-50 text-slate-700 uppercase font-semibold text-[11px] border-b border-slate-200">
                   <tr>
-                    <th className="py-3 px-4 w-12 text-center">Status</th>
+                    <th className="py-3 px-4 w-14 text-center whitespace-nowrap">Status</th>
                     <th className="py-3 px-4">Nama Komponen</th>
-                    <th className="py-3 px-4 w-28">Kode Sistem</th>
-                    <th className="py-3 px-4 w-36 text-center">Bobot (%)</th>
-                    <th className="py-3 px-4 text-center">Masuk Nilai Akhir</th>
-                    <th className="py-3 px-4 w-20 text-center">Aksi</th>
+                    <th className="py-3 px-4 w-28 whitespace-nowrap">Kode Sistem</th>
+                    <th className="py-3 px-4 w-32 text-center whitespace-nowrap">Bobot (%)</th>
+                    <th className="py-3 px-4 w-32 text-center whitespace-nowrap">Masuk Nilai Akhir</th>
+                    <th className="py-3 px-4 w-16 text-center whitespace-nowrap">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -761,12 +924,12 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                       </td>
 
                       {/* Code */}
-                      <td className="py-3 px-4 font-mono text-[11px] text-slate-500 font-semibold">
+                      <td className="py-3 px-4 font-mono text-[11px] text-slate-500 font-semibold whitespace-nowrap">
                         {comp.code}
                       </td>
 
                       {/* Weight */}
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1">
                           <input
                             type="number"
@@ -788,8 +951,8 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                       </td>
 
                       {/* Included in Final Score */}
-                      <td className="py-3 px-4 text-center">
-                        <label className="inline-flex items-center cursor-pointer">
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        <label className="relative inline-flex items-center cursor-pointer">
                           <input
                             type="checkbox"
                             checked={comp.includedInFinalScore}
@@ -803,16 +966,16 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                             }
                             className="sr-only peer"
                           />
-                          <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-indigo-600"></div>
+                          <div className="relative w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-indigo-600"></div>
                         </label>
                       </td>
 
                       {/* Actions */}
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
                         <button
                           type="button"
                           onClick={() => handleRemoveComponent(comp.code)}
-                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
                           title="Hapus Komponen"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -825,15 +988,15 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
             </div>
 
             {/* Table Footer Info */}
-            <div className="p-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-500">
-              <div className="flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                <span>
+            <div className="p-3 sm:px-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-500">
+              <div className="flex items-start sm:items-center gap-1.5 min-w-0">
+                <Info className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-0.5 sm:mt-0" />
+                <span className="leading-relaxed">
                   Jika suatu komponen dinonaktifkan (misal STS ditiadakan), komponen tersebut tidak
                   akan tampil di input nilai guru dan tidak diperhitungkan ke nilai akhir.
                 </span>
               </div>
-              <div className="font-semibold text-slate-700">
+              <div className="font-semibold text-slate-700 shrink-0">
                 Total Aktif: <strong className="text-indigo-600">{totalWeight}%</strong> / 100%
               </div>
             </div>
@@ -845,37 +1008,108 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
       {/* TAB 2: KKM MATA PELAJARAN */}
       {/* ========================================================================= */}
       {activeTab === 'kkm' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
-            <div>
+        <div className="space-y-4 w-full max-w-full min-w-0">
+          <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-200 box-border">
+            <div className="min-w-0">
               <h4 className="text-xs font-bold text-slate-900">
                 Penetapan KKM Per Mata Pelajaran (Periode Ini)
               </h4>
-              <p className="text-[11px] text-slate-500 mt-0.5">
+              <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
                 Kepala Sekolah dapat menetapkan KKM khusus untuk semester ini tanpa mengubah master data mata pelajaran.
               </p>
             </div>
             <button
               type="button"
               onClick={handleResetAllKkm}
-              className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 rounded-xl border border-slate-200 transition flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+              className="w-full sm:w-auto px-3 py-2 sm:py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 rounded-xl border border-slate-200 transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
             >
-              <RotateCcw className="w-3 h-3 text-slate-500" />
-              Kembalikan ke KKM Default Master
+              <RotateCcw className="w-3 h-3 text-slate-500 shrink-0" />
+              <span>Kembalikan ke KKM Default Master</span>
             </button>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
+          <div className="w-full max-w-full bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden box-border">
+            {/* MOBILE CARD VIEW (< md) */}
+            <div className="md:hidden divide-y divide-slate-200 w-full">
+              {activeAcademicSubjects.map((sub) => {
+                const override = draftSetting.subjectKkmOverrides?.[sub.id];
+                const isOverridden = override !== undefined;
+                const effectiveValue = isOverridden ? override : sub.kkm;
+
+                return (
+                  <div key={sub.id} className="p-3.5 space-y-2.5 w-full box-border">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-slate-900 break-words">
+                          {sub.name}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          <span className="font-mono text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                            {sub.code}
+                          </span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
+                            {sub.category}
+                          </span>
+                        </div>
+                      </div>
+
+                      {isOverridden ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+                          Khusus Periode Ini
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-normal bg-slate-100 text-slate-600 shrink-0">
+                          Default Master
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5 pt-1">
+                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between">
+                        <span className="text-[11px] font-medium text-slate-500">KKM Master</span>
+                        <strong className="text-xs font-bold text-slate-700 font-mono">{sub.kkm}</strong>
+                      </div>
+
+                      <div className="bg-slate-50 p-2 rounded-xl border border-slate-200 flex items-center justify-between gap-1">
+                        <span className="text-[11px] font-semibold text-slate-700">KKM Aktif</span>
+                        <div className="inline-flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={effectiveValue}
+                            onChange={(e) => handleSubjectKkmChange(sub.id, e.target.value)}
+                            className="w-14 px-2 py-1 text-center text-xs font-bold text-slate-900 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+                          />
+                          {isOverridden && (
+                            <button
+                              type="button"
+                              onClick={() => handleSubjectKkmChange(sub.id, '')}
+                              className="text-[11px] text-slate-400 hover:text-rose-600 p-0.5 cursor-pointer"
+                              title="Reset ke default"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* DESKTOP / TABLET TABLE VIEW (>= md) */}
+            <div className="hidden md:block w-full max-w-full overflow-x-auto">
               <table className="w-full text-left text-xs text-slate-600">
                 <thead className="bg-slate-50 text-slate-700 uppercase font-semibold text-[11px] border-b border-slate-200">
                   <tr>
-                    <th className="py-3 px-4">Kode</th>
+                    <th className="py-3 px-4 whitespace-nowrap">Kode</th>
                     <th className="py-3 px-4">Nama Mata Pelajaran</th>
-                    <th className="py-3 px-4">Kategori</th>
-                    <th className="py-3 px-4 text-center">KKM Master</th>
-                    <th className="py-3 px-4 text-center w-40">KKM Periode Ini</th>
-                    <th className="py-3 px-4 text-center">Status Aturan</th>
+                    <th className="py-3 px-4 whitespace-nowrap">Kategori</th>
+                    <th className="py-3 px-4 text-center whitespace-nowrap">KKM Master</th>
+                    <th className="py-3 px-4 text-center w-36 whitespace-nowrap">KKM Periode Ini</th>
+                    <th className="py-3 px-4 text-center whitespace-nowrap">Status Aturan</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -886,19 +1120,21 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
 
                     return (
                       <tr key={sub.id} className="hover:bg-slate-50/60 transition">
-                        <td className="py-3 px-4 font-mono font-semibold text-slate-500">
+                        <td className="py-3 px-4 font-mono font-semibold text-slate-500 whitespace-nowrap">
                           {sub.code}
                         </td>
-                        <td className="py-3 px-4 font-semibold text-slate-900">{sub.name}</td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 font-semibold text-slate-900">
+                          {sub.name}
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap">
                           <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-600">
                             {sub.category}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-center font-semibold text-slate-500">
+                        <td className="py-3 px-4 text-center font-semibold text-slate-500 whitespace-nowrap">
                           {sub.kkm}
                         </td>
-                        <td className="py-3 px-4 text-center">
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
                           <div className="inline-flex items-center gap-1">
                             <input
                               type="number"
@@ -912,7 +1148,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                               <button
                                 type="button"
                                 onClick={() => handleSubjectKkmChange(sub.id, '')}
-                                className="text-[10px] text-slate-400 hover:text-rose-600 p-0.5"
+                                className="text-[10px] text-slate-400 hover:text-rose-600 p-0.5 cursor-pointer"
                                 title="Reset ke default"
                               >
                                 ✕
@@ -920,7 +1156,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                             )}
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-center">
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
                           {isOverridden ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                               Khusus Periode Ini
@@ -945,15 +1181,15 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
       {/* TAB 3: METODE & PEMBULATAN */}
       {/* ========================================================================= */}
       {activeTab === 'method' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 w-full max-w-full min-w-0">
           {/* Card 1: Metode Perhitungan Nilai */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+          <div className="w-full bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4 box-border">
             <div>
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Calculator className="w-4 h-4 text-indigo-600" />
-                Metode Perhitungan Nilai Akhir
+                <Calculator className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>Metode Perhitungan Nilai Akhir</span>
               </h4>
-              <p className="text-[11px] text-slate-500 mt-1">
+              <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
                 Pilih cara sistem memproses nilai siswa dari berbagai komponen penilaian.
               </p>
             </div>
@@ -975,12 +1211,12 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                   onChange={() =>
                     setDraftSetting((prev) => ({ ...prev, calculationMethod: 'WEIGHTED' }))
                   }
-                  className="mt-0.5 w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  className="mt-0.5 w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 shrink-0"
                 />
-                <div className="space-y-0.5">
-                  <div className="text-xs font-bold flex items-center gap-2">
-                    Rata-rata Berdasarkan Bobot (Weighted Average)
-                    <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-700">
+                <div className="space-y-0.5 min-w-0">
+                  <div className="text-xs font-bold flex flex-wrap items-center gap-1.5 sm:gap-2">
+                    <span>Rata-rata Berdasarkan Bobot (Weighted Average)</span>
+                    <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-700 shrink-0">
                       Direkomendasikan
                     </span>
                   </div>
@@ -1007,9 +1243,9 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                   onChange={() =>
                     setDraftSetting((prev) => ({ ...prev, calculationMethod: 'SIMPLE_AVERAGE' }))
                   }
-                  className="mt-0.5 w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                  className="mt-0.5 w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 shrink-0"
                 />
-                <div className="space-y-0.5">
+                <div className="space-y-0.5 min-w-0">
                   <div className="text-xs font-bold">Rata-rata Biasa (Arithmetic Mean)</div>
                   <p className="text-[11px] text-slate-500 leading-relaxed">
                     Nilai akhir dihitung murni dari penjumlahan nilai yang sudah ada dibagi jumlah komponen yang telah dinilai, tanpa membedakan bobot persentase.
@@ -1020,13 +1256,13 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
           </div>
 
           {/* Card 2: Aturan Pembulatan Nilai */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+          <div className="w-full bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4 box-border">
             <div>
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-indigo-600" />
-                Aturan Pembulatan Nilai
+                <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>Aturan Pembulatan Nilai</span>
               </h4>
-              <p className="text-[11px] text-slate-500 mt-1">
+              <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
                 Format angka nilai akhir yang ditampilkan di buku nilai dan rapor siswa.
               </p>
             </div>
@@ -1068,9 +1304,9 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                         rounding: opt.id as RoundingOption
                       }))
                     }
-                    className="mt-0.5 w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
+                    className="mt-0.5 w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 shrink-0"
                   />
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-xs font-bold">{opt.label}</div>
                     <div className="text-[11px] text-slate-500">{opt.example}</div>
                   </div>
@@ -1080,11 +1316,11 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
           </div>
 
           {/* Card 3: Label Status Ketuntasan */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4 md:col-span-2">
+          <div className="w-full bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4 md:col-span-2 box-border">
             <div>
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                Pengaturan Label Status Ketuntasan
+                <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>Pengaturan Label Status Ketuntasan</span>
               </h4>
               <p className="text-[11px] text-slate-500 mt-1">
                 Teks status yang muncul otomatis pada tabel nilai guru dan rapor.
@@ -1109,7 +1345,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                       }
                     }))
                   }
-                  className="w-full px-3 py-1.5 text-xs font-semibold rounded-xl border border-emerald-300 bg-emerald-50/30 text-emerald-900 focus:ring-2 focus:ring-emerald-600 focus:outline-none"
+                  className="w-full px-3 py-2 sm:py-1.5 text-xs font-semibold rounded-xl border border-emerald-300 bg-emerald-50/30 text-emerald-900 focus:ring-2 focus:ring-emerald-600 focus:outline-none"
                 />
               </div>
 
@@ -1130,7 +1366,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                       }
                     }))
                   }
-                  className="w-full px-3 py-1.5 text-xs font-semibold rounded-xl border border-rose-300 bg-rose-50/30 text-rose-900 focus:ring-2 focus:ring-rose-600 focus:outline-none"
+                  className="w-full px-3 py-2 sm:py-1.5 text-xs font-semibold rounded-xl border border-rose-300 bg-rose-50/30 text-rose-900 focus:ring-2 focus:ring-rose-600 focus:outline-none"
                 />
               </div>
 
@@ -1151,7 +1387,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                       }
                     }))
                   }
-                  className="w-full px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-300 bg-slate-50 text-slate-800 focus:ring-2 focus:ring-slate-600 focus:outline-none"
+                  className="w-full px-3 py-2 sm:py-1.5 text-xs font-semibold rounded-xl border border-slate-300 bg-slate-50 text-slate-800 focus:ring-2 focus:ring-slate-600 focus:outline-none"
                 />
               </div>
             </div>
@@ -1163,18 +1399,18 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
       {/* TAB 4: RIWAYAT PERUBAHAN (AUDIT TRAIL) */}
       {/* ========================================================================= */}
       {activeTab === 'history' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
+        <div className="w-full max-w-full bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-5 space-y-4 box-border">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="min-w-0">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <History className="w-4 h-4 text-indigo-600" />
-                Catatan Riwayat Perubahan Kebijakan Akademik
+                <History className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>Catatan Riwayat Perubahan Kebijakan Akademik</span>
               </h4>
-              <p className="text-[11px] text-slate-500 mt-0.5">
+              <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
                 Setiap perubahan bobot dan aturan penilaian dicatat secara transparan untuk akuntabilitas sekolah.
               </p>
             </div>
-            <span className="text-[11px] text-slate-400">
+            <span className="text-[11px] text-slate-400 shrink-0">
               Total Log: {academicSettingLogs.length}
             </span>
           </div>
@@ -1192,10 +1428,10 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                 return (
                   <div
                     key={log.id}
-                    className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2 text-xs"
+                    className="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2 text-xs"
                   >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px]">
-                      <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[11px]">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                         <span className="px-2 py-0.5 rounded-full font-bold bg-indigo-100 text-indigo-700">
                           Versi {log.version}
                         </span>
@@ -1220,7 +1456,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                     <div className="bg-white p-3 rounded-lg border border-slate-200/80 space-y-2">
                       <div>
                         <p className="font-semibold text-slate-700 mb-1 text-[11px]">Rincian Perubahan:</p>
-                        <ul className="list-disc list-inside space-y-0.5 text-slate-600 text-[11px]">
+                        <ul className="list-disc list-inside space-y-0.5 text-slate-600 text-[11px] break-words">
                           {log.changes.map((ch, i) => (
                             <li key={i}>{ch}</li>
                           ))}
@@ -1253,24 +1489,24 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
       {/* ========================================================================= */}
       {/* INTERACTIVE LIVE SIMULATOR: UJI COBA PERHITUNGAN LANGSUNG */}
       {/* ========================================================================= */}
-      <div className="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-5 md:p-6 shadow-md space-y-4">
+      <div className="w-full max-w-full overflow-hidden bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 text-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 md:p-6 shadow-md space-y-4 box-border">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Calculator className="w-5 h-5 text-indigo-300" />
+          <div className="space-y-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Calculator className="w-5 h-5 text-indigo-300 shrink-0" />
               <h3 className="text-sm font-bold text-white tracking-wide">
                 Simulator Perhitungan Nilai Langsung
               </h3>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-800 text-indigo-200 border border-indigo-700">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-800 text-indigo-200 border border-indigo-700 shrink-0">
                 Uji Coba Real-Time
               </span>
             </div>
-            <p className="text-xs text-indigo-200/80">
+            <p className="text-xs text-indigo-200/80 leading-relaxed">
               Gunakan simulator ini untuk memverifikasi secara langsung hasil akhir rumus dengan konfigurasi yang Anda buat saat ini.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-stretch sm:items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => {
@@ -1281,7 +1517,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                 setSimSAS(89);
                 setSimSubjectKkm(75);
               }}
-              className="px-2.5 py-1 text-[11px] font-medium bg-indigo-800/80 hover:bg-indigo-700 rounded-lg transition border border-indigo-700 text-indigo-100 cursor-pointer"
+              className="px-2.5 py-1.5 sm:py-1 text-[11px] font-medium bg-indigo-800/80 hover:bg-indigo-700 rounded-lg transition border border-indigo-700 text-indigo-100 cursor-pointer text-center"
             >
               Test 1: (80, 85, 91, 89)
             </button>
@@ -1295,7 +1531,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                 setSimSAS(79);
                 setSimSubjectKkm(80);
               }}
-              className="px-2.5 py-1 text-[11px] font-medium bg-indigo-800/80 hover:bg-indigo-700 rounded-lg transition border border-indigo-700 text-indigo-100 cursor-pointer"
+              className="px-2.5 py-1.5 sm:py-1 text-[11px] font-medium bg-indigo-800/80 hover:bg-indigo-700 rounded-lg transition border border-indigo-700 text-indigo-100 cursor-pointer text-center"
             >
               Test 2: Nilai 79 (KKM 80)
             </button>
@@ -1308,7 +1544,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                 setSimSTS('');
                 setSimSAS('');
               }}
-              className="px-2.5 py-1 text-[11px] font-medium bg-indigo-800/80 hover:bg-indigo-700 rounded-lg transition border border-indigo-700 text-indigo-100 cursor-pointer"
+              className="px-2.5 py-1.5 sm:py-1 text-[11px] font-medium bg-indigo-800/80 hover:bg-indigo-700 rounded-lg transition border border-indigo-700 text-indigo-100 cursor-pointer text-center"
             >
               Uji: Hanya UH 85
             </button>
@@ -1318,7 +1554,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
         {/* Simulator Input Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
           <div>
-            <label className="block text-[11px] font-medium text-indigo-200 mb-1">
+            <label className="block text-[11px] font-medium text-indigo-200 mb-1 truncate">
               Tugas {draftSetting.components.find((c) => c.code === 'Tugas')?.weight}%
             </label>
             <input
@@ -1333,7 +1569,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
           </div>
 
           <div>
-            <label className="block text-[11px] font-medium text-indigo-200 mb-1">
+            <label className="block text-[11px] font-medium text-indigo-200 mb-1 truncate">
               UH {draftSetting.components.find((c) => c.code === 'UH')?.weight}%
             </label>
             <input
@@ -1348,7 +1584,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
           </div>
 
           <div>
-            <label className="block text-[11px] font-medium text-indigo-200 mb-1">
+            <label className="block text-[11px] font-medium text-indigo-200 mb-1 truncate">
               STS {draftSetting.components.find((c) => c.code === 'STS')?.weight}%
             </label>
             <input
@@ -1363,7 +1599,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
           </div>
 
           <div>
-            <label className="block text-[11px] font-medium text-indigo-200 mb-1">
+            <label className="block text-[11px] font-medium text-indigo-200 mb-1 truncate">
               SAS {draftSetting.components.find((c) => c.code === 'SAS')?.weight}%
             </label>
             <input
@@ -1378,7 +1614,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
           </div>
 
           <div className="col-span-2 sm:col-span-1">
-            <label className="block text-[11px] font-medium text-indigo-200 mb-1">
+            <label className="block text-[11px] font-medium text-indigo-200 mb-1 truncate">
               KKM Mapel
             </label>
             <input
@@ -1393,13 +1629,13 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
         </div>
 
         {/* Live Calculation Output Card */}
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/15 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
+        <div className="w-full bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/15 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 box-border">
+          <div className="space-y-1 min-w-0">
             <div className="text-[11px] uppercase tracking-wider text-indigo-300 font-semibold">
               Hasil Simulasi Nilai Akhir:
             </div>
-            <div className="flex items-baseline gap-3">
-              <span className="text-3xl font-extrabold text-white">
+            <div className="flex flex-wrap items-baseline gap-2.5 sm:gap-3">
+              <span className="text-2xl sm:text-3xl font-extrabold text-white">
                 {simResult.formattedFinalScore ?? (simResult.finalScore !== null ? simResult.finalScore : '-')}
               </span>
               <span
@@ -1414,7 +1650,7 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                 {simResult.statusLabel}
               </span>
             </div>
-            <p className="text-[11px] text-indigo-200/70 font-mono">
+            <p className="text-[11px] text-indigo-200/70 font-mono break-words">
               Metode:{' '}
               {draftSetting.calculationMethod === 'WEIGHTED'
                 ? 'Rata-rata Berbobot'
@@ -1423,24 +1659,24 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
             </p>
           </div>
 
-          <div className="text-right text-xs text-indigo-100/90 sm:border-l sm:border-white/15 sm:pl-4 space-y-0.5">
+          <div className="text-left sm:text-right text-xs text-indigo-100/90 sm:border-l sm:border-white/15 sm:pl-4 space-y-0.5 min-w-0 break-words">
             <div>
               {simTugas === 80 && simUH === 85 && simSTS === 91 && simSAS === 89 && (
-                <span className="text-[11px] text-emerald-300 font-mono">
+                <span className="text-[11px] text-emerald-300 font-mono break-words">
                   {draftSetting.calculationMethod === 'WEIGHTED'
                     ? `(80 × ${draftSetting.components[0]?.weight}%) + (85 × ${draftSetting.components[1]?.weight}%) + (91 × ${draftSetting.components[2]?.weight}%) + (89 × ${draftSetting.components[3]?.weight}%) = ${simResult.formattedFinalScore}`
                     : `(80 + 85 + 91 + 89) / 4 = ${simResult.formattedFinalScore}`}
                 </span>
               )}
               {simTugas !== '' && simUH === 85 && simSTS === 90 && simSAS === 88 && (
-                <span className="text-[11px] text-emerald-300 font-mono">
+                <span className="text-[11px] text-emerald-300 font-mono break-words">
                   {draftSetting.calculationMethod === 'WEIGHTED'
                     ? `(80 × ${draftSetting.components[0]?.weight}%) + (85 × ${draftSetting.components[1]?.weight}%) + (90 × ${draftSetting.components[2]?.weight}%) + (88 × ${draftSetting.components[3]?.weight}%) = ${simResult.formattedFinalScore}`
                     : `(80 + 85 + 90 + 88) / 4 = ${simResult.formattedFinalScore}`}
                 </span>
               )}
               {simTugas === '' && simUH === 85 && simSTS === '' && simSAS === '' && (
-                <span className="text-[11px] text-emerald-300 font-mono">
+                <span className="text-[11px] text-emerald-300 font-mono break-words">
                   Hanya UH diisi = 85. Komponen kosong tidak menurunkan nilai menjadi 21.25.
                 </span>
               )}
@@ -1453,13 +1689,13 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
       {/* CONFIRMATION MODAL BEFORE SAVING */}
       {/* ========================================================================= */}
       {isConfirmModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4 sm:space-y-5 my-auto max-h-[92vh] overflow-y-auto box-border">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
                 <Save className="w-5 h-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-base font-bold text-slate-900">
                   Konfirmasi Pengaturan Penilaian
                 </h3>
@@ -1470,20 +1706,20 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
             </div>
 
             {/* Change Summary Box */}
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-xs space-y-2.5">
-              <div className="flex justify-between font-semibold text-slate-800">
+            <div className="bg-slate-50 rounded-2xl p-3.5 sm:p-4 border border-slate-200 text-xs space-y-2.5">
+              <div className="flex flex-wrap justify-between gap-1 font-semibold text-slate-800">
                 <span>Periode Berlaku:</span>
                 <span className="text-indigo-600 font-bold">
                   {selectedYearObj?.name || selectedAcademicYearId} — {selectedSemester}
                 </span>
               </div>
-              <div className="flex justify-between text-slate-600">
+              <div className="flex flex-wrap justify-between gap-1 text-slate-600">
                 <span>Versi Baru:</span>
                 <span className="font-mono font-bold text-slate-800">
                   v{(draftSetting.version || 1) + 1}
                 </span>
               </div>
-              <div className="flex justify-between text-slate-600">
+              <div className="flex flex-wrap justify-between gap-1 text-slate-600">
                 <span>Metode Penilaian:</span>
                 <span className="font-semibold text-slate-800">
                   {draftSetting.calculationMethod === 'WEIGHTED'
@@ -1493,13 +1729,13 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
               </div>
               <div className="border-t border-slate-200 pt-2">
                 <span className="font-semibold text-slate-700 block mb-1">
-                  Komponen Aktif & Bobot:
+                  Komponen Aktif &amp; Bobot:
                 </span>
-                <div className="grid grid-cols-2 gap-1 text-[11px] text-slate-600">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] text-slate-600">
                   {draftSetting.components
                     .filter((c) => c.enabled)
                     .map((c) => (
-                      <div key={c.code}>
+                      <div key={c.code} className="truncate">
                         • {c.name}: <strong>{c.weight}%</strong>
                       </div>
                     ))}
@@ -1522,12 +1758,12 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-3 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => setIsConfirmModalOpen(false)}
                 disabled={isSaving}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                className="w-full sm:w-auto px-4 py-2.5 sm:py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition text-center"
               >
                 Batal
               </button>
@@ -1535,13 +1771,13 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
                 type="button"
                 onClick={handleSaveSettings}
                 disabled={isSaving}
-                className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="w-full sm:w-auto px-5 py-2.5 sm:py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 rounded-xl transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 {isSaving ? (
                   <span>Menyimpan...</span>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                     <span>Simpan Pengaturan</span>
                   </>
                 )}

@@ -20,27 +20,27 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return hasUserDoc() && getUserData().role == 'ADMIN';
+      return hasUserDoc() && getUserData().get('role', '') == 'ADMIN';
     }
 
     function isMudir() {
-      return hasUserDoc() && (getUserData().role == 'MUDIR' || getUserData().role == 'mudir');
+      return hasUserDoc() && (getUserData().get('role', '') == 'MUDIR' || getUserData().get('role', '') == 'mudir');
     }
 
     function isKepalaSekolah() {
-      return hasUserDoc() && getUserData().role == 'KEPALA_SEKOLAH';
+      return hasUserDoc() && getUserData().get('role', '') == 'KEPALA_SEKOLAH';
     }
 
     function isGuruMapel() {
-      return hasUserDoc() && (getUserData().role == 'GURU_MAPEL' || getUserData().role == 'WALI_KELAS');
+      return hasUserDoc() && (getUserData().get('role', '') == 'GURU_MAPEL' || getUserData().get('role', '') == 'WALI_KELAS');
     }
 
     function isGuru() {
-      return hasUserDoc() && (getUserData().role == 'GURU_MAPEL' || getUserData().role == 'WALI_KELAS');
+      return hasUserDoc() && (getUserData().get('role', '') == 'GURU_MAPEL' || getUserData().get('role', '') == 'WALI_KELAS');
     }
 
     function getTeacherId() {
-      return getUserData().teacherId;
+      return getUserData().get('teacherId', '');
     }
 
     // Users collection rules (read allowed for username-to-email lookup on login; no passwords stored)

@@ -350,7 +350,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F4F7F8] text-[#24343D] flex">
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#F4F7F8] text-[#24343D]">
       {/* Sidebar Navigation */}
       <Sidebar
         currentTab={currentTab}
@@ -362,18 +362,18 @@ export default function App() {
 
       {/* Main Content Area */}
       <div
-        className={`flex-1 flex flex-col min-w-0 transition-all duration-200 ${
+        className={`min-h-screen flex flex-col min-w-0 w-full max-w-full overflow-x-hidden transition-all duration-200 box-border ${
           sidebarCollapsed ? 'lg:pl-[72px]' : 'lg:pl-64'
         }`}
       >
         {/* Top Bar — Clean Professional Header (Section 4 & 13) */}
-        <header className="sticky top-0 z-30 bg-white border-b border-[#DCE5E8] h-14 px-4 sm:px-6 flex items-center justify-between gap-4">
+        <header className="sticky top-0 z-30 bg-white border-b border-[#DCE5E8] h-14 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 w-full max-w-full box-border">
           {/* Left: Hamburger / Collapse Toggle & Breadcrumb */}
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 overflow-hidden">
             {/* Mobile drawer toggle */}
             <button
               onClick={() => setSidebarOpen(true)}
-              className="p-1.5 rounded-lg text-[#71818A] hover:text-[#24343D] hover:bg-[#F4F7F8] lg:hidden cursor-pointer"
+              className="p-1.5 rounded-lg text-[#71818A] hover:text-[#24343D] hover:bg-[#F4F7F8] lg:hidden cursor-pointer shrink-0"
               aria-label="Buka navigasi"
             >
               <Menu className="w-5 h-5" />
@@ -382,7 +382,7 @@ export default function App() {
             {/* Desktop collapse toggle */}
             <button
               onClick={() => setSidebarCollapsed((prev) => !prev)}
-              className="hidden lg:inline-flex p-1.5 rounded-lg text-[#71818A] hover:text-[#24343D] hover:bg-[#F4F7F8] cursor-pointer"
+              className="hidden lg:inline-flex p-1.5 rounded-lg text-[#71818A] hover:text-[#24343D] hover:bg-[#F4F7F8] cursor-pointer shrink-0"
               title={sidebarCollapsed ? 'Perluas Sidebar' : 'Kecilkan Sidebar'}
             >
               {sidebarCollapsed ? (
@@ -392,14 +392,14 @@ export default function App() {
               )}
             </button>
 
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1 overflow-hidden">
               {/* Breadcrumb */}
-              <div className="flex items-center gap-1.5 text-xs text-[#71818A] truncate">
-                <span className="font-semibold text-[#24485A]">AKSARA</span>
+              <div className="flex items-center gap-1 sm:gap-1.5 text-xs text-[#71818A] min-w-0 overflow-hidden">
+                <span className="font-semibold text-[#24485A] shrink-0">AKSARA</span>
                 <ChevronRight className="w-3.5 h-3.5 text-[#95A5AD] shrink-0" />
-                <span className="hidden sm:inline text-[#71818A]">{activeGroupLabel}</span>
+                <span className="hidden sm:inline text-[#71818A] shrink-0">{activeGroupLabel}</span>
                 <ChevronRight className="hidden sm:inline w-3.5 h-3.5 text-[#95A5AD] shrink-0" />
-                <span className="font-semibold text-[#24343D] truncate">
+                <span className="font-semibold text-[#24343D] truncate min-w-0">
                   {activeNavItem?.label || 'Dashboard'}
                 </span>
               </div>
@@ -410,7 +410,7 @@ export default function App() {
           </div>
 
           {/* Right: Notifications, User Name, Role, Avatar, Profile Dropdown */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {/* Notification Bell Dropdown */}
             <div className="relative" ref={notifRef}>
               <button
@@ -431,7 +431,7 @@ export default function App() {
               </button>
 
               {notifOpen && (
-                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl border border-[#DCE5E8] shadow-lg py-2 z-50">
+                <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 top-14 sm:top-auto sm:mt-2 w-auto sm:w-96 bg-white rounded-xl border border-[#DCE5E8] shadow-lg py-2 z-50">
                   <div className="px-4 py-2 border-b border-[#DCE5E8] flex items-center justify-between">
                     <span className="text-xs font-bold text-[#24343D]">Notifikasi &amp; Perhatian</span>
                     <span className="text-[11px] font-mono text-[#71818A]">
@@ -552,7 +552,7 @@ export default function App() {
         </header>
 
         {/* Page Content Body */}
-        <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto">
+        <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full min-w-0 mx-auto box-border">
           {renderContent()}
         </main>
       </div>

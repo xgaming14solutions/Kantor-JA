@@ -80,7 +80,7 @@ export const ARABIC_SUBJECT_MAP: Record<string, string> = {
   "muhadatsah": "المحادثة",
   // Umum
   "matematika": "الرياضيات",
-  "bahasa indonesia": "اللغة الإndونيسية",
+  "bahasa indonesia": "اللغة الإندونيسية",
   "b. indonesia": "اللغة الإندونيسية",
   "ilmu pengetahuan alam": "العلوم الطبيعية",
   "ipa": "العلوم الطبيعية",
