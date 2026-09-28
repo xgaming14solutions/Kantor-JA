@@ -5,7 +5,7 @@ import {
   createAuthUserViaFirebase,
   rollbackAuthUser,
   sendPasswordResetViaApi,
-} from './src/server/adminAuthService';
+} from './src/server/adminAuthService.ts';
 
 async function startServer() {
   const app = express();

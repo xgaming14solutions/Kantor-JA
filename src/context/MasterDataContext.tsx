@@ -407,6 +407,135 @@ export const INITIAL_ATK_REQUESTS: AtkRequest[] = [
   },
 ];
 
+export const INITIAL_ACADEMIC_CALENDAR_EVENTS: AcademicCalendarEvent[] = [
+  {
+    id: 'cal_init_001',
+    title: 'Hari Pertama Masuk & Awal Semester Ganjil 2026/2027',
+    category: 'Awal Semester',
+    startDate: '2026-07-13',
+    endDate: '2026-07-13',
+    startTime: '07:30',
+    endTime: '12:00',
+    academicYearId: 'ay_2026_2027_1',
+    semester: 'Ganjil',
+    classIds: [],
+    location: 'Halaman Utama Pesantren Islam Mutiara Insan',
+    personInCharge: 'Kepala Sekolah & Kepala Kesantrian',
+    description: 'Apel pembukaan tahun ajaran baru 2026/2027, orientasi halaqah tahfiz, dan pembagian jadwal pembelajaran.',
+    status: 'Selesai',
+    createdBy: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
+    createdByName: 'Administrator AKSARA',
+    createdByRole: 'ADMIN',
+    createdAt: '2026-07-01T08:00:00.000Z',
+    updatedAt: '2026-07-13T12:00:00.000Z',
+  },
+  {
+    id: 'cal_init_002',
+    title: 'Rapat Koordinasi Guru & Evaluasi Pembelajaran Bulanan',
+    category: 'Rapat Guru',
+    startDate: '2026-09-28',
+    endDate: '2026-09-28',
+    startTime: '13:30',
+    endTime: '15:30',
+    academicYearId: 'ay_2026_2027_1',
+    semester: 'Ganjil',
+    classIds: [],
+    location: 'Ruang Rapat Guru',
+    personInCharge: 'Kepala Sekolah',
+    description: 'Evaluasi ketuntasan materi, kesiapan soal Sumatif Tengah Semester, dan koordinasi wali kelas.',
+    status: 'Terjadwal',
+    createdBy: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
+    createdByName: 'Administrator AKSARA',
+    createdByRole: 'ADMIN',
+    createdAt: '2026-09-20T08:00:00.000Z',
+    updatedAt: '2026-09-20T08:00:00.000Z',
+  },
+  {
+    id: 'cal_init_003',
+    title: 'Sumatif Tengah Semester (STS) Ganjil',
+    category: 'Sumatif Tengah Semester',
+    startDate: '2026-10-05',
+    endDate: '2026-10-10',
+    startTime: '07:30',
+    endTime: '12:00',
+    academicYearId: 'ay_2026_2027_1',
+    semester: 'Ganjil',
+    classIds: [],
+    location: 'Seluruh Ruang Kelas',
+    personInCharge: 'Panitia Evaluasi Akademik',
+    description: 'Pelaksanaan ujian Sumatif Tengah Semester Ganjil untuk seluruh rombongan belajar.',
+    status: 'Terjadwal',
+    createdBy: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
+    createdByName: 'Administrator AKSARA',
+    createdByRole: 'ADMIN',
+    createdAt: '2026-09-20T08:00:00.000Z',
+    updatedAt: '2026-09-20T08:00:00.000Z',
+  },
+  {
+    id: 'cal_init_004',
+    title: 'Ujian Tasmi’ & Evaluasi Capaian Tahfiz Al-Qur’an',
+    category: 'Kegiatan Tahfiz',
+    startDate: '2026-10-24',
+    endDate: '2026-10-25',
+    startTime: '08:00',
+    endTime: '15:00',
+    academicYearId: 'ay_2026_2027_1',
+    semester: 'Ganjil',
+    classIds: [],
+    location: 'Masjid & Ruang Tahfiz Pesantren',
+    personInCharge: 'Koordinator Tahfiz',
+    description: 'Simak hafalan Al-Qur’an santri sekali duduk (Tasmi’) dan evaluasi target ziyadah.',
+    status: 'Terjadwal',
+    createdBy: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
+    createdByName: 'Administrator AKSARA',
+    createdByRole: 'ADMIN',
+    createdAt: '2026-09-20T08:00:00.000Z',
+    updatedAt: '2026-09-20T08:00:00.000Z',
+  },
+  {
+    id: 'cal_init_005',
+    title: 'Sumatif Akhir Semester (SAS) Ganjil',
+    category: 'Sumatif Akhir Semester',
+    startDate: '2026-12-07',
+    endDate: '2026-12-12',
+    startTime: '07:30',
+    endTime: '12:00',
+    academicYearId: 'ay_2026_2027_1',
+    semester: 'Ganjil',
+    classIds: [],
+    location: 'Seluruh Ruang Kelas',
+    personInCharge: 'Panitia Ujian Semester',
+    description: 'Ujian Sumatif Akhir Semester Ganjil Tahun Ajaran 2026/2027.',
+    status: 'Terjadwal',
+    createdBy: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
+    createdByName: 'Administrator AKSARA',
+    createdByRole: 'ADMIN',
+    createdAt: '2026-09-20T08:00:00.000Z',
+    updatedAt: '2026-09-20T08:00:00.000Z',
+  },
+  {
+    id: 'cal_init_006',
+    title: 'Pembagian Raport Hasil Belajar Semester Ganjil',
+    category: 'Pembagian Raport',
+    startDate: '2026-12-19',
+    endDate: '2026-12-19',
+    startTime: '08:00',
+    endTime: '11:30',
+    academicYearId: 'ay_2026_2027_1',
+    semester: 'Ganjil',
+    classIds: [],
+    location: 'Aula & Ruang Kelas Masing-Masing',
+    personInCharge: 'Kepala Sekolah & Wali Kelas',
+    description: 'Penyerahan Lembar Hasil Belajar Siswa (Raport) kepada Orang Tua / Wali Santri.',
+    status: 'Terjadwal',
+    createdBy: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
+    createdByName: 'Administrator AKSARA',
+    createdByRole: 'ADMIN',
+    createdAt: '2026-09-20T08:00:00.000Z',
+    updatedAt: '2026-09-20T08:00:00.000Z',
+  },
+];
+
 interface MasterDataContextType {
   academicYears: AcademicYear[];
   activeAcademicYear: AcademicYear | null;
@@ -579,7 +708,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [atkItems, setAtkItems] = useState<AtkItem[]>(INITIAL_ATK_ITEMS);
   const [atkTransactions, setAtkTransactions] = useState<AtkTransaction[]>(INITIAL_ATK_TRANSACTIONS);
   const [atkRequests, setAtkRequests] = useState<AtkRequest[]>(INITIAL_ATK_REQUESTS);
-  const [academicCalendarEvents, setAcademicCalendarEvents] = useState<AcademicCalendarEvent[]>([]);
+  const [academicCalendarEvents, setAcademicCalendarEvents] = useState<AcademicCalendarEvent[]>(
+    INITIAL_ACADEMIC_CALENDAR_EVENTS
+  );
   const [allowTeacherViewAtkStock, setAllowTeacherViewAtkStockState] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('kantoja_allow_teacher_view_atk_stock');
@@ -652,7 +783,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         fetchCollection<AtkRequest>('atkRequests', INITIAL_ATK_REQUESTS),
         fetchAtkConfig(),
         fetchCollection<StudentReportNote>('studentReportNotes', []),
-        fetchCollection<AcademicCalendarEvent>('academicCalendar', [])
+        fetchCollection<AcademicCalendarEvent>('academicCalendar', INITIAL_ACADEMIC_CALENDAR_EVENTS)
       ]);
 
       // Normalize all academic years to guarantee valid structure
@@ -788,8 +919,31 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       );
       setReportCards(rawRepList);
       setStudentReportNotes(rawStudentReportNotes || []);
+
+      let resolvedCalendar = rawAcademicCalendar || [];
+      const calendarAlreadySeeded =
+        typeof localStorage !== 'undefined' &&
+        localStorage.getItem('kantoja_academic_calendar_seeded') === 'true';
+      if (resolvedCalendar.length === 0 && !calendarAlreadySeeded) {
+        resolvedCalendar = INITIAL_ACADEMIC_CALENDAR_EVENTS;
+        try {
+          localStorage.setItem('kantoja_academic_calendar_seeded', 'true');
+        } catch {
+          // ignore
+        }
+        INITIAL_ACADEMIC_CALENDAR_EVENTS.forEach((ev) => {
+          saveDocument('academicCalendar', ev).catch(() => {});
+        });
+      } else if (resolvedCalendar.length > 0 && !calendarAlreadySeeded) {
+        try {
+          localStorage.setItem('kantoja_academic_calendar_seeded', 'true');
+        } catch {
+          // ignore
+        }
+      }
+
       setAcademicCalendarEvents(
-        (rawAcademicCalendar || [])
+        resolvedCalendar
           .map((ev) => ({
             ...ev,
             endDate: ev.endDate || ev.startDate,

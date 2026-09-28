@@ -1,5 +1,5 @@
-import firebaseConfig from '../../firebase-applet-config.json';
-import { UserRole } from '../types';
+import firebaseConfig from '../../firebase-applet-config.json' with { type: 'json' };
+import { UserRole } from '../types.ts';
 
 export interface CreateUserInput {
   name: string;

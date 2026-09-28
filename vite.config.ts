@@ -6,7 +6,7 @@ import {
   createAuthUserViaFirebase,
   rollbackAuthUser,
   sendPasswordResetViaApi,
-} from './src/server/adminAuthService';
+} from './src/server/adminAuthService.ts';
 
 function adminApiPlugin(): Plugin {
   return {

@@ -174,7 +174,7 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
     [students]
   );
   const activeTeachers = useMemo(
-    () => teachers.filter((t) => t.status === 'Aktif' || (t as any).isActive !== false),
+    () => teachers.filter((t) => t.isActive !== false),
     [teachers]
   );
   const activeClasses = useMemo(
@@ -211,7 +211,14 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
   );
 
   const publishedReportsCount = useMemo(
-    () => ayReportCards.filter((rc) => rc.status === 'Published' || (rc as any).isPublished).length,
+    () =>
+      ayReportCards.filter(
+        (rc) =>
+          rc.status === 'Diterbitkan' ||
+          rc.status === 'Disahkan' ||
+          (rc as any).status === 'Published' ||
+          (rc as any).isPublished
+      ).length,
     [ayReportCards]
   );
 
@@ -228,9 +235,14 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
     let izin = 0;
     let alpha = 0;
     ayAttendance.forEach((a) => {
-      sakit += Number(a.sick || 0);
-      izin += Number(a.permission || 0);
-      alpha += Number(a.absent || 0);
+      if (a.status === 'Sakit') sakit += 1;
+      else if (a.status === 'Izin') izin += 1;
+      else if (a.status === 'Alpa') alpha += 1;
+
+      const legacyAny = a as any;
+      if (typeof legacyAny.sick === 'number') sakit += legacyAny.sick;
+      if (typeof legacyAny.permission === 'number') izin += legacyAny.permission;
+      if (typeof legacyAny.absent === 'number') alpha += legacyAny.absent;
     });
     return { recordedStudents: ayAttendance.length, sakit, izin, alpha };
   }, [ayAttendance]);
@@ -242,6 +254,7 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
   );
 
   const kesantrianMetrics = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
     const violations = activeKesantrianRecords.filter((r) => r.type === 'PELANGGARAN');
     const sickRecords = activeKesantrianRecords.filter((r) => r.type === 'SAKIT');
     const leaveRecords = activeKesantrianRecords.filter(
@@ -250,25 +263,33 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
     const mabitRecords = activeKesantrianRecords.filter((r) => r.type === 'MABIT');
 
     const activeSick = sickRecords.filter(
-      (r) => r.healthStatus !== 'Sembuh' && r.status !== 'Selesai'
+      (r) =>
+        r.status !== 'Sudah Sembuh' &&
+        r.status !== 'Sudah Kembali ke Pesantren' &&
+        r.status !== 'Selesai'
     );
     const activeLeave = leaveRecords.filter(
-      (r) => r.leaveStatus !== 'Sudah Kembali' && r.status !== 'Selesai'
+      (r) =>
+        r.status !== 'Sudah Kembali' &&
+        r.status !== 'Sudah Kembali ke Pesantren' &&
+        r.status !== 'Selesai'
     );
     const overdueLeave = activeLeave.filter((r) => {
-      if (r.leaveStatus === 'Terlambat') return true;
-      if (r.plannedReturnDate) {
-        const today = new Date().toISOString().slice(0, 10);
-        return r.plannedReturnDate < today;
+      if (r.status === 'Terlambat Kembali' || r.status === 'Terlambat') return true;
+      const targetReturn = r.estimatedReturnDate || r.returnDate || '';
+      if (targetReturn) {
+        return targetReturn < today;
       }
       return false;
     });
     const needFollowUp = activeKesantrianRecords.filter(
       (r) =>
-        r.followUpStatus === 'Perlu Tindak Lanjut' ||
-        r.followUpStatus === 'Pemanggilan Wali' ||
-        r.severity === 'Berat' ||
-        r.status === 'Menunggu'
+        r.status === 'Belum Ditangani' ||
+        r.status === 'Dalam Pembinaan' ||
+        r.status === 'Perlu Tindak Lanjut' ||
+        r.status === 'Menunggu' ||
+        r.violationLevel === 'Berat' ||
+        r.category === 'Berat'
     );
 
     return {
@@ -344,7 +365,7 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
     const aman = activeItems.filter((i) => i.stokSaatIni > i.stokMinimum);
     const pendingRequests = atkRequests.filter((r) => r.status === 'Menunggu');
     const approvedRequests = atkRequests.filter(
-      (r) => r.status === 'Disetujui' || r.status === 'Disetujui Sebagian'
+      (r) => r.status === 'Disetujui' || (r.status as string) === 'Disetujui Sebagian'
     );
 
     return {
