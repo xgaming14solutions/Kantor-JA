@@ -1265,15 +1265,15 @@ export const KesantrianView: React.FC<KesantrianViewProps> = ({ tab, onNavigate 
           {/* =================================================================
               PUSAT PEMANTAUAN & TINDAK LANJUT KEJADIAN KESANTRIAN
              ================================================================= */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-slate-100 pb-3">
+          <div className="bg-white rounded-xl border border-[#DCE5E8] p-5 space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-[#EDF2F4] pb-3.5">
               <div>
-                <h3 className="font-bold text-sm sm:text-base text-slate-900 flex items-center gap-2">
-                  <ClipboardCheck className="w-5 h-5 text-teal-600" />
+                <h3 className="font-bold text-sm sm:text-base text-[#24343D] flex items-center gap-2">
+                  <ClipboardCheck className="w-4 h-4 text-[#24485A]" />
                   <span>Pusat Pemantauan &amp; Tindak Lanjut Kejadian Aktif</span>
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Pemantauan terpadu untuk Kepala Kesantrian &amp; Musyrif: siapa santri yang sedang sakit &amp; berapa hari sakit, apakah perlu dijemput orang tua, siapa yang sedang izin &amp; belum kembali, serta tindak lanjut pelanggaran.
+                <p className="text-xs text-[#71818A] mt-0.5">
+                  Pemantauan terpadu untuk Kepala Kesantrian &amp; Musyrif: santri sakit, perizinan pulang, serta tindak lanjut pelanggaran.
                 </p>
               </div>
 
@@ -1281,7 +1281,7 @@ export const KesantrianView: React.FC<KesantrianViewProps> = ({ tab, onNavigate 
                 {[
                   {
                     id: 'ALL' as const,
-                    label: `Semua Perlu Pantauan (${monitoringStats.combinedRecords.length})`,
+                    label: `Semua (${monitoringStats.combinedRecords.length})`,
                   },
                   {
                     id: 'PELANGGARAN' as const,
@@ -1304,10 +1304,10 @@ export const KesantrianView: React.FC<KesantrianViewProps> = ({ tab, onNavigate 
                     key={f.id}
                     type="button"
                     onClick={() => setMonitoringCategoryFilter(f.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                       monitoringCategoryFilter === f.id
-                        ? 'bg-teal-600 text-white shadow-2xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-[#24485A] text-white'
+                        : 'bg-[#F4F7F8] text-[#71818A] hover:bg-[#EBF1F4] hover:text-[#24343D]'
                     }`}
                   >
                     {f.label}
@@ -1316,84 +1316,88 @@ export const KesantrianView: React.FC<KesantrianViewProps> = ({ tab, onNavigate 
               </div>
             </div>
 
-            {/* Indikator Prioritas Pusat Pemantauan & Tindak Lanjut */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 text-xs">
+            {/* Indikator Prioritas Pusat Pemantauan & Tindak Lanjut — Clean White Surface with Semantic Dots */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
               <button
                 type="button"
                 onClick={() => setMonitoringCategoryFilter('SAKIT_3_HARI')}
-                className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                className={`p-3.5 rounded-xl border text-left transition cursor-pointer bg-white ${
                   monitoringCategoryFilter === 'SAKIT_3_HARI'
-                    ? 'bg-rose-100 border-rose-400 ring-2 ring-rose-300'
-                    : 'bg-rose-50/80 border-rose-200 hover:bg-rose-100/70'
+                    ? 'border-[#24485A] ring-2 ring-[#24485A]/20'
+                    : 'border-[#DCE5E8] hover:border-[#5D8295]'
                 }`}
               >
-                <div className="text-[11px] text-rose-800 font-bold flex items-center gap-1.5">
-                  <span>🔴 Sakit &ge; 3 Hari (Perlu Evaluasi)</span>
+                <div className="text-[11px] text-[#71818A] font-medium flex items-center justify-between gap-1.5">
+                  <span>Sakit &ge; 3 Hari</span>
+                  <span className="w-2 h-2 rounded-full bg-[#C96A6A]" />
                 </div>
-                <div className="text-lg font-bold text-rose-900 mt-0.5">
+                <div className="text-lg font-bold text-[#24343D] font-mono tabular-nums mt-1">
                   {monitoringStats.sakitLongDuration.length} Santri
                 </div>
-                <div className="text-[10px] text-rose-700 mt-0.5">
-                  Total sedang sakit: {monitoringStats.sakitActive.length} ({monitoringStats.sakitNeedPickup.length} perlu jemput)
+                <div className="text-[10px] text-[#71818A] mt-0.5">
+                  Total sakit: {monitoringStats.sakitActive.length} ({monitoringStats.sakitNeedPickup.length} perlu jemput)
                 </div>
               </button>
 
               <button
                 type="button"
                 onClick={() => setMonitoringCategoryFilter('BELUM_TINDAK_LANJUT')}
-                className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                className={`p-3.5 rounded-xl border text-left transition cursor-pointer bg-white ${
                   monitoringCategoryFilter === 'BELUM_TINDAK_LANJUT'
-                    ? 'bg-orange-100 border-orange-400 ring-2 ring-orange-300'
-                    : 'bg-orange-50/80 border-orange-200 hover:bg-orange-100/70'
+                    ? 'border-[#24485A] ring-2 ring-[#24485A]/20'
+                    : 'border-[#DCE5E8] hover:border-[#5D8295]'
                 }`}
               >
-                <div className="text-[11px] text-orange-800 font-bold flex items-center gap-1.5">
-                  <span>🟠 Belum Ada Tindak Lanjut</span>
+                <div className="text-[11px] text-[#71818A] font-medium flex items-center justify-between gap-1.5">
+                  <span>Belum Tindak Lanjut</span>
+                  <span className="w-2 h-2 rounded-full bg-[#D6A64A]" />
                 </div>
-                <div className="text-lg font-bold text-orange-900 mt-0.5">
+                <div className="text-lg font-bold text-[#24343D] font-mono tabular-nums mt-1">
                   {monitoringStats.noFollowUpRecords.length} Kejadian
                 </div>
-                <div className="text-[10px] text-orange-700 mt-0.5">
-                  Menunggu tindakan / catatan perkembangan
+                <div className="text-[10px] text-[#71818A] mt-0.5">
+                  Menunggu tindakan petugas
                 </div>
               </button>
 
               <button
                 type="button"
                 onClick={() => setMonitoringCategoryFilter('IZIN_PULANG')}
-                className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                className={`p-3.5 rounded-xl border text-left transition cursor-pointer bg-white ${
                   monitoringCategoryFilter === 'IZIN_PULANG'
-                    ? 'bg-amber-100 border-amber-400 ring-2 ring-amber-300'
-                    : 'bg-amber-50/80 border-amber-200 hover:bg-amber-100/70'
+                    ? 'border-[#24485A] ring-2 ring-[#24485A]/20'
+                    : 'border-[#DCE5E8] hover:border-[#5D8295]'
                 }`}
               >
-                <div className="text-[11px] text-amber-800 font-bold flex items-center gap-1.5">
-                  <span>🟡 Sedang Izin / Pulang</span>
+                <div className="text-[11px] text-[#71818A] font-medium flex items-center justify-between gap-1.5">
+                  <span>Sedang Izin / Pulang</span>
+                  <span className="w-2 h-2 rounded-full bg-[#6C91A8]" />
                 </div>
-                <div className="text-lg font-bold text-amber-900 mt-0.5">
+                <div className="text-lg font-bold text-[#24343D] font-mono tabular-nums mt-1">
                   {monitoringStats.izinActive.length} Santri
                 </div>
-                <div className="text-[10px] text-amber-700 mt-0.5">
-                  Dipantau alasan &amp; jadwal kembali
+                <div className="text-[10px] text-[#71818A] mt-0.5">
+                  Dipantau jadwal kembali
                 </div>
               </button>
 
               <button
                 type="button"
                 onClick={() => setMonitoringCategoryFilter('BELUM_KEMBALI')}
-                className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                className={`p-3.5 rounded-xl border text-left transition cursor-pointer bg-white ${
                   monitoringCategoryFilter === 'BELUM_KEMBALI'
-                    ? 'bg-yellow-100 border-yellow-500 ring-2 ring-yellow-300'
-                    : 'bg-yellow-50/80 border-yellow-300 hover:bg-yellow-100/70'
+                    ? 'border-[#24485A] ring-2 ring-[#24485A]/20'
+                    : 'border-[#DCE5E8] hover:border-[#5D8295]'
                 }`}
               >
-                <div className="text-[11px] text-yellow-900 font-bold flex items-center gap-1.5">
-                  <span>🟡 Belum Kembali ke Pesantren</span>
+                <div className="text-[11px] text-[#71818A] font-medium flex items-center justify-between gap-1.5">
+                  <span>Belum Kembali</span>
+                  <span className="w-2 h-2 rounded-full bg-[#D6A64A]" />
                 </div>
-                <div className="text-lg font-bold text-yellow-950 mt-0.5">
+                <div className="text-lg font-bold text-[#24343D] font-mono tabular-nums mt-1">
                   {monitoringStats.izinOverdue.length + monitoringStats.mabitUnreturnedCount} Santri
                 </div>
-                <div className="text-[10px] text-yellow-800 mt-0.5">
+                <div className="text-[10px] text-[#71818A] mt-0.5">
                   {monitoringStats.izinOverdue.length} izin lewat jadwal &bull; {monitoringStats.mabitUnreturnedCount} Mabit
                 </div>
               </button>
@@ -1401,34 +1405,35 @@ export const KesantrianView: React.FC<KesantrianViewProps> = ({ tab, onNavigate 
               <button
                 type="button"
                 onClick={() => setMonitoringCategoryFilter('PELANGGARAN')}
-                className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                className={`p-3.5 rounded-xl border text-left transition cursor-pointer bg-white ${
                   monitoringCategoryFilter === 'PELANGGARAN'
-                    ? 'bg-rose-100 border-rose-400 ring-2 ring-rose-300'
-                    : 'bg-rose-50/80 border-rose-200 hover:bg-rose-100/70'
+                    ? 'border-[#24485A] ring-2 ring-[#24485A]/20'
+                    : 'border-[#DCE5E8] hover:border-[#5D8295]'
                 }`}
               >
-                <div className="text-[11px] text-rose-800 font-bold flex items-center gap-1.5">
-                  <span>🔴 Pelanggaran Belum Ditangani</span>
+                <div className="text-[11px] text-[#71818A] font-medium flex items-center justify-between gap-1.5">
+                  <span>Pelanggaran Aktif</span>
+                  <span className="w-2 h-2 rounded-full bg-[#C96A6A]" />
                 </div>
-                <div className="text-lg font-bold text-rose-900 mt-0.5">
+                <div className="text-lg font-bold text-[#24343D] font-mono tabular-nums mt-1">
                   {monitoringStats.pelanggaranPending.length} Kasus
                 </div>
-                <div className="text-[10px] text-rose-700 mt-0.5">
+                <div className="text-[10px] text-[#71818A] mt-0.5">
                   Perlu pembinaan &amp; tindak lanjut
                 </div>
               </button>
             </div>
 
             {monitoringCategoryFilter === 'MABIT' ? (
-              <div className="p-4 bg-indigo-50/60 border border-indigo-200 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
+              <div className="p-4 bg-[#F4F7F8] border border-[#DCE5E8] rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
                 <div>
-                  <div className="font-bold text-indigo-900">
+                  <div className="font-bold text-[#24343D]">
                     Pemantauan Kepulangan Mabit:{' '}
                     {dashboardMabitSummary
                       ? dashboardMabitSummary.period.periodName
                       : 'Belum ada periode Mabit'}
                   </div>
-                  <div className="text-slate-600 mt-0.5">
+                  <div className="text-[#71818A] mt-0.5">
                     {dashboardMabitSummary
                       ? `${dashboardMabitSummary.belumKembali} santri berstatus Belum Kembali dari total ${dashboardMabitSummary.totalSantri} santri peserta Mabit.`
                       : 'Silakan buka menu Mabit & Kepulangan Santri untuk mengatur jadwal kepulangan Mabit.'}
@@ -1437,7 +1442,7 @@ export const KesantrianView: React.FC<KesantrianViewProps> = ({ tab, onNavigate 
                 <button
                   type="button"
                   onClick={() => onNavigate('kesantrian-mabit')}
-                  className="px-3.5 py-2 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition cursor-pointer self-start sm:self-center"
+                  className="px-3.5 py-2 rounded-lg bg-[#24485A] text-white font-semibold hover:bg-[#1C3948] transition cursor-pointer self-start sm:self-center"
                 >
                   Buka Pemantauan Mabit
                 </button>
