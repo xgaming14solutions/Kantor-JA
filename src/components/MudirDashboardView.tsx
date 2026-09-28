@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
+import { SchoolLogo } from './SchoolLogo';
 import {
   ShieldCheck,
   GraduationCap,
@@ -473,27 +474,35 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
       {/* Executive Header Banner */}
       <div className="bg-white rounded-xl border border-[#DCE5E8] p-5 sm:p-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-[#F0F5F7] text-[#24485A] border border-[#DCE5E8]">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                MUDIR PESANTREN
-              </span>
-              <span className="text-xs font-medium text-[#71818A]">
-                {schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'} &bull; Tahun Ajaran{' '}
-                <strong className="text-[#24343D]">
-                  {activeAcademicYear
-                    ? `${activeAcademicYear.name} (${activeAcademicYear.semester})`
-                    : '2026/2027'}
-                </strong>
-              </span>
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <SchoolLogo
+              logoUrl={schoolIdentity?.logoUrl}
+              schoolName={schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+              size="lg"
+              variant="light"
+            />
+            <div className="space-y-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-[#F0F5F7] text-[#24485A] border border-[#DCE5E8]">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  MUDIR PESANTREN
+                </span>
+                <span className="text-xs font-medium text-[#71818A]">
+                  {schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'} &bull; Tahun Ajaran{' '}
+                  <strong className="text-[#24343D]">
+                    {activeAcademicYear
+                      ? `${activeAcademicYear.name} (${activeAcademicYear.semester})`
+                      : '2026/2027'}
+                  </strong>
+                </span>
+              </div>
+              <h1 className="text-xl sm:text-2xl font-bold text-[#24343D] tracking-tight">
+                Dashboard Eksekutif Mudir Pesantren
+              </h1>
+              <p className="text-xs text-[#71818A] max-w-3xl leading-relaxed">
+                Pusat pemantauan lintas unit Akademik, Kesantrian, Tahfizh, dan Persediaan ATK secara terpadu.
+              </p>
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-[#24343D] tracking-tight">
-              Dashboard Eksekutif Mudir Pesantren
-            </h1>
-            <p className="text-xs text-[#71818A] max-w-3xl leading-relaxed">
-              Pusat pemantauan lintas unit Akademik, Kesantrian, Tahfizh, dan Persediaan ATK secara terpadu.
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">

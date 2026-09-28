@@ -6,6 +6,8 @@ import {
   AtkCategory,
   calculateAtkStockStatus,
 } from '../types';
+import { useMasterData } from '../context/MasterDataContext';
+import { SchoolLogo } from './SchoolLogo';
 import {
   ShoppingCart,
   History,
@@ -65,6 +67,11 @@ export const AtkReportsSection: React.FC<AtkReportsSectionProps> = ({
   schoolName,
   onQuickIncoming,
 }) => {
+  const { schoolIdentity } = useMasterData();
+  const effectiveSchoolName =
+    schoolIdentity?.schoolName || schoolName || 'Pesantren Islam Mutiara Insan';
+  const effectiveLogoUrl = schoolIdentity?.logoUrl || '';
+  const effectiveAddress = schoolIdentity?.address || '';
   // History Filters
   const [trxTypeFilter, setTrxTypeFilter] = useState<'ALL' | 'MASUK' | 'KELUAR'>('ALL');
   const [trxCategoryFilter, setTrxCategoryFilter] = useState<string>('ALL');
@@ -271,14 +278,26 @@ export const AtkReportsSection: React.FC<AtkReportsSectionProps> = ({
       <div className="space-y-6">
         <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 text-rose-600" />
-                Daftar Barang ATK Perlu Dibeli / Pengadaan
-              </h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Dihitung otomatis dari barang yang habis, stok menipis (&le; stok minimum), atau stok tidak mencukupi untuk memenuhi permintaan guru.
-              </p>
+            <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+              <SchoolLogo
+                logoUrl={effectiveLogoUrl}
+                schoolName={effectiveSchoolName}
+                size="lg"
+                variant="light"
+              />
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-[#24485A]">
+                  {effectiveSchoolName}
+                  {effectiveAddress ? ` • ${effectiveAddress}` : ''}
+                </div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 mt-0.5">
+                  <ShoppingCart className="w-5 h-5 text-rose-600 shrink-0" />
+                  <span>Daftar Barang ATK Perlu Dibeli / Pengadaan</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Dihitung otomatis dari barang yang habis, stok menipis (&le; stok minimum), atau stok tidak mencukupi untuk memenuhi permintaan guru.
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -446,14 +465,26 @@ export const AtkReportsSection: React.FC<AtkReportsSectionProps> = ({
       <div className="space-y-6">
         <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <History className="w-5 h-5 text-indigo-600" />
-                Riwayat Transaksi Barang Masuk & Keluar
-              </h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Catatan audit lengkap seluruh pergerakan stok ATK beserta petugas, sumber pembelian, dan guru penerima/pengguna.
-              </p>
+            <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+              <SchoolLogo
+                logoUrl={effectiveLogoUrl}
+                schoolName={effectiveSchoolName}
+                size="lg"
+                variant="light"
+              />
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-[#24485A]">
+                  {effectiveSchoolName}
+                  {effectiveAddress ? ` • ${effectiveAddress}` : ''}
+                </div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 mt-0.5">
+                  <History className="w-5 h-5 text-indigo-600 shrink-0" />
+                  <span>Riwayat Transaksi Barang Masuk &amp; Keluar</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Catatan audit lengkap seluruh pergerakan stok ATK beserta petugas, sumber pembelian, dan guru penerima/pengguna.
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -673,14 +704,26 @@ export const AtkReportsSection: React.FC<AtkReportsSectionProps> = ({
       {/* Header & Controls */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-indigo-600" />
-              Laporan Persediaan & Penggunaan ATK Kantor
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Rekapitulasi jumlah penggunaan setiap barang, siapa yang menerima/menggunakan barang, dan posisi stok terkini untuk Kepala Sekolah.
-            </p>
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <SchoolLogo
+              logoUrl={effectiveLogoUrl}
+              schoolName={effectiveSchoolName}
+              size="lg"
+              variant="light"
+            />
+            <div className="min-w-0">
+              <div className="text-xs font-semibold text-[#24485A]">
+                {effectiveSchoolName}
+                {effectiveAddress ? ` • ${effectiveAddress}` : ''}
+              </div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 mt-0.5">
+                <BarChart3 className="w-5 h-5 text-indigo-600 shrink-0" />
+                <span>Laporan Persediaan &amp; Penggunaan ATK Kantor</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Rekapitulasi jumlah penggunaan setiap barang, siapa yang menerima/menggunakan barang, dan posisi stok terkini untuk Kepala Sekolah.
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2 print:hidden">
             <button

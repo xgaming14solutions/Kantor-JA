@@ -2,6 +2,7 @@ import React from 'react';
 import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
+import { SchoolLogo } from './SchoolLogo';
 import {
   LayoutDashboard,
   Users,
@@ -463,7 +464,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed = false,
 }) => {
   const { currentUser, role, logout } = useAuth();
-  const { activeAcademicYear } = useMasterData();
+  const { activeAcademicYear, schoolIdentity } = useMasterData();
 
   if (!role) return null;
 
@@ -510,16 +511,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Top Brand Header */}
         <div className="h-14 px-4 border-b border-white/10 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-[#335F75] border border-white/15 text-white flex items-center justify-center shrink-0">
-              <School className="w-4 h-4" />
-            </div>
+            <SchoolLogo
+              logoUrl={schoolIdentity?.logoUrl}
+              schoolName={schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+              size="sm"
+              variant="navy"
+            />
             {!isCollapsed && (
               <div className="min-w-0">
                 <div className="font-bold text-[15px] leading-tight text-white tracking-tight truncate">
                   AKSARA
                 </div>
-                <div className="text-[11px] text-[#B5C9D3] font-medium leading-tight truncate">
-                  Sistem Informasi Manajemen
+                <div
+                  className="text-[11px] text-[#B5C9D3] font-medium leading-tight truncate"
+                  title={schoolIdentity?.schoolName || 'Sistem Informasi Manajemen'}
+                >
+                  {schoolIdentity?.schoolName || 'Sistem Informasi Manajemen'}
                 </div>
               </div>
             )}

@@ -31,6 +31,7 @@ import {
   resolveEventEffectiveStatus,
   formatEventDateRange,
 } from './AcademicCalendarView';
+import { SchoolLogo } from './SchoolLogo';
 
 export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({ onNavigate }) => {
   const { currentUser, role } = useAuth();
@@ -41,6 +42,7 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
     subjects = [],
     academicYears = [],
     activeAcademicYear,
+    schoolIdentity,
     teacherAssignments = [],
     scores = [],
     attendance = [],
@@ -669,22 +671,34 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
             HEADER UTAMA
            ===================================================== */}
         <div className="bg-white border border-[#DCE5E8] rounded-xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-[#71818A]">
-              <span className="font-semibold text-[#24485A] bg-[#F0F5F7] border border-[#DCE5E8] px-2.5 py-0.5 rounded-md">
-                {isKepsek ? 'Dashboard Kepala Sekolah' : 'Dashboard Administrator'}
-              </span>
-              <span>&bull;</span>
-              <span>{todayFormatted}</span>
-              <span>&bull;</span>
-              <span className="font-medium text-[#24343D]">{activeYearDisplay}</span>
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <SchoolLogo
+              logoUrl={schoolIdentity?.logoUrl}
+              schoolName={schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+              size="lg"
+              variant="light"
+            />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-[#71818A]">
+                <span className="font-semibold text-[#24485A] bg-[#F0F5F7] border border-[#DCE5E8] px-2.5 py-0.5 rounded-md">
+                  {isKepsek ? 'Dashboard Kepala Sekolah' : 'Dashboard Administrator'}
+                </span>
+                <span>&bull;</span>
+                <span className="font-semibold text-[#24343D]">
+                  {schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+                </span>
+                <span>&bull;</span>
+                <span>{todayFormatted}</span>
+                <span>&bull;</span>
+                <span className="font-medium text-[#24343D]">{activeYearDisplay}</span>
+              </div>
+              <h1 className="text-xl sm:text-2xl font-bold text-[#24343D] mt-1.5 tracking-tight">
+                Selamat datang, {currentUser?.name || (isKepsek ? 'Kepala Sekolah' : 'Administrator')}
+              </h1>
+              <p className="text-[13px] text-[#71818A] mt-0.5">
+                Ringkasan kondisi Akademik, Kesantrian, dan ATK &amp; Persediaan
+              </p>
             </div>
-            <h1 className="text-2xl font-bold text-[#24343D] mt-2 tracking-tight">
-              Selamat datang, {currentUser?.name || (isKepsek ? 'Kepala Sekolah' : 'Administrator')}
-            </h1>
-            <p className="text-[13px] text-[#71818A] mt-0.5">
-              Ringkasan kondisi Akademik, Kesantrian, dan ATK &amp; Persediaan
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
@@ -1583,24 +1597,36 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
     <div className="space-y-6">
       {/* Welcome Banner */}
       <div className="bg-white border border-[#DCE5E8] rounded-xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-[#71818A]">
-            <span className="font-semibold text-[#24485A] bg-[#F0F5F7] border border-[#DCE5E8] px-2.5 py-0.5 rounded-md">
-              {role === 'WALI_KELAS' ? 'Dashboard Wali Kelas' : 'Dashboard Guru Mata Pelajaran'}
-            </span>
-            <span>&bull;</span>
-            <span>{todayFormatted}</span>
-            <span>&bull;</span>
-            <span className="font-medium text-[#24343D]">{activeYearDisplay}</span>
+        <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+          <SchoolLogo
+            logoUrl={schoolIdentity?.logoUrl}
+            schoolName={schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+            size="lg"
+            variant="light"
+          />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[#71818A]">
+              <span className="font-semibold text-[#24485A] bg-[#F0F5F7] border border-[#DCE5E8] px-2.5 py-0.5 rounded-md">
+                {role === 'WALI_KELAS' ? 'Dashboard Wali Kelas' : 'Dashboard Guru Mata Pelajaran'}
+              </span>
+              <span>&bull;</span>
+              <span className="font-semibold text-[#24343D]">
+                {schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+              </span>
+              <span>&bull;</span>
+              <span>{todayFormatted}</span>
+              <span>&bull;</span>
+              <span className="font-medium text-[#24343D]">{activeYearDisplay}</span>
+            </div>
+            <h1 className="text-xl sm:text-2xl font-bold text-[#24343D] mt-1.5 tracking-tight">
+              Selamat datang, {currentUser?.name}
+            </h1>
+            <p className="text-[13px] text-[#71818A] mt-0.5">
+              {role === 'WALI_KELAS'
+                ? `Monitoring kemajuan belajar, presensi, dan catatan raport siswa kelas ${homeroomClass?.name || 'Binaan'}.`
+                : 'Kelola kegiatan belajar mengajar, input nilai siswa, dan absensi mata pelajaran.'}
+            </p>
           </div>
-          <h1 className="text-2xl font-bold text-[#24343D] mt-2 tracking-tight">
-            Selamat datang, {currentUser?.name}
-          </h1>
-          <p className="text-[13px] text-[#71818A] mt-0.5">
-            {role === 'WALI_KELAS'
-              ? `Monitoring kemajuan belajar, presensi, dan catatan raport siswa kelas ${homeroomClass?.name || 'Binaan'}.`
-              : 'Kelola kegiatan belajar mengajar, input nilai siswa, dan absensi mata pelajaran.'}
-          </p>
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-center">

@@ -3,6 +3,7 @@ import { useMasterData } from '../context/MasterDataContext';
 import { useAuth } from '../context/AuthContext';
 import { calculateStudentScore, formatFinalScore } from '../lib/academicCalculation';
 import { formatReportProgram, formatReportClassLabel } from '../lib/dbService';
+import { SchoolLogo } from './SchoolLogo';
 import { ReportCard, UserRole } from '../types';
 import {
   Award,
@@ -415,22 +416,33 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
     <div className="space-y-6">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5">
-              <Award className="w-3.5 h-3.5" />
-              Modul Rapor Siswa
-            </span>
-            <span className="text-xs text-slate-400 font-medium">
-              Semester {activeAcademicYear?.semester || 'Ganjil'} &bull; TA {activeAcademicYear?.name || '2026/2027'}
-            </span>
+        <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+          <SchoolLogo
+            logoUrl={schoolIdentity?.logoUrl}
+            schoolName={schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+            size="lg"
+            variant="light"
+          />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5">
+                <Award className="w-3.5 h-3.5" />
+                Modul Rapor &amp; Laporan Akademik
+              </span>
+              <span className="text-xs text-slate-500 font-semibold">
+                {schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+              </span>
+              <span className="text-xs text-slate-400 font-medium">
+                &bull; Semester {activeAcademicYear?.semester || 'Ganjil'} &bull; TA {activeAcademicYear?.name || '2026/2027'}
+              </span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1 tracking-tight">
+              Buku Rapor &amp; Capaian Belajar Peserta Didik
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+              Seluruh nilai dihitung secara terpusat berdasarkan konfigurasi Pengaturan Akademik aktif sekolah.
+            </p>
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-            Buku Rapor & Capaian Belajar Peserta Didik
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Seluruh nilai dihitung secara terpusat berdasarkan konfigurasi Pengaturan Akademik aktif sekolah.
-          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -670,10 +682,13 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
           <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
-                  <Award className="w-4 h-4" />
-                </div>
+              <div className="flex items-center gap-3">
+                <SchoolLogo
+                  logoUrl={schoolIdentity?.logoUrl}
+                  schoolName={schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+                  size="sm"
+                  variant="light"
+                />
                 <div>
                   <h3 className="text-base font-bold text-slate-900">
                     Lembar Hasil Belajar Peserta Didik (Rapor)
@@ -719,7 +734,31 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
             {/* Modal Scrollable Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 print:p-0">
               {/* Report Header Card */}
-              <div className="border border-slate-200 rounded-2xl p-5 bg-slate-50/50">
+              <div className="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 space-y-4">
+                {schoolIdentity?.logoUrl?.trim() && (
+                  <div className="flex items-center gap-3.5 pb-3.5 border-b border-slate-200">
+                    <SchoolLogo
+                      logoUrl={schoolIdentity.logoUrl}
+                      schoolName={schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}
+                      size="lg"
+                      variant="light"
+                      hideIfEmpty
+                    />
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-slate-900 uppercase">
+                        {schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}
+                      </div>
+                      <div className="text-xs text-slate-600">
+                        {formatReportProgram(schoolIdentity.programName, selectedClass)}
+                      </div>
+                      {schoolIdentity.address && (
+                        <div className="text-[11px] text-slate-500 mt-0.5">
+                          {schoolIdentity.address}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
                   {/* Left Column */}
                   <div className="space-y-1.5">

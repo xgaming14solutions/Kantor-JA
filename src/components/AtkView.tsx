@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { AtkRequestsSection } from './AtkRequestsSection';
 import { AtkReportsSection, RestockRecommendation, formatIDR } from './AtkReportsSection';
+import { SchoolLogo } from './SchoolLogo';
 import {
   Package,
   LayoutDashboard,
@@ -522,20 +523,28 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
       {/* Top Module Header & Sub-Navigation */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4 print:hidden">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <div className="text-xs font-semibold text-indigo-600">
-              MODUL AKSARA &bull; INVENTARIS & LOGISTIK SEKOLAH
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <SchoolLogo
+              logoUrl={schoolIdentity?.logoUrl}
+              schoolName={schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+              size="lg"
+              variant="light"
+            />
+            <div className="min-w-0">
+              <div className="text-xs font-semibold text-[#24485A]">
+                MODUL AKSARA &bull; {schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5 tracking-tight flex items-center gap-2">
+                <span>ATK &amp; Persediaan Kantor</span>
+              </h2>
+              <p className="text-xs text-[#71818A] mt-0.5">
+                {isMudirSupervisor
+                  ? 'Supervisi persediaan stok ATK, riwayat barang masuk & keluar, permintaan unit, pengadaan, dan laporan penggunaan (Mode Pantau Mudir).'
+                  : isAdminOrHeadmaster
+                  ? 'Kelola ketersediaan stok ATK, barang masuk & keluar, persetujuan permintaan guru, pengadaan, dan laporan penggunaan.'
+                  : 'Ajukan permintaan kebutuhan ATK mengajar/administrasi dan pantau status persetujuan permintaan Anda.'}
+              </p>
             </div>
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1 tracking-tight flex items-center gap-2">
-              <span>ATK &amp; Persediaan Kantor</span>
-            </h2>
-            <p className="text-xs text-[#71818A] mt-1">
-              {isMudirSupervisor
-                ? 'Supervisi persediaan stok ATK, riwayat barang masuk & keluar, permintaan unit, pengadaan, dan laporan penggunaan (Mode Pantau Mudir).'
-                : isAdminOrHeadmaster
-                ? 'Kelola ketersediaan stok ATK, barang masuk & keluar, persetujuan permintaan guru, pengadaan, dan laporan penggunaan.'
-                : 'Ajukan permintaan kebutuhan ATK mengajar/administrasi dan pantau status persetujuan permintaan Anda.'}
-            </p>
           </div>
 
           {isAdminOrHeadmaster && (

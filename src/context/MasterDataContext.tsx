@@ -41,6 +41,7 @@ import {
   normalizeScore,
   assertTeacherScoreAccess,
   DEFAULT_SCHOOL_IDENTITY,
+  getInitialSchoolIdentity,
   fetchSchoolIdentity,
   saveSchoolIdentityDoc,
   fetchAtkConfig,
@@ -697,7 +698,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [attendance, setAttendance] = useState<Attendance[]>(INITIAL_ATTENDANCE);
   const [extracurricularParticipants, setExtracurricularParticipants] = useState<ExtracurricularParticipant[]>([]);
   const [extracurricularScores, setExtracurricularScores] = useState<ExtracurricularScore[]>([]);
-  const [schoolIdentity, setSchoolIdentity] = useState<SchoolIdentity>(DEFAULT_SCHOOL_IDENTITY);
+  const [schoolIdentity, setSchoolIdentity] = useState<SchoolIdentity>(() =>
+    getInitialSchoolIdentity()
+  );
   const [kesantrianRecords, setKesantrianRecords] = useState<KesantrianRecord[]>([]);
   const [kesantrianMedicines, setKesantrianMedicines] = useState<KesantrianMedicine[]>([]);
   const [kesantrianViolationCategories, setKesantrianViolationCategories] = useState<KesantrianViolationCategory[]>(
@@ -1720,6 +1723,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const saveSchoolIdentity = async (data: Partial<SchoolIdentity>): Promise<SchoolIdentity> => {
     if (isKesantrianOfficerRole(role)) {
       throw new Error('Akses Ditolak: Petugas Kesantrian tidak diizinkan mengubah konfigurasi sekolah.');
+    }
+    if (data.logoUrl !== undefined && data.logoUrl !== schoolIdentity.logoUrl && role !== 'ADMIN') {
+      throw new Error('Akses Ditolak: Hanya Administrator yang diizinkan mengubah atau menghapus logo sekolah.');
     }
     const updaterName = currentUser?.displayName || currentUser?.name || currentUser?.email || 'Administrator';
     const merged: Partial<SchoolIdentity> = {

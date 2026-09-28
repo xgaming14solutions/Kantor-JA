@@ -263,6 +263,7 @@ export interface SchoolIdentity {
   mudirNip: string; // NIP/NIK Mudir
   leaderTitle: string; // Jabatan Pimpinan (misal: Mudir / Kepala Sekolah)
   city: string; // Kota/Kabupaten
+  logoUrl?: string; // URL atau Data URL Logo Sekolah / Pesantren
   whatsapp?: string; // Nomor WhatsApp Resmi Pesantren
   email?: string; // Email Resmi Pesantren
   socialMedia?: string; // Kanal Media Sosial Resmi

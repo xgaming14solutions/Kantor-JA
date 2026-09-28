@@ -3,6 +3,7 @@ import { useMasterData } from '../context/MasterDataContext';
 import { useAuth } from '../context/AuthContext';
 import { calculateStudentScore, formatFinalScore } from '../lib/academicCalculation';
 import { formatReportProgram, formatReportClassLabel } from '../lib/dbService';
+import { SchoolLogo } from './SchoolLogo';
 import { ReportCard, UserRole } from '../types';
 import {
   Printer,
@@ -933,10 +934,40 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
           {/* ========================================================
               1. HEADER
              ======================================================== */}
-          <div className="text-center pb-3 border-b-2 border-slate-900">
-            <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-900">
-              LAPORAN HASIL BELAJAR SISWA
-            </h1>
+          <div className="pb-3 border-b-2 border-slate-900">
+            {schoolIdentity?.logoUrl?.trim() ? (
+              <div className="flex items-center justify-between gap-4">
+                <SchoolLogo
+                  logoUrl={schoolIdentity.logoUrl}
+                  schoolName={schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}
+                  size="print"
+                  variant="plain"
+                  hideIfEmpty
+                  className="shrink-0"
+                />
+                <div className="flex-1 text-center">
+                  <div className="text-xs sm:text-sm font-bold uppercase tracking-wide text-slate-700">
+                    {schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}
+                  </div>
+                  <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-900 mt-0.5">
+                    LAPORAN HASIL BELAJAR SISWA
+                  </h1>
+                  {schoolIdentity.address && (
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      {schoolIdentity.address}
+                    </div>
+                  )}
+                </div>
+                {/* Balanced spacer so title remains centered */}
+                <div className="w-16 sm:w-20 shrink-0 hidden sm:block" aria-hidden="true" />
+              </div>
+            ) : (
+              <div className="text-center">
+                <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-900">
+                  LAPORAN HASIL BELAJAR SISWA
+                </h1>
+              </div>
+            )}
           </div>
 
           {/* Information Grid: Two Columns (Left & Right) */}

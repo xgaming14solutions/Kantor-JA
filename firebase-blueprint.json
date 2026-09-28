@@ -227,6 +227,7 @@
         "mudirNip": { "type": "string" },
         "leaderTitle": { "type": "string" },
         "city": { "type": "string" },
+        "logoUrl": { "type": "string" },
         "updatedAt": { "type": "string" },
         "updatedBy": { "type": "string" }
       },

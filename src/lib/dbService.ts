@@ -617,6 +617,7 @@ export const DEFAULT_SCHOOL_IDENTITY: SchoolIdentity = {
   mudirNip: '',
   leaderTitle: 'Mudir / Kepala Sekolah',
   city: 'Tulang Bawang Barat',
+  logoUrl: '',
   whatsapp: '',
   email: '',
   socialMedia: '',
@@ -746,6 +747,7 @@ export function normalizeSchoolIdentity(raw: any): SchoolIdentity {
       String(raw.leaderTitle ?? raw.jabatanPimpinan ?? DEFAULT_SCHOOL_IDENTITY.leaderTitle).trim() ||
       'Mudir / Kepala Sekolah',
     city: isLegacyCity ? DEFAULT_SCHOOL_IDENTITY.city : rawCity,
+    logoUrl: String(raw.logoUrl ?? raw.logo ?? '').trim(),
     whatsapp: String(raw.whatsapp ?? '').trim(),
     email: String(raw.email ?? '').trim(),
     socialMedia: String(raw.socialMedia ?? '').trim(),
@@ -766,6 +768,18 @@ export function normalizeSchoolIdentity(raw: any): SchoolIdentity {
   };
 }
 
+export function getInitialSchoolIdentity(): SchoolIdentity {
+  try {
+    const cached = safeGetItem('kantoja_school_identity');
+    if (cached) {
+      return normalizeSchoolIdentity(JSON.parse(cached));
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return { ...DEFAULT_SCHOOL_IDENTITY };
+}
+
 export async function fetchSchoolIdentity(): Promise<SchoolIdentity> {
   // 1. Read local cache first
   let cachedIdentity: SchoolIdentity | null = null;
@@ -783,28 +797,30 @@ export async function fetchSchoolIdentity(): Promise<SchoolIdentity> {
     const snap = await getDoc(doc(db, 'academicSettings', 'school_identity'));
     if (snap.exists()) {
       const firestoreIdentity = normalizeSchoolIdentity({ id: snap.id, ...snap.data() });
-      // If cachedIdentity has a newer updatedAt than Firestore, sync cachedIdentity to Firestore when authenticated
+      // If cachedIdentity has a newer updatedAt than Firestore, keep cachedIdentity and sync to Firestore
       if (
         cachedIdentity?.updatedAt &&
-        (!firestoreIdentity.updatedAt || cachedIdentity.updatedAt > firestoreIdentity.updatedAt)
+        (!firestoreIdentity.updatedAt || cachedIdentity.updatedAt >= firestoreIdentity.updatedAt)
       ) {
-        if (auth.currentUser) {
-          setDoc(doc(db, 'academicSettings', 'school_identity'), sanitizeDataForFirestore(cachedIdentity), {
-            merge: true
-          }).catch(() => {});
-        }
+        setDoc(
+          doc(db, 'academicSettings', 'school_identity'),
+          sanitizeDataForFirestore(cachedIdentity),
+          { merge: true }
+        ).catch(() => {});
         safeSetItem('kantoja_school_identity', JSON.stringify(cachedIdentity));
         return cachedIdentity;
       }
       safeSetItem('kantoja_school_identity', JSON.stringify(firestoreIdentity));
       return firestoreIdentity;
-    } else if (auth.currentUser) {
+    } else {
       // Seed initial school_identity document into Firestore so it exists persistently
       const initialToSave = cachedIdentity || { ...DEFAULT_SCHOOL_IDENTITY };
       safeSetItem('kantoja_school_identity', JSON.stringify(initialToSave));
-      setDoc(doc(db, 'academicSettings', 'school_identity'), sanitizeDataForFirestore(initialToSave), {
-        merge: true
-      }).catch(() => {});
+      setDoc(
+        doc(db, 'academicSettings', 'school_identity'),
+        sanitizeDataForFirestore(initialToSave),
+        { merge: true }
+      ).catch(() => {});
       return initialToSave;
     }
   } catch (e) {
@@ -873,6 +889,7 @@ export async function saveSchoolIdentityDoc(data: Partial<SchoolIdentity>): Prom
     mudirNip: String(data.mudirNip ?? '').trim(),
     leaderTitle: String(data.leaderTitle ?? 'Mudir / Kepala Sekolah').trim() || 'Mudir / Kepala Sekolah',
     city: String(data.city ?? DEFAULT_SCHOOL_IDENTITY.city).trim() || DEFAULT_SCHOOL_IDENTITY.city,
+    logoUrl: String(data.logoUrl ?? '').trim(),
     whatsapp: String(data.whatsapp ?? '').trim(),
     email: String(data.email ?? '').trim(),
     socialMedia: String(data.socialMedia ?? '').trim(),

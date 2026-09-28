@@ -6,6 +6,7 @@ import {
 } from '../types';
 import { useMasterData } from '../context/MasterDataContext';
 import { formatIndonesianDate } from './MabitKepulanganSection';
+import { SchoolLogo } from './SchoolLogo';
 import {
   FileSpreadsheet,
   Filter,
@@ -85,6 +86,7 @@ export const LaporanKesantrianSection: React.FC<LaporanKesantrianSectionProps> =
     classes = [],
     academicYears = [],
     activeAcademicYear,
+    schoolIdentity,
     kesantrianRecords = [],
     mabitPeriods = [],
   } = useMasterData();
@@ -425,14 +427,26 @@ export const LaporanKesantrianSection: React.FC<LaporanKesantrianSectionProps> =
     <div className="space-y-6">
       {/* Header Laporan Kesantrian */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <FileSpreadsheet className="w-6 h-6 text-teal-600" />
-            <span>Laporan Kesantrian Terpadu</span>
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Rekapitulasi dan detail kejadian otomatis dari Pelanggaran Santri, Santri Sakit, Izin/Pulang Santri, Mabit &amp; Kepulangan, serta Obat &amp; P3K.
-          </p>
+        <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+          <SchoolLogo
+            logoUrl={schoolIdentity?.logoUrl}
+            schoolName={schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+            size="lg"
+            variant="light"
+          />
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-[#24485A]">
+              {schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+              {schoolIdentity?.address ? ` • ${schoolIdentity.address}` : ''}
+            </div>
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2 mt-0.5">
+              <FileSpreadsheet className="w-5 h-5 text-teal-600 shrink-0" />
+              <span>Laporan Kesantrian Terpadu</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Rekapitulasi dan detail kejadian otomatis dari Pelanggaran Santri, Santri Sakit, Izin/Pulang Santri, Mabit &amp; Kepulangan, serta Obat &amp; P3K.
+            </p>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { DEFAULT_PESANTREN_FACILITIES } from '../lib/dbService';
+import { SchoolLogo } from './SchoolLogo';
 import {
   LogIn,
   AlertCircle,
@@ -298,6 +299,9 @@ export const LoginView: React.FC = () => {
       : DEFAULT_PESANTREN_FACILITIES
   ).filter((item) => item.isAvailable !== false);
 
+  const pesantrenName =
+    schoolIdentity?.schoolName?.trim() || 'Pesantren Islam Mutiara Insan';
+  const pesantrenLogoUrl = schoolIdentity?.logoUrl?.trim() || '';
   const pesantrenAddress =
     schoolIdentity?.address ||
     'Jl. Tuan Rio II RT 10/RW 05 Bandar Dewa Tulang Bawang Barat - Lampung';
@@ -325,7 +329,7 @@ export const LoginView: React.FC = () => {
          ===================================================================== */}
       <header className="sticky top-0 z-40 bg-[#FAF8F5]/95 backdrop-blur-md border-b border-stone-200/80">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-3">
-          {/* Kiri: Logo & Nama Pesantren Islam Mutiara Insan */}
+          {/* Kiri: Logo & Nama Pesantren */}
           <a
             href="#beranda"
             onClick={(e) => {
@@ -334,11 +338,15 @@ export const LoginView: React.FC = () => {
             }}
             className="flex items-center gap-3 min-w-0 group focus:outline-none"
           >
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-emerald-950 text-amber-300 flex items-center justify-center shrink-0 border border-emerald-800 shadow-xs group-hover:bg-emerald-900 transition-colors">
-              <BookOpen className="w-5 h-5" />
-            </div>
+            <SchoolLogo
+              logoUrl={pesantrenLogoUrl}
+              schoolName={pesantrenName}
+              size="md"
+              variant="emerald"
+              fallbackIcon="book"
+            />
             <span className="font-bold text-xs sm:text-sm md:text-base tracking-tight text-emerald-950 uppercase truncate">
-              PESANTREN ISLAM MUTIARA INSAN
+              {pesantrenName}
             </span>
           </a>
 
@@ -389,11 +397,19 @@ export const LoginView: React.FC = () => {
                   className="fixed sm:absolute right-3 left-3 sm:left-auto sm:right-0 top-18 sm:top-full sm:mt-2.5 w-auto sm:w-96 bg-white rounded-2xl border border-stone-200 shadow-2xl p-5 sm:p-6 z-50 text-left max-h-[85vh] overflow-y-auto"
                 >
                   <div className="flex items-start justify-between gap-3 pb-3.5 border-b border-stone-100">
-                    <div>
-                      <h2 className="text-base font-bold text-stone-900">Masuk ke AKSARA</h2>
-                      <p className="text-xs text-stone-500 mt-0.5">
-                        Sistem Informasi Manajemen Akademik dan Administrasi Sekolah
-                      </p>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <SchoolLogo
+                        logoUrl={pesantrenLogoUrl}
+                        schoolName={pesantrenName}
+                        size="sm"
+                        variant="light"
+                      />
+                      <div className="min-w-0">
+                        <h2 className="text-base font-bold text-stone-900">Masuk ke AKSARA</h2>
+                        <p className="text-xs text-stone-500 mt-0.5 truncate">
+                          {pesantrenName}
+                        </p>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -648,7 +664,7 @@ export const LoginView: React.FC = () => {
               </div>
 
               <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-[1.1] text-balance">
-                Pesantren Islam Mutiara Insan
+                {pesantrenName}
               </h1>
 
               <p className="font-display text-xl sm:text-2xl text-amber-200 font-medium leading-snug text-balance">
@@ -1164,11 +1180,15 @@ export const LoginView: React.FC = () => {
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8 pb-10 border-b border-stone-800">
             <div className="space-y-2.5 max-w-xl">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-emerald-900 text-amber-300 flex items-center justify-center border border-emerald-800">
-                  <BookOpen className="w-4 h-4" />
-                </div>
+                <SchoolLogo
+                  logoUrl={pesantrenLogoUrl}
+                  schoolName={pesantrenName}
+                  size="sm"
+                  variant="emerald"
+                  fallbackIcon="book"
+                />
                 <span className="font-bold text-sm sm:text-base tracking-tight text-white uppercase">
-                  PESANTREN ISLAM MUTIARA INSAN
+                  {pesantrenName}
                 </span>
               </div>
               <p className="font-display text-lg sm:text-xl text-amber-200/90 italic">
@@ -1217,7 +1237,7 @@ export const LoginView: React.FC = () => {
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-stone-400">
             <p>
-              &copy; {new Date().getFullYear()} Pesantren Islam Mutiara Insan. All rights reserved.
+              &copy; {new Date().getFullYear()} {pesantrenName}. All rights reserved.
             </p>
             <p className="text-stone-500">
               Didukung oleh AKSARA &mdash; Sistem Informasi Manajemen Akademik dan Administrasi Sekolah

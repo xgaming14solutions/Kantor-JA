@@ -27,6 +27,7 @@ import { GenericModuleView } from './components/GenericModuleView';
 import { KesantrianView } from './components/KesantrianView';
 import { AtkView } from './components/AtkView';
 import { AcademicCalendarView } from './components/AcademicCalendarView';
+import { SchoolLogo } from './components/SchoolLogo';
 import { calculateAtkStockStatus } from './types';
 import {
   Menu,
@@ -56,6 +57,7 @@ export default function App() {
   const { currentUser, role, loading, logout } = useAuth();
   const {
     activeAcademicYear,
+    schoolIdentity,
     kesantrianRecords = [],
     mabitPeriods = [],
     atkItems = [],
@@ -392,6 +394,14 @@ export default function App() {
               )}
             </button>
 
+            <SchoolLogo
+              logoUrl={schoolIdentity?.logoUrl}
+              schoolName={schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+              size="sm"
+              variant="light"
+              className="hidden sm:inline-flex"
+            />
+
             <div className="min-w-0 flex-1 overflow-hidden">
               {/* Breadcrumb */}
               <div className="flex items-center gap-1 sm:gap-1.5 text-xs text-[#71818A] min-w-0 overflow-hidden">
@@ -404,7 +414,7 @@ export default function App() {
                 </span>
               </div>
               <div className="text-[11px] text-[#71818A] hidden md:block truncate">
-                Sistem Informasi Manajemen Akademik dan Administrasi Sekolah
+                {schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'} &mdash; Sistem Informasi Manajemen Akademik &amp; Administrasi
               </div>
             </div>
           </div>

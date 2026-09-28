@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MyClassesView } from './MyClassesView';
 import {
   INITIAL_CLASSES,
@@ -14,6 +14,12 @@ import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { formatReportProgram, DEFAULT_PESANTREN_FACILITIES } from '../lib/dbService';
 import { PesantrenFacilityItem } from '../types';
+import {
+  SchoolLogo,
+  ProcessedLogoResult,
+  validateAndPreviewLogoFile,
+  uploadSchoolLogoWithFallback,
+} from './SchoolLogo';
 import {
   BookOpen,
   ClipboardList,
@@ -31,7 +37,11 @@ import {
   AlertCircle,
   Info,
   Phone,
-  Building2
+  Building2,
+  Upload,
+  Trash2,
+  Image as ImageIcon,
+  X,
 } from 'lucide-react';
 
 export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
@@ -78,6 +88,104 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Logo Sekolah / Pesantren state
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingLogo, setPendingLogo] = useState<ProcessedLogoResult | null>(null);
+  const [isSavingLogo, setIsSavingLogo] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const [logoSuccess, setLogoSuccess] = useState<string | null>(null);
+  const [confirmRemoveLogo, setConfirmRemoveLogo] = useState(false);
+  const [previewImgBroken, setPreviewImgBroken] = useState(false);
+
+  const isAdmin = role === 'ADMIN';
+  const canManageIdentity = role === 'ADMIN';
+
+  const savedLogoUrl = (schoolIdentity.logoUrl || '').trim();
+  const activePreviewLogoUrl = pendingLogo ? pendingLogo.previewDataUrl : savedLogoUrl;
+
+  useEffect(() => {
+    setPreviewImgBroken(false);
+  }, [activePreviewLogoUrl]);
+
+  const handleSelectLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (logoInputRef.current) {
+      logoInputRef.current.value = '';
+    }
+    if (!file) return;
+    if (!isAdmin) {
+      setLogoError('Akses Ditolak: Hanya Administrator yang dapat mengubah logo sekolah.');
+      return;
+    }
+
+    setLogoError(null);
+    setLogoSuccess(null);
+    setConfirmRemoveLogo(false);
+
+    try {
+      const processed = await validateAndPreviewLogoFile(file);
+      setPendingLogo(processed);
+    } catch (err: any) {
+      setPendingLogo(null);
+      setLogoError(err?.message || 'Gagal memproses file logo yang dipilih.');
+    }
+  };
+
+  const handleCancelPendingLogo = () => {
+    setPendingLogo(null);
+    setLogoError(null);
+    setConfirmRemoveLogo(false);
+  };
+
+  const handleSaveLogo = async () => {
+    if (!pendingLogo) return;
+    if (!isAdmin) {
+      setLogoError('Akses Ditolak: Hanya Administrator yang dapat menyimpan logo sekolah.');
+      return;
+    }
+    setLogoError(null);
+    setLogoSuccess(null);
+    setIsSavingLogo(true);
+    try {
+      const finalLogoUrl = await uploadSchoolLogoWithFallback(pendingLogo);
+      await saveSchoolIdentity({
+        logoUrl: finalLogoUrl,
+      });
+      setPendingLogo(null);
+      setLogoSuccess(
+        'Logo Sekolah / Pesantren berhasil disimpan dan langsung diterapkan di seluruh aplikasi.'
+      );
+      setTimeout(() => setLogoSuccess(null), 5000);
+    } catch (err: any) {
+      setLogoError(err?.message || 'Gagal menyimpan logo sekolah.');
+    } finally {
+      setIsSavingLogo(false);
+    }
+  };
+
+  const handleConfirmRemoveLogo = async () => {
+    if (!isAdmin) {
+      setLogoError('Akses Ditolak: Hanya Administrator yang dapat menghapus logo sekolah.');
+      return;
+    }
+    setLogoError(null);
+    setLogoSuccess(null);
+    setIsSavingLogo(true);
+    try {
+      await saveSchoolIdentity({
+        logoUrl: '',
+      });
+      setPendingLogo(null);
+      setConfirmRemoveLogo(false);
+      setLogoSuccess('Logo sekolah berhasil dihapus dan dikembalikan ke ikon standar.');
+      setTimeout(() => setLogoSuccess(null), 5000);
+    } catch (err: any) {
+      setLogoError(err?.message || 'Gagal menghapus logo sekolah.');
+    } finally {
+      setIsSavingLogo(false);
+    }
+  };
+
   // Sync form state whenever schoolIdentity loads or updates from Firestore
   useEffect(() => {
     setFormData({
@@ -116,6 +224,10 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
 
     setIsSaving(true);
     try {
+      let nextLogoUrl = schoolIdentity.logoUrl || '';
+      if (pendingLogo) {
+        nextLogoUrl = await uploadSchoolLogoWithFallback(pendingLogo);
+      }
       await saveSchoolIdentity({
         schoolName: formData.schoolName.trim(),
         programName: formData.programName.trim() || 'PKBM AL-QOLAM',
@@ -125,13 +237,17 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
         mudirNip: formData.mudirNip.trim(),
         leaderTitle: formData.leaderTitle.trim() || 'Mudir / Kepala Sekolah',
         city: formData.city.trim() || 'Tulang Bawang Barat',
+        logoUrl: nextLogoUrl,
         whatsapp: formData.whatsapp.trim(),
         email: formData.email.trim(),
         socialMedia: formData.socialMedia.trim(),
         ppdbInfo: formData.ppdbInfo.trim(),
         facilities: formData.facilities,
       });
-      setSaveSuccess('Identitas Pesantren, Kontak Publik, Fasilitas, dan Data Mudir berhasil disimpan ke database.');
+      if (pendingLogo) {
+        setPendingLogo(null);
+      }
+      setSaveSuccess('Identitas Pesantren, Logo, Kontak Publik, Fasilitas, dan Data Mudir berhasil disimpan ke database.');
       setTimeout(() => setSaveSuccess(null), 5000);
     } catch (err: any) {
       setSaveError(err?.message || 'Gagal menyimpan pengaturan identitas sekolah.');
@@ -426,11 +542,191 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Form Edit Identitas Sekolah & Data Mudir */}
-        <form
-          onSubmit={handleSaveIdentity}
-          className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5"
-        >
+        {/* Left / Main Column: Logo Card + Form Edit Identitas Sekolah */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Card: Logo Sekolah / Pesantren */}
+          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-[#DCE5E8] shadow-xs space-y-4">
+            <div className="border-b border-[#EBF0F2] pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-bold text-[#24343D] flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-[#24485A]" />
+                  <span>Logo Sekolah / Pesantren</span>
+                </h3>
+                <p className="text-[11px] text-[#71818A] mt-0.5 leading-relaxed">
+                  Logo ini digunakan sebagai identitas aplikasi dan dapat ditampilkan pada halaman profil, dashboard, cetak rapor, laporan, dan dokumen resmi.
+                </p>
+              </div>
+              {pendingLogo ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-[#FDF7EB] text-[#B47D1E] border border-[#F3DFB8] self-start sm:self-auto shrink-0">
+                  Pratinjau Logo Baru (Belum Disimpan)
+                </span>
+              ) : savedLogoUrl && !previewImgBroken ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-[#EFF7F2] text-[#35694E] border border-[#CBE4D5] self-start sm:self-auto shrink-0">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#5D9B7A]" />
+                  Logo Aktif
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-[#F4F7F8] text-[#71818A] border border-[#DCE5E8] self-start sm:self-auto shrink-0">
+                  Belum ada logo
+                </span>
+              )}
+            </div>
+
+            {logoSuccess && (
+              <div className="p-3.5 rounded-xl bg-[#EFF7F2] border border-[#CBE4D5] text-[#35694E] text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-[#5D9B7A] shrink-0" />
+                <span>{logoSuccess}</span>
+              </div>
+            )}
+
+            {logoError && (
+              <div className="p-3.5 rounded-xl bg-[#FBF1F1] border border-[#EBC6C6] text-[#A84848] text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-[#C96A6A] shrink-0" />
+                <span>{logoError}</span>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 p-4 rounded-xl bg-[#F4F7F8]/70 border border-[#DCE5E8]">
+              {/* [ Preview Logo ] */}
+              <div className="w-36 h-36 sm:w-40 sm:h-40 rounded-2xl bg-white border border-[#DCE5E8] shadow-2xs flex flex-col items-center justify-center p-3 shrink-0 overflow-hidden">
+                {activePreviewLogoUrl && !previewImgBroken ? (
+                  <img
+                    src={activePreviewLogoUrl}
+                    alt={`Logo ${formData.schoolName || 'Sekolah'}`}
+                    onError={() => setPreviewImgBroken(true)}
+                    className="max-w-full max-h-full w-auto h-auto object-contain"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center text-[#71818A] gap-1.5 px-2">
+                    <div className="w-11 h-11 rounded-xl bg-[#F0F5F7] border border-[#DCE5E8] text-[#5D8295] flex items-center justify-center">
+                      <School className="w-5 h-5" />
+                    </div>
+                    <span className="text-xs font-semibold text-[#24343D]">Belum ada logo</span>
+                    <span className="text-[10px] text-[#71818A] leading-tight">
+                      Gunakan tombol Pilih Logo
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Controls & File Info */}
+              <div className="flex-1 w-full space-y-3 text-center sm:text-left">
+                <div className="space-y-1">
+                  <div className="text-xs font-bold text-[#24343D]">
+                    {formData.schoolName || 'Pesantren Islam Mutiara Insan'}
+                  </div>
+                  <p className="text-[11px] text-[#71818A] leading-relaxed">
+                    Format yang didukung: <strong>PNG, JPG, JPEG, WEBP</strong> &bull; Ukuran maksimal: <strong>2 MB</strong>. Rasio gambar asli akan dipertahankan secara proporsional (tidak gepeng atau terpotong).
+                  </p>
+                  {pendingLogo && (
+                    <div className="text-[11px] font-mono text-[#24485A] bg-white px-2.5 py-1.5 rounded-lg border border-[#DCE5E8] inline-block mt-1">
+                      File terpilih: <strong>{pendingLogo.fileName}</strong> ({pendingLogo.width}&times;{pendingLogo.height}px &bull;{' '}
+                      {(pendingLogo.originalSize / 1024).toFixed(1)} KB)
+                    </div>
+                  )}
+                </div>
+
+                {/* Hidden File Input */}
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                  onChange={handleSelectLogoFile}
+                  className="hidden"
+                />
+
+                {canManageIdentity ? (
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 pt-1">
+                    {/* [ Pilih Logo ] */}
+                    <button
+                      type="button"
+                      disabled={isSavingLogo}
+                      onClick={() => logoInputRef.current?.click()}
+                      className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-[#24485A] text-white hover:bg-[#1C3948] transition inline-flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>{savedLogoUrl ? 'Pilih / Ganti Logo' : 'Pilih Logo'}</span>
+                    </button>
+
+                    {/* [ Simpan Logo ] & [ Batal ] when a new logo is previewed */}
+                    {pendingLogo && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={isSavingLogo}
+                          onClick={handleSaveLogo}
+                          className="px-4 py-2 text-xs font-semibold rounded-xl bg-[#5D9B7A] text-white hover:bg-[#4B8567] transition inline-flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          <span>{isSavingLogo ? 'Menyimpan Logo...' : 'Simpan Logo'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isSavingLogo}
+                          onClick={handleCancelPendingLogo}
+                          className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-white text-[#24343D] border border-[#DCE5E8] hover:bg-[#F4F7F8] transition inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Batal</span>
+                        </button>
+                      </>
+                    )}
+
+                    {/* [ Hapus Logo ] when logo exists */}
+                    {savedLogoUrl && !pendingLogo && !confirmRemoveLogo && (
+                      <button
+                        type="button"
+                        disabled={isSavingLogo}
+                        onClick={() => setConfirmRemoveLogo(true)}
+                        className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-[#FBF1F1] text-[#C96A6A] border border-[#EBC6C6] hover:bg-[#F5E1E1] transition inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Hapus Logo</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-2.5 rounded-xl bg-white border border-[#DCE5E8] text-[11px] text-[#71818A] inline-flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#24485A] shrink-0" />
+                    <span>Mode Lihat Saja &mdash; Hanya Administrator yang dapat mengubah atau menghapus logo sekolah.</span>
+                  </div>
+                )}
+
+                {/* In-app Confirmation to Remove Logo */}
+                {confirmRemoveLogo && (
+                  <div className="p-3 rounded-xl bg-[#FBF1F1] border border-[#EBC6C6] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 text-xs">
+                    <span className="text-[#A84848] font-medium">
+                      Hapus logo sekolah saat ini? Aplikasi akan kembali menampilkan ikon standar.
+                    </span>
+                    <div className="flex items-center justify-center sm:justify-end gap-2 shrink-0">
+                      <button
+                        type="button"
+                        disabled={isSavingLogo}
+                        onClick={handleConfirmRemoveLogo}
+                        className="px-3 py-1.5 rounded-lg bg-[#C96A6A] text-white font-semibold hover:bg-[#B25555] transition cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingLogo ? 'Menghapus...' : 'Ya, Hapus Logo'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSavingLogo}
+                        onClick={() => setConfirmRemoveLogo(false)}
+                        className="px-3 py-1.5 rounded-lg bg-white text-[#24343D] border border-[#DCE5E8] font-semibold hover:bg-[#F4F7F8] transition cursor-pointer"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Form Edit Identitas Sekolah & Data Mudir */}
+          <form
+            onSubmit={handleSaveIdentity}
+            className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5"
+          >
           <div className="border-b border-slate-100 pb-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <School className="w-4 h-4 text-indigo-600" />
@@ -677,27 +973,44 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
             <button
               type="submit"
               disabled={isSaving}
-              className="px-5 py-2.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition shadow-xs inline-flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              className="px-5 py-2.5 text-xs font-semibold text-white bg-[#24485A] hover:bg-[#1C3948] rounded-xl transition shadow-xs inline-flex items-center gap-2 cursor-pointer disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
-              {isSaving ? 'Menyimpan...' : 'Simpan'}
+              {isSaving ? 'Menyimpan...' : 'Simpan Identitas Sekolah'}
             </button>
           </div>
-        </form>
+          </form>
+        </div>
 
         {/* Live Preview Panel for Report Card */}
         <div className="space-y-4">
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-              <Info className="w-4 h-4 text-indigo-600" />
+              <Info className="w-4 h-4 text-[#24485A]" />
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                Pratinjau pada Cetak Rapor
+                Pratinjau pada Cetak Rapor &amp; Aplikasi
               </h3>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-3">
               <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Identitas Sekolah di Rapor:
+                Kop &amp; Identitas Sekolah di Rapor:
+              </div>
+              <div className="flex items-center gap-3 pb-2.5 border-b border-slate-200">
+                <SchoolLogo
+                  logoUrl={activePreviewLogoUrl}
+                  schoolName={formData.schoolName || 'Pesantren Islam Mutiara Insan'}
+                  size="md"
+                  variant="light"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="font-bold text-slate-900 truncate">
+                    {formData.schoolName || 'Pesantren Islam Mutiara Insan'}
+                  </div>
+                  <div className="text-[11px] text-slate-500 truncate">
+                    {formData.programName || 'PKBM AL-QOLAM'}
+                  </div>
+                </div>
               </div>
               <div className="grid grid-cols-[105px_8px_1fr] gap-y-1.5 text-[11px]">
                 <span className="text-slate-500">Nama Sekolah</span>

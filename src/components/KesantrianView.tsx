@@ -14,6 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { PelanggaranSantriSection } from './PelanggaranSantriSection';
 import { MabitKepulanganSection, formatIndonesianDate } from './MabitKepulanganSection';
 import { LaporanKesantrianSection } from './LaporanKesantrianSection';
+import { SchoolLogo } from './SchoolLogo';
 import {
   ShieldAlert,
   HeartPulse,
@@ -143,6 +144,7 @@ export const KesantrianView: React.FC<KesantrianViewProps> = ({ tab, onNavigate 
     classes = [],
     academicYears = [],
     activeAcademicYear,
+    schoolIdentity,
     kesantrianRecords = [],
     kesantrianMedicines = [],
     mabitPeriods = [],
@@ -1084,34 +1086,45 @@ export const KesantrianView: React.FC<KesantrianViewProps> = ({ tab, onNavigate 
           {/* Welcome Banner & Akun Pengguna Kesantrian */}
           <div className="bg-white border border-[#DCE5E8] rounded-xl p-5 sm:p-6 space-y-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#24485A] bg-[#F0F5F7] border border-[#DCE5E8] px-2.5 py-0.5 rounded-md inline-flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-[#24485A]" />
-                    Modul Kesantrian AKSARA
-                  </span>
-                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-[#F4F7F8] text-[#24343D] border border-[#DCE5E8]">
-                    {currentOfficerLabel}
-                  </span>
-                  <span className="text-xs text-[#71818A] font-medium">
-                    Periode Aktif:{' '}
+              <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                <SchoolLogo
+                  logoUrl={schoolIdentity?.logoUrl}
+                  schoolName={schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+                  size="lg"
+                  variant="light"
+                />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-[#24485A] bg-[#F0F5F7] border border-[#DCE5E8] px-2.5 py-0.5 rounded-md inline-flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#24485A]" />
+                      Modul Kesantrian AKSARA
+                    </span>
+                    <span className="text-xs font-semibold text-[#24343D]">
+                      {schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+                    </span>
+                    <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-[#F4F7F8] text-[#24343D] border border-[#DCE5E8]">
+                      {currentOfficerLabel}
+                    </span>
+                    <span className="text-xs text-[#71818A] font-medium">
+                      Periode Aktif:{' '}
+                      <strong className="text-[#24343D]">
+                        {activeAcademicYear
+                          ? `${activeAcademicYear.name} - Semester ${activeAcademicYear.semester}`
+                          : '2026/2027 - Semester Ganjil'}
+                      </strong>
+                    </span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-bold text-[#24343D] mt-1.5 tracking-tight">
+                    Dashboard Kesantrian &amp; Asrama
+                  </h2>
+                  <p className="text-xs text-[#71818A] mt-0.5">
+                    Pemantauan terpadu kesehatan, perizinan pulang, kedisiplinan, mabit, dan pembinaan untuk{' '}
                     <strong className="text-[#24343D]">
-                      {activeAcademicYear
-                        ? `${activeAcademicYear.name} - Semester ${activeAcademicYear.semester}`
-                        : '2026/2027 - Semester Ganjil'}
+                      {activeStudentsList.length} santri aktif
                     </strong>
-                  </span>
+                    .
+                  </p>
                 </div>
-                <h2 className="text-xl sm:text-2xl font-bold text-[#24343D] mt-1.5 tracking-tight">
-                  Dashboard Kesantrian &amp; Asrama
-                </h2>
-                <p className="text-xs text-[#71818A] mt-0.5">
-                  Pemantauan terpadu kesehatan, perizinan pulang, kedisiplinan, mabit, dan pembinaan untuk{' '}
-                  <strong className="text-[#24343D]">
-                    {activeStudentsList.length} santri aktif
-                  </strong>
-                  .
-                </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
