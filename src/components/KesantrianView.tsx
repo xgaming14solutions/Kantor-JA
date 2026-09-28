@@ -1037,8 +1037,8 @@ export const KesantrianView: React.FC<KesantrianViewProps> = ({ tab, onNavigate 
 
   return (
     <div className="space-y-6">
-      {/* Top Module Navigation Pills */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-2 shadow-xs flex items-center gap-1.5 overflow-x-auto">
+      {/* Top Module Navigation Bar */}
+      <div className="bg-white border border-[#DCE5E8] rounded-xl p-1.5 flex items-center gap-1 overflow-x-auto">
         {kesantrianNavTabs.map((item) => {
           const Icon = item.icon;
           const isActive = activeSection === item.section;
@@ -1050,10 +1050,10 @@ export const KesantrianView: React.FC<KesantrianViewProps> = ({ tab, onNavigate 
                 setSelectedRecordCategory('ALL');
                 onNavigate(item.id);
               }}
-              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
                 isActive
-                  ? 'bg-teal-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  ? 'bg-[#24485A] text-white'
+                  : 'text-[#71818A] hover:bg-[#F4F7F8] hover:text-[#24343D]'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -1065,12 +1065,12 @@ export const KesantrianView: React.FC<KesantrianViewProps> = ({ tab, onNavigate 
 
       {/* Notice Banner */}
       {notice && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center justify-between shadow-xs">
+        <div className="p-3.5 bg-[#EFF7F2] border border-[#CBE4D5] rounded-xl text-xs text-[#35694E] flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-[#5D9B7A] shrink-0" />
             <span>{notice}</span>
           </div>
-          <button onClick={() => setNotice('')} className="text-emerald-500 hover:text-emerald-700 cursor-pointer">
+          <button onClick={() => setNotice('')} className="text-[#5D9B7A] hover:text-[#35694E] cursor-pointer">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -1081,214 +1081,160 @@ export const KesantrianView: React.FC<KesantrianViewProps> = ({ tab, onNavigate 
          ===================================================================== */}
       {activeSection === 'DASHBOARD' && (
         <div className="space-y-6">
-          {/* Welcome Banner & Akun Pengguna Kesantrian (2 Akun Berbeda: Kepala Kesantrian & Musyrif Kesantrian) */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs space-y-4">
+          {/* Welcome Banner & Akun Pengguna Kesantrian */}
+          <div className="bg-white border border-[#DCE5E8] rounded-xl p-5 sm:p-6 space-y-4">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-teal-700 bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#24485A] bg-[#F0F5F7] border border-[#DCE5E8] px-2.5 py-0.5 rounded-md inline-flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#24485A]" />
                     Modul Kesantrian AKSARA
                   </span>
-                  <span
-                    className={`text-xs font-bold px-2.5 py-1 rounded-lg border inline-flex items-center gap-1.5 ${
-                      isKepalaKesantrian
-                        ? 'bg-teal-100 text-teal-800 border-teal-300'
-                        : 'bg-cyan-100 text-cyan-800 border-cyan-300'
-                    }`}
-                  >
-                    Akun Aktif: {currentOfficerLabel} (
-                    {isKepalaKesantrian ? 'kepala_kesantrian' : 'musyrif_kesantrian'})
+                  <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-[#F4F7F8] text-[#24343D] border border-[#DCE5E8]">
+                    {currentOfficerLabel}
                   </span>
-                  {currentUser?.email && (
-                    <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                      {currentUser.email}
-                    </span>
-                  )}
-                  <span className="text-xs text-slate-500 font-medium">
+                  <span className="text-xs text-[#71818A] font-medium">
                     Periode Aktif:{' '}
-                    <strong className="text-slate-800">
+                    <strong className="text-[#24343D]">
                       {activeAcademicYear
                         ? `${activeAcademicYear.name} - Semester ${activeAcademicYear.semester}`
                         : '2026/2027 - Semester Ganjil'}
                     </strong>
                   </span>
                 </div>
-                <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mt-2 tracking-tight">
-                  Dashboard Kesantrian — {currentOfficerLabel}
+                <h2 className="text-xl sm:text-2xl font-bold text-[#24343D] mt-1.5 tracking-tight">
+                  Dashboard Kesantrian &amp; Asrama
                 </h2>
-                <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                  Login aktif sebagai <strong className="text-slate-800">{currentActorName}</strong> (
-                  <code>{isKepalaKesantrian ? 'kepala_kesantrian' : 'musyrif_kesantrian'}</code>). Menangani{' '}
-                  <strong className="text-slate-700">
-                    seluruh santri ({activeStudentsList.length} santri aktif)
-                  </strong>{' '}
-                  dari Master Data Siswa utama.
+                <p className="text-xs text-[#71818A] mt-0.5">
+                  Pemantauan terpadu kesehatan, perizinan pulang, kedisiplinan, mabit, dan pembinaan untuk{' '}
+                  <strong className="text-[#24343D]">
+                    {activeStudentsList.length} santri aktif
+                  </strong>
+                  .
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
                 <button
                   onClick={() => onNavigate('kesantrian-laporan')}
-                  className="px-3.5 py-2 text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-200 hover:bg-teal-100 rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer"
+                  className="px-3.5 py-2 text-xs font-semibold text-[#24485A] bg-[#F4F7F8] border border-[#DCE5E8] hover:bg-[#EBF1F4] rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <FileText className="w-3.5 h-3.5" />
                   Laporan Kesantrian
                 </button>
                 <button
                   onClick={() => onNavigate('kesantrian-pelanggaran')}
-                  className="px-3.5 py-2 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-xl transition shadow-xs inline-flex items-center gap-1.5 cursor-pointer"
+                  className="px-3.5 py-2 text-xs font-semibold text-white bg-[#24485A] hover:bg-[#1C3948] rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  Catat Pelanggaran Baru
+                  Catat Pelanggaran
                 </button>
-              </div>
-            </div>
-
-            {/* Struktur 2 Akun Pengguna Kesantrian: Kepala Kesantrian & Musyrif Kesantrian */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-slate-100 text-xs">
-              <div
-                className={`p-3.5 rounded-xl border ${
-                  isKepalaKesantrian
-                    ? 'bg-teal-50/70 border-teal-200'
-                    : 'bg-slate-50 border-slate-200'
-                }`}
-              >
-                <div className="font-bold text-teal-900 flex items-center justify-between">
-                  <span>A. Akun Kepala Kesantrian (Role: kepala_kesantrian)</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white text-teal-700 border border-teal-200">
-                    {isKepalaKesantrian ? 'Sedang Login' : 'Akun Terpisah'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-                  Penanggung jawab utama: memantau siapa santri yang sedang sakit &amp; berapa hari sakit, apakah sudah ditangani, apakah perlu dijemput orang tua, siapa yang sedang izin &amp; kapan harus kembali, pelanggaran yang belum ditindaklanjuti, serta kondisi santri setelah pulang.
-                </p>
-              </div>
-
-              <div
-                className={`p-3.5 rounded-xl border ${
-                  !isKepalaKesantrian
-                    ? 'bg-cyan-50/70 border-cyan-200'
-                    : 'bg-slate-50 border-slate-200'
-                }`}
-              >
-                <div className="font-bold text-cyan-900 flex items-center justify-between">
-                  <span>B. Akun Musyrif Kesantrian (Role: musyrif_kesantrian)</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white text-cyan-700 border border-cyan-200">
-                    {!isKepalaKesantrian ? 'Sedang Login' : 'Akun Terpisah'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-                  Pelaksana harian: mencatat pelanggaran, santri sakit, izin/pulang, periode Mabit, pemberian obat &amp; P3K, memperbarui perkembangan harian santri sakit, mencatat pemulangan/penjemputan orang tua, dan mengonfirmasi saat santri sembuh/kembali ke pesantren.
-                </p>
               </div>
             </div>
           </div>
 
-          {/* Summary Cards (5 Kesantrian Feature Cards) */}
+          {/* Summary Cards (5 Clean White Kesantrian KPI Cards) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <button
               onClick={() => onNavigate('kesantrian-pelanggaran')}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs text-left hover:border-rose-300 transition group cursor-pointer"
+              className="bg-white p-5 rounded-xl border border-[#DCE5E8] text-left hover:border-[#C96A6A] transition group cursor-pointer"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500">Pelanggaran Santri</span>
-                <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
-                  <ShieldAlert className="w-5 h-5" />
+                <span className="text-xs font-medium text-[#71818A]">Pelanggaran Santri</span>
+                <div className="w-9 h-9 rounded-lg bg-[#FBF1F1] text-[#C96A6A] flex items-center justify-center">
+                  <ShieldAlert className="w-4 h-4" />
                 </div>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-slate-900">{recordCounts.PELANGGARAN}</span>
-                <span className="text-xs text-rose-600 font-semibold">Catatan</span>
+              <div className="mt-2.5 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-[#24343D] font-mono tabular-nums">
+                  {recordCounts.PELANGGARAN}
+                </span>
+                <span className="text-xs text-[#C96A6A] font-medium">Catatan</span>
               </div>
-              <div className="text-[11px] text-slate-400 mt-1">
-                Kedisiplinan &amp; pembinaan santri
+              <div className="text-[11px] text-[#71818A] mt-1">
+                Kedisiplinan &amp; pembinaan
               </div>
             </button>
 
             <button
               onClick={() => onNavigate('kesantrian-sakit')}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs text-left hover:border-amber-300 transition group cursor-pointer"
+              className="bg-white p-5 rounded-xl border border-[#DCE5E8] text-left hover:border-[#D6A64A] transition group cursor-pointer"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500">Santri Sakit</span>
-                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                  <HeartPulse className="w-5 h-5" />
+                <span className="text-xs font-medium text-[#71818A]">Santri Sakit</span>
+                <div className="w-9 h-9 rounded-lg bg-[#FDF7EB] text-[#D6A64A] flex items-center justify-center">
+                  <HeartPulse className="w-4 h-4" />
                 </div>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-slate-900">{recordCounts.SAKIT}</span>
-                <span className="text-xs text-amber-600 font-semibold">Catatan</span>
+              <div className="mt-2.5 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-[#24343D] font-mono tabular-nums">
+                  {recordCounts.SAKIT}
+                </span>
+                <span className="text-xs text-[#B47D1E] font-medium">Catatan</span>
               </div>
-              <div className="text-[11px] text-slate-400 mt-1">
+              <div className="text-[11px] text-[#71818A] mt-1">
                 Pemantauan kesehatan &amp; UKS
               </div>
             </button>
 
             <button
               onClick={() => onNavigate('kesantrian-izin')}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs text-left hover:border-blue-300 transition group cursor-pointer"
+              className="bg-white p-5 rounded-xl border border-[#DCE5E8] text-left hover:border-[#6C91A8] transition group cursor-pointer"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500">Izin / Pulang Santri</span>
-                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <DoorOpen className="w-5 h-5" />
+                <span className="text-xs font-medium text-[#71818A]">Izin / Pulang</span>
+                <div className="w-9 h-9 rounded-lg bg-[#F1F6F9] text-[#6C91A8] flex items-center justify-center">
+                  <DoorOpen className="w-4 h-4" />
                 </div>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-slate-900">{recordCounts.IZIN_PULANG}</span>
-                <span className="text-xs text-blue-600 font-semibold">Catatan</span>
+              <div className="mt-2.5 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-[#24343D] font-mono tabular-nums">
+                  {recordCounts.IZIN_PULANG}
+                </span>
+                <span className="text-xs text-[#3D6B82] font-medium">Catatan</span>
               </div>
-              <div className="text-[11px] text-slate-400 mt-1">
+              <div className="text-[11px] text-[#71818A] mt-1">
                 Perizinan keluar &amp; kepulangan
               </div>
             </button>
 
             <button
               onClick={() => onNavigate('kesantrian-mabit')}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs text-left hover:border-indigo-300 transition group cursor-pointer"
+              className="bg-white p-5 rounded-xl border border-[#DCE5E8] text-left hover:border-[#24485A] transition group cursor-pointer"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500">
-                  Mabit &amp; Kepulangan Santri
+                <span className="text-xs font-medium text-[#71818A]">
+                  Mabit &amp; Kepulangan
                 </span>
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                  <Moon className="w-5 h-5" />
+                <div className="w-9 h-9 rounded-lg bg-[#F0F5F7] text-[#24485A] flex items-center justify-center">
+                  <Moon className="w-4 h-4" />
                 </div>
               </div>
               {dashboardMabitSummary ? (
-                <div className="mt-2.5 space-y-1">
-                  <div className="text-xs font-bold text-indigo-700 truncate">
-                    Mabit Terdekat: {dashboardMabitSummary.period.periodName}
+                <div className="mt-2 space-y-1">
+                  <div className="text-xs font-semibold text-[#24485A] truncate">
+                    {dashboardMabitSummary.period.periodName}
                   </div>
-                  <div className="text-[11px] text-slate-600">
-                    <div>
-                      Pulang: {formatIndonesianDate(dashboardMabitSummary.period.departureDate)}
-                    </div>
-                    <div>
-                      Kembali: {formatIndonesianDate(dashboardMabitSummary.period.returnDate)}
-                    </div>
-                  </div>
-                  <div className="pt-1 border-t border-slate-100 text-[11px] flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <span className="font-bold text-slate-900">
-                      Total: {dashboardMabitSummary.totalSantri} santri
+                  <div className="pt-1 border-t border-[#EDF2F4] text-[11px] flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <span className="font-semibold text-[#24343D]">
+                      {dashboardMabitSummary.totalSantri} santri
                     </span>
-                    <span className="text-emerald-600 font-semibold">
-                      Sudah Kembali: {dashboardMabitSummary.sudahKembali}
+                    <span className="text-[#5D9B7A] font-medium">
+                      Kembali: {dashboardMabitSummary.sudahKembali}
                     </span>
-                    <span className="text-amber-600 font-semibold">
-                      Belum Kembali: {dashboardMabitSummary.belumKembali}
+                    <span className="text-[#D6A64A] font-medium">
+                      Belum: {dashboardMabitSummary.belumKembali}
                     </span>
                   </div>
                 </div>
               ) : (
                 <>
-                  <div className="mt-3 flex items-baseline gap-2">
-                    <span className="text-2xl font-bold text-slate-900">0</span>
-                    <span className="text-xs text-indigo-600 font-semibold">Periode Mabit</span>
+                  <div className="mt-2.5 flex items-baseline gap-2">
+                    <span className="text-2xl font-bold text-[#24343D] font-mono tabular-nums">0</span>
+                    <span className="text-xs text-[#24485A] font-medium">Periode</span>
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-1">
-                    Jadwal kepulangan Mabit santri
+                  <div className="text-[11px] text-[#71818A] mt-1">
+                    Jadwal kepulangan Mabit
                   </div>
                 </>
               )}
@@ -1296,19 +1242,21 @@ export const KesantrianView: React.FC<KesantrianViewProps> = ({ tab, onNavigate 
 
             <button
               onClick={() => onNavigate('kesantrian-obat')}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs text-left hover:border-emerald-300 transition group cursor-pointer"
+              className="bg-white p-5 rounded-xl border border-[#DCE5E8] text-left hover:border-[#5D9B7A] transition group cursor-pointer"
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-500">Obat &amp; P3K</span>
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <Pill className="w-5 h-5" />
+                <span className="text-xs font-medium text-[#71818A]">Obat &amp; P3K</span>
+                <div className="w-9 h-9 rounded-lg bg-[#EFF7F2] text-[#5D9B7A] flex items-center justify-center">
+                  <Pill className="w-4 h-4" />
                 </div>
               </div>
-              <div className="mt-3 flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-slate-900">{recordCounts.OBAT_P3K}</span>
-                <span className="text-xs text-emerald-600 font-semibold">Pemberian</span>
+              <div className="mt-2.5 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-[#24343D] font-mono tabular-nums">
+                  {recordCounts.OBAT_P3K}
+                </span>
+                <span className="text-xs text-[#35694E] font-medium">Pemberian</span>
               </div>
-              <div className="text-[11px] text-slate-400 mt-1">
+              <div className="text-[11px] text-[#71818A] mt-1">
                 {kesantrianMedicines.length} item stok obat &amp; P3K
               </div>
             </button>

@@ -1,8 +1,139 @@
 @import "tailwindcss";
 
+@theme {
+  /* Primary Navy (#24485A) & Secondary Blue (#5D8295) mapped to indigo & teal for global consistency */
+  --color-indigo-50: #F0F5F7;
+  --color-indigo-100: #DCE5E8;
+  --color-indigo-200: #C2D2DA;
+  --color-indigo-300: #9BB6C4;
+  --color-indigo-400: #779AAE;
+  --color-indigo-500: #5D8295;
+  --color-indigo-600: #24485A;
+  --color-indigo-700: #1C3948;
+  --color-indigo-800: #162D39;
+  --color-indigo-900: #10212A;
+  --color-indigo-950: #0A151B;
+
+  /* Secondary Blue / Info (#5D8295 / #6C91A8) */
+  --color-teal-50: #F0F5F7;
+  --color-teal-100: #DCE5E8;
+  --color-teal-200: #C2D2DA;
+  --color-teal-500: #6C91A8;
+  --color-teal-600: #24485A;
+  --color-teal-700: #1C3948;
+  --color-teal-800: #24343D;
+  --color-teal-900: #18252C;
+
+  --color-blue-50: #EEF4F7;
+  --color-blue-100: #D8E6EE;
+  --color-blue-200: #BDD3E0;
+  --color-blue-500: #6C91A8;
+  --color-blue-600: #5D8295;
+  --color-blue-700: #3E6073;
+  --color-blue-800: #24485A;
+  --color-blue-900: #1B3644;
+
+  /* Neutral Canvas & Typography (#F4F7F8 background, #DCE5E8 border, #24343D text, #71818A secondary) */
+  --color-slate-50: #F4F7F8;
+  --color-slate-100: #EBF0F2;
+  --color-slate-200: #DCE5E8;
+  --color-slate-300: #C4D1D6;
+  --color-slate-400: #95A5AD;
+  --color-slate-500: #71818A;
+  --color-slate-600: #52636D;
+  --color-slate-700: #384952;
+  --color-slate-800: #24343D;
+  --color-slate-900: #24343D;
+  --color-slate-950: #162127;
+
+  /* Semantic Success (#5D9B7A) */
+  --color-emerald-50: #EFF7F3;
+  --color-emerald-100: #D8EDE2;
+  --color-emerald-200: #BBE0CC;
+  --color-emerald-500: #5D9B7A;
+  --color-emerald-600: #5D9B7A;
+  --color-emerald-700: #437A5D;
+  --color-emerald-800: #315D46;
+  --color-emerald-900: #244735;
+
+  /* Semantic Warning (#D6A64A) */
+  --color-amber-50: #FCF7EC;
+  --color-amber-100: #F6E9CE;
+  --color-amber-200: #EDD5A4;
+  --color-amber-500: #D6A64A;
+  --color-amber-600: #C29135;
+  --color-amber-700: #9A6F21;
+  --color-amber-800: #7A5618;
+  --color-amber-900: #5E4111;
+
+  /* Semantic Danger (#C96A6A) */
+  --color-rose-50: #FBF1F1;
+  --color-rose-100: #F4DCDC;
+  --color-rose-200: #E8BDBD;
+  --color-rose-500: #C96A6A;
+  --color-rose-600: #C96A6A;
+  --color-rose-700: #A84E4E;
+  --color-rose-800: #873B3B;
+  --color-rose-900: #6B2E2E;
+
+  /* Tone down purple/violet/cyan into secondary blue/navy shades so there are no loud neon/purple colors */
+  --color-purple-50: #F0F5F7;
+  --color-purple-100: #DCE5E8;
+  --color-purple-200: #C2D2DA;
+  --color-purple-600: #5D8295;
+  --color-purple-700: #24485A;
+  --color-purple-800: #24343D;
+  --color-purple-900: #1B3644;
+
+  --color-violet-50: #F0F5F7;
+  --color-violet-100: #DCE5E8;
+  --color-violet-200: #C2D2DA;
+  --color-violet-600: #5D8295;
+  --color-violet-700: #24485A;
+
+  --color-cyan-50: #EEF4F7;
+  --color-cyan-100: #D8E6EE;
+  --color-cyan-200: #BDD3E0;
+  --color-cyan-600: #6C91A8;
+  --color-cyan-700: #4A6F85;
+  --color-cyan-800: #24485A;
+  --color-cyan-900: #1B3644;
+}
+
+:root {
+  --aksara-navy: #24485A;
+  --aksara-blue: #5D8295;
+  --aksara-bg: #F4F7F8;
+  --aksara-surface: #FFFFFF;
+  --aksara-border: #DCE5E8;
+  --aksara-text: #24343D;
+  --aksara-text-secondary: #71818A;
+  --aksara-success: #5D9B7A;
+  --aksara-warning: #D6A64A;
+  --aksara-danger: #C96A6A;
+  --aksara-info: #6C91A8;
+}
+
 html {
   scroll-behavior: smooth;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: #F4F7F8;
+  color: #24343D;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background-color: #F4F7F8;
+  color: #24343D;
+}
+
+/* Enforce clean 10px–12px enterprise card border radius instead of overly rounded pills */
+.rounded-2xl {
+  border-radius: 0.75rem; /* 12px */
+}
+
+.rounded-3xl {
+  border-radius: 0.875rem; /* 14px */
 }
 
 .font-arabic {

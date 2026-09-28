@@ -3,7 +3,6 @@ import { UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
 import {
-  Home,
   LayoutDashboard,
   Users,
   GraduationCap,
@@ -31,25 +30,42 @@ import {
   ArrowUpCircle,
   ShoppingCart,
   History,
-  BarChart3
+  BarChart3,
 } from 'lucide-react';
+
+export type MenuGroup =
+  | 'MAIN'
+  | 'AKADEMIK'
+  | 'KESANTRIAN'
+  | 'ATK'
+  | 'ADMINISTRASI'
+  | 'PENGATURAN';
 
 export interface MenuItem {
   id: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   allowedRoles: UserRole[];
-  group?: 'MAIN' | 'AKADEMIK' | 'KESANTRIAN' | 'ATK' | 'PENGATURAN';
+  group: MenuGroup;
 }
+
+export const MENU_GROUP_LABELS: Record<MenuGroup, string> = {
+  MAIN: 'MENU UTAMA',
+  AKADEMIK: 'AKADEMIK',
+  KESANTRIAN: 'KESANTRIAN',
+  ATK: 'ATK & PERSEDIAAN',
+  ADMINISTRASI: 'ADMINISTRASI',
+  PENGATURAN: 'PENGATURAN',
+};
 
 export const NAVIGATION_ITEMS: MenuItem[] = [
   // =======================================================
-  // 🏠 DASHBOARD UTAMA
+  // MENU UTAMA
   // =======================================================
   {
     id: 'dashboard',
     label: 'Dashboard',
-    icon: Home,
+    icon: LayoutDashboard,
     allowedRoles: [
       'ADMIN',
       'MUDIR',
@@ -67,30 +83,11 @@ export const NAVIGATION_ITEMS: MenuItem[] = [
   },
 
   // =======================================================
-  // 📚 AKADEMIK
+  // AKADEMIK
   // =======================================================
   {
-    id: 'academic-calendar',
-    label: '📅 Kalender Akademik',
-    icon: CalendarDays,
-    allowedRoles: [
-      'ADMIN',
-      'MUDIR',
-      'mudir',
-      'KEPALA_SEKOLAH',
-      'WALI_KELAS',
-      'GURU_MAPEL',
-      'KEPALA_KESANTRIAN',
-      'MUSYRIF_KESANTRIAN',
-      'kepala_kesantrian',
-      'musyrif_kesantrian',
-      'PETUGAS_KESANTRIAN',
-    ],
-    group: 'AKADEMIK',
-  },
-  {
     id: 'students',
-    label: 'Data Siswa',
+    label: 'Data Siswa/Santri',
     icon: GraduationCap,
     allowedRoles: ['ADMIN', 'MUDIR', 'mudir', 'KEPALA_SEKOLAH', 'WALI_KELAS'],
     group: 'AKADEMIK',
@@ -158,13 +155,32 @@ export const NAVIGATION_ITEMS: MenuItem[] = [
     allowedRoles: ['ADMIN', 'MUDIR', 'mudir', 'KEPALA_SEKOLAH', 'WALI_KELAS'],
     group: 'AKADEMIK',
   },
+  {
+    id: 'academic-calendar',
+    label: 'Kalender Akademik',
+    icon: CalendarDays,
+    allowedRoles: [
+      'ADMIN',
+      'MUDIR',
+      'mudir',
+      'KEPALA_SEKOLAH',
+      'WALI_KELAS',
+      'GURU_MAPEL',
+      'KEPALA_KESANTRIAN',
+      'MUSYRIF_KESANTRIAN',
+      'kepala_kesantrian',
+      'musyrif_kesantrian',
+      'PETUGAS_KESANTRIAN',
+    ],
+    group: 'AKADEMIK',
+  },
 
   // =======================================================
-  // 🏫 KESANTRIAN
+  // KESANTRIAN
   // =======================================================
   {
     id: 'kesantrian-dashboard',
-    label: 'Ringkasan Kesantrian',
+    label: 'Dashboard Kesantrian',
     icon: ShieldCheck,
     allowedRoles: [
       'KEPALA_KESANTRIAN',
@@ -283,7 +299,7 @@ export const NAVIGATION_ITEMS: MenuItem[] = [
   },
 
   // =======================================================
-  // 📦 ATK & PERSEDIAAN
+  // ATK & PERSEDIAAN
   // =======================================================
   {
     id: 'atk-dashboard',
@@ -367,22 +383,26 @@ export const NAVIGATION_ITEMS: MenuItem[] = [
   },
 
   // =======================================================
-  // ⚙️ PENGATURAN
+  // ADMINISTRASI
   // =======================================================
   {
     id: 'users',
     label: 'Pengguna & Role',
     icon: UserCog,
     allowedRoles: ['ADMIN'],
-    group: 'PENGATURAN',
+    group: 'ADMINISTRASI',
   },
   {
     id: 'settings',
     label: 'Identitas Sekolah',
     icon: Settings,
     allowedRoles: ['ADMIN', 'MUDIR', 'mudir', 'KEPALA_SEKOLAH'],
-    group: 'PENGATURAN',
+    group: 'ADMINISTRASI',
   },
+
+  // =======================================================
+  // PENGATURAN
+  // =======================================================
   {
     id: 'academic-settings',
     label: 'Pengaturan Akademik',
@@ -399,11 +419,40 @@ export const NAVIGATION_ITEMS: MenuItem[] = [
   },
 ];
 
+export function formatRoleLabel(role?: UserRole | string | null, kesantrianSubRole?: string): string {
+  switch (role) {
+    case 'ADMIN':
+      return 'Administrator';
+    case 'MUDIR':
+    case 'mudir':
+      return 'Mudir Pesantren';
+    case 'KEPALA_SEKOLAH':
+      return 'Kepala Sekolah';
+    case 'WALI_KELAS':
+      return 'Wali Kelas';
+    case 'GURU_MAPEL':
+      return 'Guru Mata Pelajaran';
+    case 'KEPALA_KESANTRIAN':
+    case 'kepala_kesantrian':
+      return 'Kepala Kesantrian';
+    case 'MUSYRIF_KESANTRIAN':
+    case 'musyrif_kesantrian':
+      return 'Musyrif Kesantrian';
+    case 'PETUGAS_KESANTRIAN':
+      return kesantrianSubRole === 'MUSYRIF_KESANTRIAN'
+        ? 'Musyrif Kesantrian'
+        : 'Kepala Kesantrian';
+    default:
+      return String(role || 'Pengguna');
+  }
+}
+
 interface SidebarProps {
   currentTab: string;
   setCurrentTab: (tab: string) => void;
   isOpen: boolean;
   onClose: () => void;
+  isCollapsed?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -411,6 +460,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setCurrentTab,
   isOpen,
   onClose,
+  isCollapsed = false,
 }) => {
   const { currentUser, role, logout } = useAuth();
   const { activeAcademicYear } = useMasterData();
@@ -430,172 +480,158 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return item.allowedRoles.includes(role);
   });
 
-  const kesantrianSubRoleText =
-    currentUser?.kesantrianRole === 'MUSYRIF_KESANTRIAN'
-      ? 'Musyrif Kesantrian'
-      : currentUser?.kesantrianRole === 'KEPALA_KESANTRIAN'
-      ? 'Kepala Kesantrian'
-      : 'Kepala Kesantrian';
+  const roleText = formatRoleLabel(role, currentUser?.kesantrianRole);
 
-  const roleBadge = {
-    ADMIN: { text: 'Admin', color: 'bg-rose-50 text-rose-700 border-rose-200' },
-    MUDIR: { text: 'Mudir Pesantren', color: 'bg-emerald-50 text-emerald-800 border-emerald-300' },
-    mudir: { text: 'Mudir Pesantren', color: 'bg-emerald-50 text-emerald-800 border-emerald-300' },
-    KEPALA_SEKOLAH: { text: 'Kepala Sekolah', color: 'bg-amber-50 text-amber-700 border-amber-200' },
-    WALI_KELAS: { text: 'Wali Kelas', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-    GURU_MAPEL: { text: 'Guru Mapel', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-    KEPALA_KESANTRIAN: { text: 'Kepala Kesantrian', color: 'bg-teal-50 text-teal-800 border-teal-300' },
-    MUSYRIF_KESANTRIAN: { text: 'Musyrif Kesantrian', color: 'bg-cyan-50 text-cyan-800 border-cyan-300' },
-    kepala_kesantrian: { text: 'Kepala Kesantrian', color: 'bg-teal-50 text-teal-800 border-teal-300' },
-    musyrif_kesantrian: { text: 'Musyrif Kesantrian', color: 'bg-cyan-50 text-cyan-800 border-cyan-300' },
-    PETUGAS_KESANTRIAN: { text: kesantrianSubRoleText, color: 'bg-teal-50 text-teal-700 border-teal-200' },
-  }[role] || { text: 'Kepala Kesantrian', color: 'bg-teal-50 text-teal-800 border-teal-300' };
-
-  const firstAkademikId = visibleItems.find((vi) => vi.group === 'AKADEMIK')?.id;
-  const firstKesantrianId = visibleItems.find((vi) => vi.group === 'KESANTRIAN')?.id;
-  const firstAtkId = visibleItems.find((vi) => vi.group === 'ATK')?.id;
-  const firstPengaturanId = visibleItems.find((vi) => vi.group === 'PENGATURAN')?.id;
+  const orderedGroups: MenuGroup[] = [
+    'MAIN',
+    'AKADEMIK',
+    'KESANTRIAN',
+    'ATK',
+    'ADMINISTRASI',
+    'PENGATURAN',
+  ];
 
   return (
     <>
       {/* Mobile Backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 lg:hidden"
+          className="fixed inset-0 bg-[#162833]/50 backdrop-blur-[2px] z-40 lg:hidden"
           onClick={onClose}
         />
       )}
 
-      {/* Sidebar Container */}
+      {/* Sidebar Container — Primary Navy #24485A */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col transition-transform duration-200 ease-in-out lg:translate-x-0 ${
-          isOpen ? 'translate-x-0 shadow-xl' : '-translate-x-full'
-        }`}
+        className={`fixed top-0 bottom-0 left-0 z-50 bg-[#24485A] text-white flex flex-col transition-all duration-200 ease-out select-none ${
+          isCollapsed ? 'lg:w-[72px]' : 'lg:w-64'
+        } w-64 ${isOpen ? 'translate-x-0 shadow-xl' : '-translate-x-full lg:translate-x-0'}`}
       >
-        {/* Brand */}
-        <div className="h-16 px-5 border-b border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
-              <School className="w-5 h-5" />
+        {/* Top Brand Header */}
+        <div className="h-14 px-4 border-b border-white/10 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-[#335F75] border border-white/15 text-white flex items-center justify-center shrink-0">
+              <School className="w-4 h-4" />
             </div>
-            <div>
-              <div className="font-bold text-base leading-none text-slate-900 tracking-tight">
-                AKSARA
+            {!isCollapsed && (
+              <div className="min-w-0">
+                <div className="font-bold text-[15px] leading-tight text-white tracking-tight truncate">
+                  AKSARA
+                </div>
+                <div className="text-[11px] text-[#B5C9D3] font-medium leading-tight truncate">
+                  Sistem Informasi Manajemen
+                </div>
               </div>
-              <div className="text-[11px] text-slate-500 font-medium leading-none mt-1">
-                Sistem Info Sekolah
-              </div>
-            </div>
+            )}
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 lg:hidden"
+            className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 lg:hidden cursor-pointer"
+            aria-label="Tutup menu"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Current User Role Pill */}
-        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50">
-          <div className="text-xs text-slate-500 font-medium truncate">
-            {currentUser?.name || 'Pengguna'}
+        {/* User Profile Summary in Sidebar */}
+        {!isCollapsed ? (
+          <div className="px-4 py-3 border-b border-white/10 bg-[#1E3D4D]/60 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[#335F75] border border-white/15 text-white flex items-center justify-center font-semibold text-xs shrink-0">
+                {(currentUser?.name || 'A').charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-semibold text-white truncate">
+                  {currentUser?.name || 'Pengguna'}
+                </div>
+                <div className="flex items-center justify-between gap-1 mt-0.5">
+                  <span className="text-[11px] text-[#B5C9D3] truncate">{roleText}</span>
+                  <span className="text-[10px] font-mono text-[#9AB4C1] bg-white/8 px-1.5 py-0.5 rounded shrink-0">
+                    {activeAcademicYear?.name || '2026/2027'}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center justify-between mt-1">
-            <span
-              className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${roleBadge.color}`}
+        ) : (
+          <div className="py-2.5 border-b border-white/10 bg-[#1E3D4D]/60 flex justify-center shrink-0">
+            <div
+              className="w-8 h-8 rounded-lg bg-[#335F75] border border-white/15 text-white flex items-center justify-center font-semibold text-xs"
+              title={`${currentUser?.name || 'Pengguna'} (${roleText})`}
             >
-              {roleBadge.text}
-            </span>
-            <span className="text-[11px] text-slate-400 font-mono">
-              TA {activeAcademicYear?.name || '2026/2027'}
-            </span>
+              {(currentUser?.name || 'A').charAt(0).toUpperCase()}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Navigation Links */}
-        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
-          {visibleItems.map((item) => {
-            const Icon = item.icon === Home && role !== 'ADMIN' ? LayoutDashboard : item.icon;
-            const isActive = currentTab === item.id;
-            const displayLabel =
-              item.id === 'dashboard'
-                ? role === 'ADMIN'
-                  ? '🏠 Dashboard'
-                  : role === 'MUDIR' || role === 'mudir'
-                  ? '🏛️ Dashboard Mudir'
-                  : isKesantrianOnlyRole
-                  ? 'Dashboard Kesantrian'
-                  : 'Dashboard'
-                : item.label;
-
-            const showAkademikDivider = firstAkademikId === item.id;
-            const showKesantrianDivider = !isKesantrianOnlyRole && firstKesantrianId === item.id;
-            const showAtkDivider = firstAtkId === item.id;
-            const showPengaturanDivider = firstPengaturanId === item.id;
+        {/* Navigation Links Grouped by Section */}
+        <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-4">
+          {orderedGroups.map((groupKey) => {
+            const groupItems = visibleItems.filter((item) => item.group === groupKey);
+            if (groupItems.length === 0) return null;
 
             return (
-              <React.Fragment key={item.id}>
-                {showAkademikDivider && (
-                  <div className="pt-3 pb-1 px-3">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 border-t border-slate-100 pt-2.5">
-                      📚 AKADEMIK
-                    </div>
+              <div key={groupKey} className="space-y-0.5">
+                {!isCollapsed && (
+                  <div className="px-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[#9AB4C1]">
+                    {MENU_GROUP_LABELS[groupKey]}
                   </div>
                 )}
-                {showKesantrianDivider && (
-                  <div className="pt-3 pb-1 px-3">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-teal-600 border-t border-slate-100 pt-2.5">
-                      🏫 KESANTRIAN
-                    </div>
-                  </div>
-                )}
-                {showAtkDivider && (
-                  <div className="pt-3 pb-1 px-3">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 border-t border-slate-100 pt-2.5">
-                      📦 ATK & PERSEDIAAN
-                    </div>
-                  </div>
-                )}
-                {showPengaturanDivider && (
-                  <div className="pt-3 pb-1 px-3">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 border-t border-slate-100 pt-2.5">
-                      ⚙️ PENGATURAN
-                    </div>
-                  </div>
-                )}
-                <button
-                  id={`menu-${item.id}`}
-                  onClick={() => {
-                    setCurrentTab(item.id);
-                    onClose();
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-xl transition cursor-pointer ${
-                    isActive
-                      ? 'bg-indigo-50 text-indigo-600 font-semibold'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                >
-                  <Icon
-                    className={`w-4 h-4 flex-shrink-0 ${
-                      isActive ? 'text-indigo-600' : 'text-slate-400'
-                    }`}
-                  />
-                  <span className="truncate">{displayLabel}</span>
-                </button>
-              </React.Fragment>
+
+                {groupItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentTab === item.id;
+                  const displayLabel =
+                    item.id === 'dashboard' && isKesantrianOnlyRole
+                      ? 'Dashboard Kesantrian'
+                      : item.label;
+
+                  return (
+                    <button
+                      key={item.id}
+                      id={`menu-${item.id}`}
+                      title={isCollapsed ? displayLabel : undefined}
+                      onClick={() => {
+                        setCurrentTab(item.id);
+                        onClose();
+                      }}
+                      className={`w-full flex items-center ${
+                        isCollapsed ? 'justify-center px-2' : 'gap-2.5 px-2.5'
+                      } py-2 text-[13px] rounded-lg transition cursor-pointer relative ${
+                        isActive
+                          ? 'bg-[#325E74] text-white font-semibold'
+                          : 'text-[#D5E2E8] hover:bg-white/8 hover:text-white font-medium'
+                      }`}
+                    >
+                      {isActive && (
+                        <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-[#8BB3C7]" />
+                      )}
+                      <Icon
+                        className={`w-4 h-4 shrink-0 ${
+                          isActive ? 'text-white' : 'text-[#9AB4C1]'
+                        }`}
+                      />
+                      {!isCollapsed && <span className="truncate">{displayLabel}</span>}
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>
 
-        {/* Logout Button */}
-        <div className="p-3 border-t border-slate-200">
+        {/* Bottom Logout Section */}
+        <div className="p-2.5 border-t border-white/10 bg-[#1E3D4D]/40 shrink-0">
           <button
             id="btn-logout"
+            title={isCollapsed ? 'Keluar dari AKSARA' : undefined}
             onClick={logout}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition border border-rose-100"
+            className={`w-full flex items-center ${
+              isCollapsed ? 'justify-center px-2' : 'gap-2.5 px-3'
+            } py-2 text-xs font-medium text-[#E8C5C5] hover:text-white hover:bg-[#C96A6A]/25 rounded-lg transition cursor-pointer`}
           >
-            <LogOut className="w-3.5 h-3.5" />
-            Keluar dari AKSARA
+            <LogOut className="w-4 h-4 shrink-0" />
+            {!isCollapsed && <span>Keluar</span>}
           </button>
         </div>
       </aside>

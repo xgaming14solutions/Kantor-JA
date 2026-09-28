@@ -471,43 +471,42 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
   return (
     <div className="space-y-6">
       {/* Executive Header Banner */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+      <div className="bg-white rounded-xl border border-[#DCE5E8] p-5 sm:p-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-[#F0F5F7] text-[#24485A] border border-[#DCE5E8]">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 MUDIR PESANTREN
               </span>
-              <span className="text-xs font-medium text-slate-500">
+              <span className="text-xs font-medium text-[#71818A]">
                 {schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'} &bull; Tahun Ajaran{' '}
-                <strong className="text-slate-700">
+                <strong className="text-[#24343D]">
                   {activeAcademicYear
                     ? `${activeAcademicYear.name} (${activeAcademicYear.semester})`
                     : '2026/2027'}
                 </strong>
               </span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-bold text-[#24343D] tracking-tight">
               Dashboard Eksekutif Mudir Pesantren
             </h1>
-            <p className="text-xs sm:text-sm text-slate-600 max-w-3xl leading-relaxed">
-              Pimpinan pesantren dan pengawas utama seluruh unit pendidikan serta pembinaan santri.
-              Memantau perkembangan Akademik, Kesantrian, Tahfizh, dan Persediaan ATK secara terpadu.
+            <p className="text-xs text-[#71818A] max-w-3xl leading-relaxed">
+              Pusat pemantauan lintas unit Akademik, Kesantrian, Tahfizh, dan Persediaan ATK secara terpadu.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={() => setActiveSection('LAPORAN')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-[#24485A] bg-[#F4F7F8] hover:bg-[#EBF1F4] border border-[#DCE5E8] transition cursor-pointer"
             >
               <MessageSquarePlus className="w-4 h-4" />
-              Berikan Arahan Pimpinan
+              Arahan Pimpinan
             </button>
             <button
               onClick={() => setActiveSection('OVERVIEW')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-white bg-[#24485A] hover:bg-[#1C3948] transition cursor-pointer"
             >
               <ClipboardCheck className="w-4 h-4" />
               Persetujuan Mudir ({pendingApprovalsCount})
@@ -516,64 +515,66 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
         </div>
 
         {feedbackBanner && (
-          <div className="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
+          <div className="mt-4 p-3 rounded-lg bg-[#EFF7F2] border border-[#CBE4D5] text-[#35694E] text-xs font-medium flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-[#5D9B7A]" />
             <span>{feedbackBanner}</span>
           </div>
         )}
       </div>
 
-      {/* Top Executive KPI Strip (5 Core Pillars) */}
+      {/* Top Executive KPI Strip (5 Core Pillars - Clean White Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* 1. Akademik */}
         <button
           onClick={() => setActiveSection('AKADEMIK')}
-          className={`text-left p-4 rounded-2xl border transition cursor-pointer bg-white hover:border-indigo-300 shadow-xs ${
-            activeSection === 'AKADEMIK' ? 'ring-2 ring-indigo-600 border-indigo-600' : 'border-slate-200'
+          className={`text-left p-5 rounded-xl border transition cursor-pointer bg-white ${
+            activeSection === 'AKADEMIK'
+              ? 'ring-2 ring-[#24485A] border-[#24485A]'
+              : 'border-[#DCE5E8] hover:border-[#5D8295]'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              A. Akademik
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+            <span className="text-xs font-medium text-[#71818A]">Akademik</span>
+            <div className="w-9 h-9 rounded-lg bg-[#F0F5F7] text-[#24485A] flex items-center justify-center">
               <GraduationCap className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-slate-900 font-mono">{activeStudents.length}</div>
-          <div className="text-xs text-slate-600 mt-0.5">
-            Santri/Siswa &bull; <span className="font-semibold">{activeTeachers.length}</span> Guru
+          <div className="text-2xl font-bold text-[#24343D] font-mono tabular-nums">
+            {activeStudents.length}
           </div>
-          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-500">{activeClasses.length} Rombel</span>
-            <span className="font-semibold text-indigo-600">Nilai {scoreCompletionPct}%</span>
+          <div className="text-xs text-[#71818A] mt-1">
+            Santri Aktif &bull; <span className="font-semibold text-[#24343D]">{activeTeachers.length}</span> Guru
+          </div>
+          <div className="mt-3 pt-2.5 border-t border-[#EDF2F4] flex items-center justify-between text-[11px]">
+            <span className="text-[#71818A]">{activeClasses.length} Rombel</span>
+            <span className="font-semibold text-[#24485A]">Nilai {scoreCompletionPct}%</span>
           </div>
         </button>
 
         {/* 2. Kesantrian */}
         <button
           onClick={() => setActiveSection('KESANTRIAN')}
-          className={`text-left p-4 rounded-2xl border transition cursor-pointer bg-white hover:border-teal-300 shadow-xs ${
-            activeSection === 'KESANTRIAN' ? 'ring-2 ring-teal-600 border-teal-600' : 'border-slate-200'
+          className={`text-left p-5 rounded-xl border transition cursor-pointer bg-white ${
+            activeSection === 'KESANTRIAN'
+              ? 'ring-2 ring-[#24485A] border-[#24485A]'
+              : 'border-[#DCE5E8] hover:border-[#5D8295]'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              B. Kesantrian
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center">
+            <span className="text-xs font-medium text-[#71818A]">Kesantrian</span>
+            <div className="w-9 h-9 rounded-lg bg-[#F0F5F7] text-[#5D8295] flex items-center justify-center">
               <HeartPulse className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-slate-900 font-mono">
+          <div className="text-2xl font-bold text-[#24343D] font-mono tabular-nums">
             {kesantrianMetrics.activeSick + kesantrianMetrics.activeLeave}
           </div>
-          <div className="text-xs text-slate-600 mt-0.5">
-            {kesantrianMetrics.activeSick} Sakit &bull; {kesantrianMetrics.activeLeave} Izin/Pulang
+          <div className="text-xs text-[#71818A] mt-1">
+            {kesantrianMetrics.activeSick} Sakit &bull; {kesantrianMetrics.activeLeave} Izin
           </div>
-          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-500">{kesantrianMetrics.totalViolations} Pelanggaran</span>
-            <span className="font-semibold text-amber-700">
+          <div className="mt-3 pt-2.5 border-t border-[#EDF2F4] flex items-center justify-between text-[11px]">
+            <span className="text-[#71818A]">{kesantrianMetrics.totalViolations} Pelanggaran</span>
+            <span className="font-semibold text-[#B47D1E]">
               {kesantrianMetrics.needFollowUp} Tindak Lanjut
             </span>
           </div>
@@ -582,27 +583,27 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
         {/* 3. Tahfizh */}
         <button
           onClick={() => setActiveSection('TAHFIZH')}
-          className={`text-left p-4 rounded-2xl border transition cursor-pointer bg-white hover:border-emerald-300 shadow-xs ${
-            activeSection === 'TAHFIZH' ? 'ring-2 ring-emerald-600 border-emerald-600' : 'border-slate-200'
+          className={`text-left p-5 rounded-xl border transition cursor-pointer bg-white ${
+            activeSection === 'TAHFIZH'
+              ? 'ring-2 ring-[#24485A] border-[#24485A]'
+              : 'border-[#DCE5E8] hover:border-[#5D8295]'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              C. Tahfizh
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <span className="text-xs font-medium text-[#71818A]">Tahfizh</span>
+            <div className="w-9 h-9 rounded-lg bg-[#EFF7F2] text-[#5D9B7A] flex items-center justify-center">
               <BookOpen className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-slate-900 font-mono">
+          <div className="text-2xl font-bold text-[#24343D] font-mono tabular-nums">
             {tahfizhOverview.avgProgressPct}%
           </div>
-          <div className="text-xs text-slate-600 mt-0.5">
+          <div className="text-xs text-[#71818A] mt-1">
             Capaian Target ({tahfizhOverview.totalActiveTahfizh} Santri)
           </div>
-          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-500">Ziyadah &amp; Murajaah</span>
-            <span className="font-semibold text-emerald-700">
+          <div className="mt-3 pt-2.5 border-t border-[#EDF2F4] flex items-center justify-between text-[11px]">
+            <span className="text-[#71818A]">Ziyadah &amp; Murajaah</span>
+            <span className="font-semibold text-[#5D9B7A]">
               {tahfizhOverview.needAttentionCount} Perhatian
             </span>
           </div>
@@ -611,69 +612,73 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
         {/* 4. ATK & Persediaan */}
         <button
           onClick={() => setActiveSection('ATK')}
-          className={`text-left p-4 rounded-2xl border transition cursor-pointer bg-white hover:border-blue-300 shadow-xs ${
-            activeSection === 'ATK' ? 'ring-2 ring-blue-600 border-blue-600' : 'border-slate-200'
+          className={`text-left p-5 rounded-xl border transition cursor-pointer bg-white ${
+            activeSection === 'ATK'
+              ? 'ring-2 ring-[#24485A] border-[#24485A]'
+              : 'border-[#DCE5E8] hover:border-[#5D8295]'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              D. ATK &amp; Stok
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <span className="text-xs font-medium text-[#71818A]">ATK &amp; Persediaan</span>
+            <div className="w-9 h-9 rounded-lg bg-[#F0F5F7] text-[#24485A] flex items-center justify-center">
               <Package className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-slate-900 font-mono">{atkMetrics.totalItems}</div>
-          <div className="text-xs text-slate-600 mt-0.5">
+          <div className="text-2xl font-bold text-[#24343D] font-mono tabular-nums">
+            {atkMetrics.totalItems}
+          </div>
+          <div className="text-xs text-[#71818A] mt-1">
             {atkMetrics.amanCount} Aman &bull; {atkMetrics.menipisCount} Menipis
           </div>
-          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-rose-600 font-semibold">{atkMetrics.habisCount} Habis</span>
-            <span className="text-slate-500">{atkMetrics.pendingRequestsCount} Permintaan</span>
+          <div className="mt-3 pt-2.5 border-t border-[#EDF2F4] flex items-center justify-between text-[11px]">
+            <span className="text-[#C96A6A] font-semibold">{atkMetrics.habisCount} Habis</span>
+            <span className="text-[#71818A]">{atkMetrics.pendingRequestsCount} Permintaan</span>
           </div>
         </button>
 
         {/* 5. Laporan & Keputusan Pimpinan */}
         <button
           onClick={() => setActiveSection('LAPORAN')}
-          className={`text-left p-4 rounded-2xl border transition cursor-pointer bg-white hover:border-amber-300 shadow-xs ${
-            activeSection === 'LAPORAN' ? 'ring-2 ring-amber-600 border-amber-600' : 'border-slate-200'
+          className={`text-left p-5 rounded-xl border transition cursor-pointer bg-white ${
+            activeSection === 'LAPORAN'
+              ? 'ring-2 ring-[#24485A] border-[#24485A]'
+              : 'border-[#DCE5E8] hover:border-[#5D8295]'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              E. Pimpinan
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+            <span className="text-xs font-medium text-[#71818A]">Keputusan Pimpinan</span>
+            <div className="w-9 h-9 rounded-lg bg-[#FDF7EB] text-[#D6A64A] flex items-center justify-center">
               <ClipboardCheck className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-slate-900 font-mono">{pendingApprovalsCount}</div>
-          <div className="text-xs text-slate-600 mt-0.5">Menunggu Persetujuan Mudir</div>
-          <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-500">{directives.length} Arahan Aktif</span>
-            <span className="font-semibold text-amber-700">Tinjau &rarr;</span>
+          <div className="text-2xl font-bold text-[#24343D] font-mono tabular-nums">
+            {pendingApprovalsCount}
+          </div>
+          <div className="text-xs text-[#71818A] mt-1">Menunggu Persetujuan</div>
+          <div className="mt-3 pt-2.5 border-t border-[#EDF2F4] flex items-center justify-between text-[11px]">
+            <span className="text-[#71818A]">{directives.length} Arahan Aktif</span>
+            <span className="font-semibold text-[#24485A]">Tinjau &rarr;</span>
           </div>
         </button>
       </div>
 
       {/* Clean Section Navigation Bar */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-1.5 flex flex-wrap items-center gap-1 shadow-2xs">
+      <div className="bg-white rounded-xl border border-[#DCE5E8] p-1.5 flex flex-wrap items-center gap-1">
         {[
           { id: 'OVERVIEW', label: 'Ringkasan Eksekutif & Persetujuan' },
-          { id: 'AKADEMIK', label: 'A. Akademik' },
-          { id: 'KESANTRIAN', label: 'B. Kesantrian' },
-          { id: 'TAHFIZH', label: 'C. Tahfizh' },
-          { id: 'ATK', label: 'D. ATK & Persediaan' },
-          { id: 'LAPORAN', label: 'E. Laporan & Arahan Pimpinan' },
+          { id: 'AKADEMIK', label: 'Akademik' },
+          { id: 'KESANTRIAN', label: 'Kesantrian' },
+          { id: 'TAHFIZH', label: 'Tahfizh' },
+          { id: 'ATK', label: 'ATK & Persediaan' },
+          { id: 'LAPORAN', label: 'Laporan & Arahan Pimpinan' },
         ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveSection(tab.id as any)}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer ${
+            className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition cursor-pointer ${
               activeSection === tab.id
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                ? 'bg-[#24485A] text-white'
+                : 'text-[#71818A] hover:text-[#24343D] hover:bg-[#F4F7F8]'
             }`}
           >
             {tab.label}
@@ -1074,39 +1079,48 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/70">
-              <div className="text-[11px] text-slate-500">Total Santri</div>
-              <div className="text-xl font-bold text-slate-900 font-mono mt-1">
+            <div className="p-4 rounded-xl bg-white border border-[#DCE5E8]">
+              <div className="text-xs text-[#71818A]">Total Santri</div>
+              <div className="text-xl font-bold text-[#24343D] font-mono mt-1">
                 {activeStudents.length}
               </div>
             </div>
-            <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200">
-              <div className="text-[11px] text-rose-700">Santri Sakit</div>
-              <div className="text-xl font-bold text-rose-800 font-mono mt-1">
+            <div className="p-4 rounded-xl bg-white border border-[#DCE5E8]">
+              <div className="text-xs text-[#71818A] flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#D6A64A]" />
+                Santri Sakit
+              </div>
+              <div className="text-xl font-bold text-[#B47D1E] font-mono mt-1">
                 {kesantrianMetrics.activeSick}
               </div>
             </div>
-            <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200">
-              <div className="text-[11px] text-blue-700">Izin / Pulang</div>
-              <div className="text-xl font-bold text-blue-800 font-mono mt-1">
+            <div className="p-4 rounded-xl bg-white border border-[#DCE5E8]">
+              <div className="text-xs text-[#71818A] flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#6C91A8]" />
+                Izin / Pulang
+              </div>
+              <div className="text-xl font-bold text-[#3D6B82] font-mono mt-1">
                 {kesantrianMetrics.activeLeave}
               </div>
             </div>
-            <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200">
-              <div className="text-[11px] text-amber-800">Belum Kembali</div>
-              <div className="text-xl font-bold text-amber-900 font-mono mt-1">
+            <div className="p-4 rounded-xl bg-white border border-[#DCE5E8]">
+              <div className="text-xs text-[#71818A] flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#C96A6A]" />
+                Belum Kembali
+              </div>
+              <div className="text-xl font-bold text-[#A84343] font-mono mt-1">
                 {kesantrianMetrics.overdueLeave}
               </div>
             </div>
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/70">
-              <div className="text-[11px] text-slate-500">Pelanggaran</div>
-              <div className="text-xl font-bold text-slate-900 font-mono mt-1">
+            <div className="p-4 rounded-xl bg-white border border-[#DCE5E8]">
+              <div className="text-xs text-[#71818A]">Pelanggaran</div>
+              <div className="text-xl font-bold text-[#24343D] font-mono mt-1">
                 {kesantrianMetrics.totalViolations}
               </div>
             </div>
-            <div className="p-3.5 rounded-xl bg-teal-50/70 border border-teal-200">
-              <div className="text-[11px] text-teal-800">Rekap Mabit</div>
-              <div className="text-xl font-bold text-teal-900 font-mono mt-1">
+            <div className="p-4 rounded-xl bg-white border border-[#DCE5E8]">
+              <div className="text-xs text-[#71818A]">Rekap Mabit</div>
+              <div className="text-xl font-bold text-[#24485A] font-mono mt-1">
                 {kesantrianMetrics.totalMabit}
               </div>
             </div>
@@ -1269,39 +1283,51 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/70">
-              <div className="text-[11px] text-slate-500">Total Jenis Barang</div>
-              <div className="text-xl font-bold text-slate-900 font-mono mt-1">
+            <div className="p-4 rounded-xl bg-white border border-[#DCE5E8]">
+              <div className="text-xs text-[#71818A]">Total Jenis Barang</div>
+              <div className="text-xl font-bold text-[#24343D] font-mono mt-1">
                 {atkMetrics.totalItems}
               </div>
             </div>
-            <div className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200">
-              <div className="text-[11px] text-emerald-800">Stok Aman</div>
-              <div className="text-xl font-bold text-emerald-900 font-mono mt-1">
+            <div className="p-4 rounded-xl bg-white border border-[#DCE5E8]">
+              <div className="text-xs text-[#71818A] flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#5D9B7A]" />
+                Stok Aman
+              </div>
+              <div className="text-xl font-bold text-[#35694E] font-mono mt-1">
                 {atkMetrics.amanCount}
               </div>
             </div>
-            <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200">
-              <div className="text-[11px] text-amber-800">Stok Menipis</div>
-              <div className="text-xl font-bold text-amber-900 font-mono mt-1">
+            <div className="p-4 rounded-xl bg-white border border-[#DCE5E8]">
+              <div className="text-xs text-[#71818A] flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#D6A64A]" />
+                Stok Menipis
+              </div>
+              <div className="text-xl font-bold text-[#B47D1E] font-mono mt-1">
                 {atkMetrics.menipisCount}
               </div>
             </div>
-            <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200">
-              <div className="text-[11px] text-rose-800">Barang Habis</div>
-              <div className="text-xl font-bold text-rose-900 font-mono mt-1">
+            <div className="p-4 rounded-xl bg-white border border-[#DCE5E8]">
+              <div className="text-xs text-[#71818A] flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#C96A6A]" />
+                Barang Habis
+              </div>
+              <div className="text-xl font-bold text-[#A84343] font-mono mt-1">
                 {atkMetrics.habisCount}
               </div>
             </div>
-            <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200">
-              <div className="text-[11px] text-blue-800">Permintaan ATK</div>
-              <div className="text-xl font-bold text-blue-900 font-mono mt-1">
+            <div className="p-4 rounded-xl bg-white border border-[#DCE5E8]">
+              <div className="text-xs text-[#71818A] flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#6C91A8]" />
+                Permintaan ATK
+              </div>
+              <div className="text-xl font-bold text-[#24485A] font-mono mt-1">
                 {atkMetrics.pendingRequestsCount}
               </div>
             </div>
-            <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200">
-              <div className="text-[11px] text-indigo-800">Pengadaan Berjalan</div>
-              <div className="text-xl font-bold text-indigo-900 font-mono mt-1">
+            <div className="p-4 rounded-xl bg-white border border-[#DCE5E8]">
+              <div className="text-xs text-[#71818A]">Pengadaan Berjalan</div>
+              <div className="text-xl font-bold text-[#24343D] font-mono mt-1">
                 {atkMetrics.ongoingProcurementCount}
               </div>
             </div>

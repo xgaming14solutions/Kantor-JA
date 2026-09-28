@@ -527,9 +527,9 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
               MODUL AKSARA &bull; INVENTARIS & LOGISTIK SEKOLAH
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1 tracking-tight flex items-center gap-2">
-              <span>📦 ATK & Persediaan Kantor</span>
+              <span>ATK &amp; Persediaan Kantor</span>
             </h2>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-[#71818A] mt-1">
               {isMudirSupervisor
                 ? 'Supervisi persediaan stok ATK, riwayat barang masuk & keluar, permintaan unit, pengadaan, dan laporan penggunaan (Mode Pantau Mudir).'
                 : isAdminOrHeadmaster
@@ -542,16 +542,16 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => handleSectionSelect('INCOMING', 'atk-incoming')}
-                className="px-3.5 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2 text-xs font-semibold text-[#35694E] bg-[#EFF7F2] hover:bg-[#CBE4D5]/50 border border-[#CBE4D5] rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer"
               >
-                <ArrowDownCircle className="w-4 h-4" />
+                <ArrowDownCircle className="w-4 h-4 text-[#5D9B7A]" />
                 + Barang Masuk
               </button>
               <button
                 onClick={() => handleSectionSelect('OUTGOING', 'atk-outgoing')}
-                className="px-3.5 py-2 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2 text-xs font-semibold text-[#B47D1E] bg-[#FDF7EB] hover:bg-[#F3DFB8]/50 border border-[#F3DFB8] rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer"
               >
-                <ArrowUpCircle className="w-4 h-4" />
+                <ArrowUpCircle className="w-4 h-4 text-[#D6A64A]" />
                 + Barang Keluar
               </button>
               <button
@@ -559,7 +559,7 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
                   handleSectionSelect('ITEMS', 'atk-items');
                   openAddItemModal();
                 }}
-                className="px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer"
+                className="px-3.5 py-2 text-xs font-semibold text-white bg-[#24485A] hover:bg-[#1C3948] rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 Tambah Barang
@@ -569,18 +569,18 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
         </div>
 
         {/* Sub-navigation Bar */}
-        <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-xl">
+        <div className="flex flex-wrap items-center gap-1 p-1 bg-[#F4F7F8] border border-[#DCE5E8] rounded-xl">
           {canViewAllAtkSections && (
             <button
               onClick={() => handleSectionSelect('DASHBOARD', 'atk-dashboard')}
               className={`px-3 py-2 text-xs font-semibold rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                 activeSection === 'DASHBOARD'
-                  ? 'bg-white text-indigo-600 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-[#24485A] text-white shadow-2xs'
+                  : 'text-[#71818A] hover:text-[#24343D]'
               }`}
             >
               <LayoutDashboard className="w-3.5 h-3.5" />
-              📦 Ringkasan Persediaan
+              Ringkasan Persediaan
             </button>
           )}
 
@@ -588,12 +588,12 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
             onClick={() => handleSectionSelect('ITEMS', 'atk-items')}
             className={`px-3 py-2 text-xs font-semibold rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
               activeSection === 'ITEMS'
-                ? 'bg-white text-indigo-600 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-[#24485A] text-white shadow-2xs'
+                : 'text-[#71818A] hover:text-[#24343D]'
             }`}
           >
             <Package className="w-3.5 h-3.5" />
-            📋 Daftar Barang
+            Daftar Barang
           </button>
 
           {canViewAllAtkSections && (
@@ -602,24 +602,24 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
                 onClick={() => handleSectionSelect('INCOMING', 'atk-incoming')}
                 className={`px-3 py-2 text-xs font-semibold rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   activeSection === 'INCOMING'
-                    ? 'bg-white text-indigo-600 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-[#24485A] text-white shadow-2xs'
+                    : 'text-[#71818A] hover:text-[#24343D]'
                 }`}
               >
                 <ArrowDownCircle className="w-3.5 h-3.5" />
-                📥 Barang Masuk
+                Barang Masuk
               </button>
 
               <button
                 onClick={() => handleSectionSelect('OUTGOING', 'atk-outgoing')}
                 className={`px-3 py-2 text-xs font-semibold rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   activeSection === 'OUTGOING'
-                    ? 'bg-white text-indigo-600 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-[#24485A] text-white shadow-2xs'
+                    : 'text-[#71818A] hover:text-[#24343D]'
                 }`}
               >
                 <ArrowUpCircle className="w-3.5 h-3.5" />
-                📤 Barang Keluar
+                Barang Keluar
               </button>
             </>
           )}
@@ -628,15 +628,21 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
             onClick={() => handleSectionSelect('REQUESTS', 'atk-requests')}
             className={`px-3 py-2 text-xs font-semibold rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
               activeSection === 'REQUESTS'
-                ? 'bg-white text-indigo-600 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-[#24485A] text-white shadow-2xs'
+                : 'text-[#71818A] hover:text-[#24343D]'
             }`}
           >
             <ClipboardList className="w-3.5 h-3.5" />
-            {canViewAllAtkSections ? '📋 Permintaan ATK' : '📝 Permintaan ATK'}
+            Permintaan ATK
             {canViewAllAtkSections && dashboardMetrics.permintaanMenunggu > 0 && (
-              <span className="font-mono font-bold text-amber-700">
-                ({dashboardMetrics.permintaanMenunggu})
+              <span
+                className={`font-mono font-bold px-1.5 py-0.5 rounded text-[10px] ${
+                  activeSection === 'REQUESTS'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-[#FDF7EB] text-[#B47D1E]'
+                }`}
+              >
+                {dashboardMetrics.permintaanMenunggu}
               </span>
             )}
           </button>
@@ -647,36 +653,36 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
                 onClick={() => handleSectionSelect('RESTOCK', 'atk-restock')}
                 className={`px-3 py-2 text-xs font-semibold rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   activeSection === 'RESTOCK'
-                    ? 'bg-white text-indigo-600 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-[#24485A] text-white shadow-2xs'
+                    : 'text-[#71818A] hover:text-[#24343D]'
                 }`}
               >
                 <ShoppingCart className="w-3.5 h-3.5" />
-                🛒 Pengadaan ({dashboardMetrics.perluDibeli})
+                Pengadaan ({dashboardMetrics.perluDibeli})
               </button>
 
               <button
                 onClick={() => handleSectionSelect('HISTORY', 'atk-history')}
                 className={`px-3 py-2 text-xs font-semibold rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   activeSection === 'HISTORY'
-                    ? 'bg-white text-indigo-600 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-[#24485A] text-white shadow-2xs'
+                    : 'text-[#71818A] hover:text-[#24343D]'
                 }`}
               >
                 <History className="w-3.5 h-3.5" />
-                🔄 Riwayat Transaksi
+                Riwayat Transaksi
               </button>
 
               <button
                 onClick={() => handleSectionSelect('REPORTS', 'atk-reports')}
                 className={`px-3 py-2 text-xs font-semibold rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   activeSection === 'REPORTS'
-                    ? 'bg-white text-indigo-600 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-[#24485A] text-white shadow-2xs'
+                    : 'text-[#71818A] hover:text-[#24343D]'
                 }`}
               >
                 <BarChart3 className="w-3.5 h-3.5" />
-                📊 Laporan ATK
+                Laporan ATK
               </button>
             </>
           )}
@@ -688,41 +694,45 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
         <div
           className={`p-4 rounded-xl border text-xs font-medium flex items-center justify-between ${
             banner.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-              : 'bg-rose-50 border-rose-200 text-rose-800'
+              ? 'bg-[#EFF7F2] border-[#CBE4D5] text-[#35694E]'
+              : 'bg-[#FBF1F1] border-[#EFCBCA] text-[#A84343]'
           }`}
         >
           <div className="flex items-center gap-2">
             {banner.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <CheckCircle2 className="w-4 h-4 text-[#5D9B7A] shrink-0" />
             ) : (
-              <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <XCircle className="w-4 h-4 text-[#C96A6A] shrink-0" />
             )}
             <span>{banner.message}</span>
           </div>
-          <button onClick={() => setBanner(null)} className="text-slate-400 hover:text-slate-600">
+          <button onClick={() => setBanner(null)} className="text-[#71818A] hover:text-[#24343D]">
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
       {/* ==================================================================== */}
-      {/* 2. 📦 DASHBOARD ATK & PERSEDIAAN */}
+      {/* 2. DASHBOARD ATK & PERSEDIAAN (CLEAN ENTERPRISE INVENTORY VIEW) */}
       {/* ==================================================================== */}
       {activeSection === 'DASHBOARD' && canViewAllAtkSections && (
         <div className="space-y-6">
-          {/* 6 Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          {/* 5 Clean White Summary Cards (Section 8) */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             <button
               onClick={() => handleSectionSelect('ITEMS', 'atk-items')}
-              className="text-left bg-white border border-slate-200 hover:border-indigo-300 rounded-2xl p-4 shadow-xs transition cursor-pointer"
+              className="text-left bg-white border border-[#DCE5E8] hover:border-[#5D8295] rounded-xl p-5 transition cursor-pointer"
             >
-              <div className="text-xs font-medium text-slate-500">Total Jenis Barang</div>
-              <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums mt-1">
-                {dashboardMetrics.totalJenis}{' '}
-                <span className="text-xs font-sans font-normal text-slate-500">jenis</span>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-[#71818A]">Total Jenis Barang</span>
+                <div className="w-8 h-8 rounded-lg bg-[#F0F5F7] text-[#24485A] flex items-center justify-center">
+                  <Package className="w-4 h-4" />
+                </div>
               </div>
-              <div className="text-[11px] text-slate-400 mt-1">Master barang aktif</div>
+              <div className="text-2xl font-bold text-[#24343D] font-mono tabular-nums">
+                {dashboardMetrics.totalJenis}
+              </div>
+              <div className="text-[11px] text-[#71818A] mt-1">Master barang aktif</div>
             </button>
 
             <button
@@ -730,13 +740,18 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
                 setItemStatusFilter('Stok Aman');
                 handleSectionSelect('ITEMS', 'atk-items');
               }}
-              className="text-left bg-white border border-emerald-200 hover:border-emerald-400 rounded-2xl p-4 shadow-xs transition cursor-pointer"
+              className="text-left bg-white border border-[#DCE5E8] hover:border-[#5D9B7A] rounded-xl p-5 transition cursor-pointer"
             >
-              <div className="text-xs font-semibold text-emerald-700">🟢 Stok Aman</div>
-              <div className="text-2xl font-bold text-emerald-900 font-mono tabular-nums mt-1">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-[#71818A]">Stok Aman</span>
+                <div className="w-8 h-8 rounded-lg bg-[#EFF7F2] text-[#5D9B7A] flex items-center justify-center">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-2xl font-bold text-[#35694E] font-mono tabular-nums">
                 {dashboardMetrics.stokAman}
               </div>
-              <div className="text-[11px] text-emerald-600 mt-1">Stok &gt; batas minimum</div>
+              <div className="text-[11px] text-[#71818A] mt-1">Di atas batas minimum</div>
             </button>
 
             <button
@@ -744,13 +759,18 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
                 setItemStatusFilter('Stok Menipis');
                 handleSectionSelect('ITEMS', 'atk-items');
               }}
-              className="text-left bg-white border border-amber-200 hover:border-amber-400 rounded-2xl p-4 shadow-xs transition cursor-pointer"
+              className="text-left bg-white border border-[#DCE5E8] hover:border-[#D6A64A] rounded-xl p-5 transition cursor-pointer"
             >
-              <div className="text-xs font-semibold text-amber-700">🟡 Stok Menipis</div>
-              <div className="text-2xl font-bold text-amber-900 font-mono tabular-nums mt-1">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-[#71818A]">Stok Menipis</span>
+                <div className="w-8 h-8 rounded-lg bg-[#FDF7EB] text-[#D6A64A] flex items-center justify-center">
+                  <AlertTriangle className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-2xl font-bold text-[#B47D1E] font-mono tabular-nums">
                 {dashboardMetrics.stokMenipis}
               </div>
-              <div className="text-[11px] text-amber-700 mt-1">Stok &le; batas minimum</div>
+              <div className="text-[11px] text-[#71818A] mt-1">Stok &le; batas minimum</div>
             </button>
 
             <button
@@ -758,56 +778,119 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
                 setItemStatusFilter('Habis');
                 handleSectionSelect('ITEMS', 'atk-items');
               }}
-              className="text-left bg-white border border-rose-200 hover:border-rose-400 rounded-2xl p-4 shadow-xs transition cursor-pointer"
+              className="text-left bg-white border border-[#DCE5E8] hover:border-[#C96A6A] rounded-xl p-5 transition cursor-pointer"
             >
-              <div className="text-xs font-semibold text-rose-700">🔴 Barang Habis</div>
-              <div className="text-2xl font-bold text-rose-900 font-mono tabular-nums mt-1">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-[#71818A]">Barang Habis</span>
+                <div className="w-8 h-8 rounded-lg bg-[#FBF1F1] text-[#C96A6A] flex items-center justify-center">
+                  <XCircle className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-2xl font-bold text-[#A84343] font-mono tabular-nums">
                 {dashboardMetrics.habis}
               </div>
-              <div className="text-[11px] text-rose-600 mt-1">Stok saat ini = 0</div>
+              <div className="text-[11px] text-[#71818A] mt-1">Stok saat ini = 0</div>
             </button>
 
             <button
               onClick={() => handleSectionSelect('REQUESTS', 'atk-requests')}
-              className="text-left bg-white border border-indigo-200 hover:border-indigo-400 rounded-2xl p-4 shadow-xs transition cursor-pointer"
+              className="text-left bg-white border border-[#DCE5E8] hover:border-[#6C91A8] rounded-xl p-5 transition cursor-pointer"
             >
-              <div className="text-xs font-semibold text-indigo-700">Permintaan Menunggu</div>
-              <div className="text-2xl font-bold text-indigo-900 font-mono tabular-nums mt-1">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-[#71818A]">Permintaan ATK</span>
+                <div className="w-8 h-8 rounded-lg bg-[#F1F6F9] text-[#6C91A8] flex items-center justify-center">
+                  <ClipboardList className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-2xl font-bold text-[#24485A] font-mono tabular-nums">
                 {dashboardMetrics.permintaanMenunggu}
               </div>
-              <div className="text-[11px] text-indigo-600 mt-1">
-                +{dashboardMetrics.disetujuiBelumDiberikan} disetujui blm diberikan
+              <div className="text-[11px] text-[#71818A] mt-1">
+                +{dashboardMetrics.disetujuiBelumDiberikan} disetujui blm diserahkan
               </div>
-            </button>
-
-            <button
-              onClick={() => handleSectionSelect('RESTOCK', 'atk-restock')}
-              className="text-left bg-white border border-rose-200 hover:border-rose-400 rounded-2xl p-4 shadow-xs transition cursor-pointer"
-            >
-              <div className="text-xs font-semibold text-rose-700">🛒 Perlu Dibeli</div>
-              <div className="text-2xl font-bold text-rose-900 font-mono tabular-nums mt-1">
-                {dashboardMetrics.perluDibeli}
-              </div>
-              <div className="text-[11px] text-rose-600 mt-1">Rekomendasi pengadaan</div>
             </button>
           </div>
 
-          {/* 🔴 PERLU PERHATIAN SECTION */}
-          <div className="bg-white border border-rose-200 rounded-2xl overflow-hidden shadow-xs">
-            <div className="p-5 sm:px-6 border-b border-rose-100 bg-rose-50/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* Visual Bar Chart: Perbandingan Stok Saat Ini vs Stok Minimum */}
+          <div className="bg-white border border-[#DCE5E8] rounded-xl p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-4 border-b border-[#EDF2F4]">
               <div>
-                <h3 className="text-sm font-bold text-rose-900 flex items-center gap-2">
-                  <span>🔴 PERLU PERHATIAN</span>
+                <h3 className="text-sm font-semibold text-[#24343D]">
+                  Grafik Perbandingan Stok Saat Ini vs Stok Minimum
                 </h3>
-                <p className="text-xs text-rose-700 mt-0.5">
-                  Daftar barang yang stoknya sudah habis, berada di bawah/sama dengan batas minimum, atau tidak mencukupi untuk memenuhi permintaan guru yang sudah disetujui.
+                <p className="text-xs text-[#71818A] mt-0.5">
+                  Pemantauan visual rasio ketersediaan barang terhadap ambang batas minimum gudang
+                </p>
+              </div>
+              <div className="flex items-center gap-4 text-[11px] text-[#71818A]">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-xs bg-[#5D9B7A]" /> Aman
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-xs bg-[#D6A64A]" /> Menipis
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-xs bg-[#C96A6A]" /> Habis
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3.5 pt-4">
+              {activeAtkItems.slice(0, 8).map((item) => {
+                const status = calculateAtkStockStatus(item.stokSaatIni, item.stokMinimum);
+                const maxScale = Math.max(item.stokSaatIni, item.stokMinimum * 2, 10);
+                const currentPct = Math.min(100, Math.round((item.stokSaatIni / maxScale) * 100));
+                const minPct = Math.min(100, Math.round((item.stokMinimum / maxScale) * 100));
+                const barColor =
+                  status === 'Habis'
+                    ? 'bg-[#C96A6A]'
+                    : status === 'Stok Menipis'
+                    ? 'bg-[#D6A64A]'
+                    : 'bg-[#5D9B7A]';
+
+                return (
+                  <div key={item.id} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium text-[#24343D] truncate">{item.name}</span>
+                      <span className="font-mono text-[11px] text-[#71818A] shrink-0">
+                        <strong className="text-[#24343D]">{item.stokSaatIni}</strong> / min{' '}
+                        {item.stokMinimum} {item.unit}
+                      </span>
+                    </div>
+                    <div className="relative h-2.5 w-full bg-[#EDF2F4] rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${barColor}`}
+                        style={{ width: `${Math.max(currentPct, item.stokSaatIni > 0 ? 5 : 0)}%` }}
+                      />
+                      <div
+                        className="absolute top-0 bottom-0 w-0.5 bg-[#24343D]/50"
+                        style={{ left: `${minPct}%` }}
+                        title={`Stok Minimum: ${item.stokMinimum} ${item.unit}`}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* PERLU PERHATIAN SECTION */}
+          <div className="bg-white border border-[#DCE5E8] rounded-xl overflow-hidden">
+            <div className="p-5 border-b border-[#EDF2F4] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-[#24343D] flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#C96A6A]" />
+                  <span>Barang Perlu Perhatian &amp; Pengadaan</span>
+                </h3>
+                <p className="text-xs text-[#71818A] mt-0.5">
+                  Daftar barang yang stoknya habis, berada pada batas minimum, atau dibutuhkan untuk permintaan guru.
                 </p>
               </div>
               <button
                 onClick={() => handleSectionSelect('RESTOCK', 'atk-restock')}
-                className="px-3.5 py-2 text-xs font-semibold text-rose-700 bg-white hover:bg-rose-100 border border-rose-200 rounded-xl transition cursor-pointer self-start sm:self-center whitespace-nowrap"
+                className="px-3.5 py-2 text-xs font-semibold text-[#24485A] bg-[#F4F7F8] hover:bg-[#EBF1F4] border border-[#DCE5E8] rounded-lg transition cursor-pointer self-start sm:self-center whitespace-nowrap"
               >
-                Buka Daftar Belanja ({restockList.length}) &rarr;
+                Daftar Pengadaan ({restockList.length}) &rarr;
               </button>
             </div>
 
