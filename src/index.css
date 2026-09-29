@@ -159,23 +159,39 @@ body {
   font-family: 'Cormorant Garamond', 'Amiri', Georgia, serif;
 }
 
-@page {
-  size: A4 portrait;
-  margin: 8mm 10mm 8mm 10mm;
-}
-
 @media print {
-  body {
+  html,
+  body,
+  #root {
     background-color: #ffffff !important;
     color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    overflow: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+
   header,
   aside,
   nav,
   button,
   .no-print {
     display: none !important;
+  }
+
+  .report-card-page {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-sizing: border-box;
+  }
+
+  .report-card-page-break {
+    break-after: page;
+    page-break-after: always;
   }
 }

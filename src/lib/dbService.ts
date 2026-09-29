@@ -384,6 +384,24 @@ function safeSetItem(key: string, value: string): void {
     try {
       localStorage.setItem(key, value);
     } catch (e) {
+      // If quota exceeded when saving critical school identity, free up non-essential cache keys and retry
+      if (key === 'kantoja_school_identity' || key === 'kantoja_school_logo_url') {
+        try {
+          const removableKeys = [
+            'kantoja_academicSettingLogs',
+            'kantoja_academicSettings',
+            'kantoja_atkTransactions',
+            'kantoja_kesantrianRecords',
+            'kantoja_scores',
+            'kantoja_attendance',
+          ];
+          removableKeys.forEach((k) => localStorage.removeItem(k));
+          localStorage.setItem(key, value);
+          return;
+        } catch (retryErr) {
+          console.warn('Storage retry failed:', retryErr);
+        }
+      }
       console.warn('Storage set failed:', e);
     }
   }
@@ -467,7 +485,12 @@ export async function fetchCollection<T extends { id: string }>(
 
   // Save the normalized list back to cache only if Firestore read succeeded or cache already existed
   if (firestoreReadSucceeded) {
-    safeSetItem(`kantoja_${collectionName}`, JSON.stringify(items));
+    // Exclude school_identity from kantoja_academicSettings cache to avoid duplicating logoUrl in localStorage
+    const toCache =
+      collectionName === 'academicSettings'
+        ? items.filter((item: any) => item.id !== 'school_identity')
+        : items;
+    safeSetItem(`kantoja_${collectionName}`, JSON.stringify(toCache));
   }
   return items;
 }
@@ -770,9 +793,17 @@ export function normalizeSchoolIdentity(raw: any): SchoolIdentity {
 
 export function getInitialSchoolIdentity(): SchoolIdentity {
   try {
+    const dedicatedLogo = safeGetItem('kantoja_school_logo_url');
     const cached = safeGetItem('kantoja_school_identity');
     if (cached) {
-      return normalizeSchoolIdentity(JSON.parse(cached));
+      const parsed = normalizeSchoolIdentity(JSON.parse(cached));
+      if (!parsed.logoUrl && dedicatedLogo !== null) {
+        parsed.logoUrl = dedicatedLogo;
+      }
+      return parsed;
+    }
+    if (dedicatedLogo) {
+      return { ...DEFAULT_SCHOOL_IDENTITY, logoUrl: dedicatedLogo };
     }
   } catch {
     // ignore parse errors
@@ -781,55 +812,128 @@ export function getInitialSchoolIdentity(): SchoolIdentity {
 }
 
 export async function fetchSchoolIdentity(): Promise<SchoolIdentity> {
-  // 1. Read local cache first
+  // 1. Read local cache
   let cachedIdentity: SchoolIdentity | null = null;
+  const dedicatedLogo = safeGetItem('kantoja_school_logo_url');
   try {
     const cached = safeGetItem('kantoja_school_identity');
     if (cached) {
       cachedIdentity = normalizeSchoolIdentity(JSON.parse(cached));
+      if (!cachedIdentity.logoUrl && dedicatedLogo) {
+        cachedIdentity.logoUrl = dedicatedLogo;
+      }
     }
   } catch (err) {
     console.warn('Error reading school identity from localStorage:', err);
   }
 
-  // 2. Read from Firestore document academicSettings/school_identity
-  try {
-    const snap = await getDoc(doc(db, 'academicSettings', 'school_identity'));
-    if (snap.exists()) {
-      const firestoreIdentity = normalizeSchoolIdentity({ id: snap.id, ...snap.data() });
-      // If cachedIdentity has a newer updatedAt than Firestore, keep cachedIdentity and sync to Firestore
-      if (
-        cachedIdentity?.updatedAt &&
-        (!firestoreIdentity.updatedAt || cachedIdentity.updatedAt >= firestoreIdentity.updatedAt)
-      ) {
-        setDoc(
-          doc(db, 'academicSettings', 'school_identity'),
-          sanitizeDataForFirestore(cachedIdentity),
-          { merge: true }
-        ).catch(() => {});
-        safeSetItem('kantoja_school_identity', JSON.stringify(cachedIdentity));
-        return cachedIdentity;
+  // 2. Read from Backend Server (/api/school-identity) and Firestore (academicSettings/school_identity) in parallel
+  const docRef = doc(db, 'academicSettings', 'school_identity');
+
+  const fetchServerPromise: Promise<SchoolIdentity | null> = (async () => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const res = await fetch('/api/school-identity', {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (json?.success && json?.data && typeof json.data === 'object') {
+        return normalizeSchoolIdentity(json.data);
       }
-      safeSetItem('kantoja_school_identity', JSON.stringify(firestoreIdentity));
-      return firestoreIdentity;
-    } else {
-      // Seed initial school_identity document into Firestore so it exists persistently
-      const initialToSave = cachedIdentity || { ...DEFAULT_SCHOOL_IDENTITY };
-      safeSetItem('kantoja_school_identity', JSON.stringify(initialToSave));
-      setDoc(
-        doc(db, 'academicSettings', 'school_identity'),
-        sanitizeDataForFirestore(initialToSave),
-        { merge: true }
-      ).catch(() => {});
-      return initialToSave;
+    } catch {
+      // ignore if endpoint unreachable
     }
-  } catch (e) {
-    console.warn('Error fetching school identity from Firestore:', e);
+    return null;
+  })();
+
+  const fetchFirestorePromise: Promise<SchoolIdentity | null> = (async () => {
+    try {
+      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000));
+      const getTask = (async () => {
+        try {
+          const snap = await getDocFromServer(docRef);
+          if (snap.exists()) {
+            return normalizeSchoolIdentity({ id: snap.id, ...snap.data() });
+          }
+          return null;
+        } catch {
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            return normalizeSchoolIdentity({ id: snap.id, ...snap.data() });
+          }
+          return null;
+        }
+      })();
+      return await Promise.race([getTask, timeout]);
+    } catch {
+      return null;
+    }
+  })();
+
+  const [serverIdentity, firestoreIdentity] = await Promise.all([
+    fetchServerPromise,
+    fetchFirestorePromise,
+  ]);
+
+  // Pick the most recent authoritative identity across Firestore, Server, and Local Cache
+  const candidates = [firestoreIdentity, serverIdentity, cachedIdentity].filter(
+    (item): item is SchoolIdentity => item !== null
+  );
+
+  if (candidates.length > 0) {
+    candidates.sort((a, b) => {
+      const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      if (timeA !== timeB) return timeB - timeA;
+      // Tie-breaker: prefer candidate with non-empty logoUrl
+      if (a.logoUrl && !b.logoUrl) return -1;
+      if (!a.logoUrl && b.logoUrl) return 1;
+      return 0;
+    });
+
+    const winner = candidates[0];
+
+    // Ensure local cache, server, and Firestore are all in sync with the winner
+    safeSetItem('kantoja_school_identity', JSON.stringify(winner));
+    safeSetItem('kantoja_school_logo_url', winner.logoUrl || '');
+
+    if (
+      !firestoreIdentity ||
+      (winner.updatedAt && firestoreIdentity.updatedAt !== winner.updatedAt) ||
+      firestoreIdentity.logoUrl !== winner.logoUrl
+    ) {
+      setDoc(docRef, sanitizeDataForFirestore(winner), { merge: true }).catch(() => {});
+    }
+
+    if (
+      typeof window !== 'undefined' &&
+      (!serverIdentity ||
+        (winner.updatedAt && serverIdentity.updatedAt !== winner.updatedAt) ||
+        serverIdentity.logoUrl !== winner.logoUrl)
+    ) {
+      fetch('/api/school-identity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(winner),
+      }).catch(() => {});
+    }
+
+    return winner;
   }
 
-  const fallback = cachedIdentity || { ...DEFAULT_SCHOOL_IDENTITY };
-  safeSetItem('kantoja_school_identity', JSON.stringify(fallback));
-  return fallback;
+  // Seed initial school_identity document if none exists yet
+  const initialToSave: SchoolIdentity = {
+    ...DEFAULT_SCHOOL_IDENTITY,
+    logoUrl: dedicatedLogo || '',
+    updatedAt: new Date().toISOString(),
+  };
+  safeSetItem('kantoja_school_identity', JSON.stringify(initialToSave));
+  safeSetItem('kantoja_school_logo_url', initialToSave.logoUrl || '');
+  setDoc(docRef, sanitizeDataForFirestore(initialToSave), { merge: true }).catch(() => {});
+  return initialToSave;
 }
 
 export async function fetchAtkConfig(): Promise<{ allowTeacherViewAtkStock: boolean }> {
@@ -905,14 +1009,45 @@ export async function saveSchoolIdentityDoc(data: Partial<SchoolIdentity>): Prom
   };
   const sanitized = sanitizeDataForFirestore(normalized);
 
-  // 1. Always persist to local cache immediately
+  // 1. Update local cache immediately
   safeSetItem('kantoja_school_identity', JSON.stringify(sanitized));
+  safeSetItem('kantoja_school_logo_url', sanitized.logoUrl || '');
 
-  // 2. Persist to Firestore (academicSettings/school_identity)
-  try {
-    await setDoc(doc(db, 'academicSettings', 'school_identity'), sanitized, { merge: true });
-  } catch (e) {
-    console.warn('Firestore write warning for academicSettings/school_identity (saved to local cache):', e);
+  // 2. Persist to Backend Server (/api/school-identity) and Firestore (academicSettings/school_identity)
+  const docRef = doc(db, 'academicSettings', 'school_identity');
+
+  const saveServerPromise: Promise<boolean> = (async () => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const res = await fetch('/api/school-identity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sanitized),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  })();
+
+  const saveFirestorePromise: Promise<boolean> = (async () => {
+    try {
+      const writeTask = setDoc(docRef, sanitized, { merge: true }).then(() => true);
+      const timeout = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 4500));
+      return await Promise.race([writeTask, timeout]);
+    } catch (e) {
+      console.warn('Firestore write error for academicSettings/school_identity:', e);
+      return false;
+    }
+  })();
+
+  const [serverSaved, firestoreSaved] = await Promise.all([
+    saveServerPromise,
+    saveFirestorePromise,
+  ]);
+
+  if (!serverSaved && !firestoreSaved) {
+    throw new Error('Gagal menyimpan identitas sekolah secara permanen ke database. Periksa koneksi internet Anda.');
   }
 
   return sanitized;

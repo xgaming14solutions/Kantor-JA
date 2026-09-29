@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import {
   AcademicYear,
   Teacher,
@@ -41,6 +43,7 @@ import {
   normalizeScore,
   assertTeacherScoreAccess,
   DEFAULT_SCHOOL_IDENTITY,
+  normalizeSchoolIdentity,
   getInitialSchoolIdentity,
   fetchSchoolIdentity,
   saveSchoolIdentityDoc,
@@ -701,6 +704,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [schoolIdentity, setSchoolIdentity] = useState<SchoolIdentity>(() =>
     getInitialSchoolIdentity()
   );
+  const lastSavedIdentityAtRef = useRef<string>('');
   const [kesantrianRecords, setKesantrianRecords] = useState<KesantrianRecord[]>([]);
   const [kesantrianMedicines, setKesantrianMedicines] = useState<KesantrianMedicine[]>([]);
   const [kesantrianViolationCategories, setKesantrianViolationCategories] = useState<KesantrianViolationCategory[]>(
@@ -958,7 +962,23 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setAttendance(rawAttList);
       setExtracurricularParticipants(rawEksPartList || []);
       setExtracurricularScores(rawEksScoreList || []);
-      setSchoolIdentity(loadedSchoolIdentity);
+      setSchoolIdentity((prev) => {
+        if (
+          lastSavedIdentityAtRef.current &&
+          (!loadedSchoolIdentity.updatedAt ||
+            loadedSchoolIdentity.updatedAt < lastSavedIdentityAtRef.current)
+        ) {
+          return prev;
+        }
+        if (
+          prev.updatedAt &&
+          loadedSchoolIdentity.updatedAt &&
+          prev.updatedAt > loadedSchoolIdentity.updatedAt
+        ) {
+          return prev;
+        }
+        return loadedSchoolIdentity;
+      });
       setKesantrianRecords(
         (rawKesantrianRecords || []).sort(
           (a, b) => new Date(b.date || b.createdAt || '').getTime() - new Date(a.date || a.createdAt || '').getTime()
@@ -1050,6 +1070,41 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   useEffect(() => {
     refreshAll();
   }, [currentUser?.uid, currentUser?.id]);
+
+  // Real-time Firestore listener for academicSettings/school_identity so logo & identity stay synced across reloads/navigation/devices
+  useEffect(() => {
+    const docRef = doc(db, 'academicSettings', 'school_identity');
+    const unsubscribe = onSnapshot(
+      docRef,
+      (snap) => {
+        if (!snap.exists()) return;
+        const remote = normalizeSchoolIdentity({ id: snap.id, ...snap.data() });
+        setSchoolIdentity((prev) => {
+          if (
+            lastSavedIdentityAtRef.current &&
+            remote.updatedAt &&
+            remote.updatedAt < lastSavedIdentityAtRef.current
+          ) {
+            return prev;
+          }
+          if (prev.updatedAt && remote.updatedAt && prev.updatedAt > remote.updatedAt) {
+            return prev;
+          }
+          try {
+            localStorage.setItem('kantoja_school_identity', JSON.stringify(remote));
+            localStorage.setItem('kantoja_school_logo_url', remote.logoUrl || '');
+          } catch {
+            // ignore storage errors
+          }
+          return remote;
+        });
+      },
+      () => {
+        // ignore snapshot errors when offline
+      }
+    );
+    return () => unsubscribe();
+  }, []);
 
   const activeAcademicYear = academicYears.find((ay) => ay.isActive) || null;
 
@@ -1728,14 +1783,19 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       throw new Error('Akses Ditolak: Hanya Administrator yang diizinkan mengubah atau menghapus logo sekolah.');
     }
     const updaterName = currentUser?.displayName || currentUser?.name || currentUser?.email || 'Administrator';
+    const nowIso = new Date().toISOString();
+    lastSavedIdentityAtRef.current = nowIso;
     const merged: Partial<SchoolIdentity> = {
       ...schoolIdentity,
       ...data,
       id: 'school_identity',
       updatedBy: updaterName,
-      updatedAt: new Date().toISOString()
+      updatedAt: nowIso
     };
     const saved = await saveSchoolIdentityDoc(merged);
+    if (saved.updatedAt) {
+      lastSavedIdentityAtRef.current = saved.updatedAt;
+    }
     setSchoolIdentity(saved);
     return saved;
   };

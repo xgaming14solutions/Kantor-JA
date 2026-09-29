@@ -383,7 +383,10 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
   useEffect(() => {
     if (classStudents.length === 0) {
       if (selectedStudentId !== '') setSelectedStudentId('');
-    } else if (!classStudents.some((s) => s.id === selectedStudentId)) {
+    } else if (
+      selectedStudentId !== '__ALL_CLASS_STUDENTS__' &&
+      !classStudents.some((s) => s.id === selectedStudentId)
+    ) {
       setSelectedStudentId(classStudents[0].id);
     }
   }, [classStudents, selectedStudentId]);
@@ -391,10 +394,103 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
   // Search filter inside student picker
   const [searchStudentQuery, setSearchStudentQuery] = useState<string>('');
 
-  // Active student object
+  // Paper Size Selection ('A4' = 210x297mm, 'F4' = 215x330mm)
+  const [paperSize, setPaperSize] = useState<'A4' | 'F4'>(() => {
+    try {
+      const saved = localStorage.getItem('aksara_report_paper_size');
+      if (saved === 'F4' || saved === 'A4') return saved;
+    } catch {
+      // ignore storage errors
+    }
+    return 'A4';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('aksara_report_paper_size', paperSize);
+    } catch {
+      // ignore storage errors
+    }
+  }, [paperSize]);
+
+  // Inject dynamic @page rule into document.head so only the selected paper size (A4 or F4) is active
+  useEffect(() => {
+    const styleId = 'aksara-dynamic-report-page-size';
+    let styleEl = document.getElementById(styleId) as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = styleId;
+      document.head.appendChild(styleEl);
+    }
+
+    if (paperSize === 'F4') {
+      styleEl.textContent = `
+        @page {
+          size: 215mm 330mm;
+          margin: 8mm 10mm 8mm 10mm;
+        }
+      `;
+    } else {
+      styleEl.textContent = `
+        @page {
+          size: 210mm 297mm;
+          margin: 7mm 10mm 7mm 10mm;
+        }
+      `;
+    }
+
+    return () => {
+      // Keep default A4 when leaving PrintReportCardView
+      if (styleEl) {
+        styleEl.textContent = `
+          @page {
+            size: 210mm 297mm;
+            margin: 8mm 10mm 8mm 10mm;
+          }
+        `;
+      }
+    };
+  }, [paperSize]);
+
+  // Print mode: single student vs all students in class
+  const isAllClassStudentsSelected = selectedStudentId === '__ALL_CLASS_STUDENTS__';
+
+  // Header logo error state for clean fallback (never show broken image)
+  const [headerLogoError, setHeaderLogoError] = useState(false);
+  const cleanHeaderLogoUrl = useMemo(() => {
+    const raw = (schoolIdentity?.logoUrl || '').trim();
+    if (!raw) return '';
+    if (raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
+    if (schoolIdentity?.updatedAt) {
+      const sep = raw.includes('?') ? '&' : '?';
+      return `${raw}${sep}v=${encodeURIComponent(String(schoolIdentity.updatedAt))}`;
+    }
+    return raw;
+  }, [schoolIdentity?.logoUrl, schoolIdentity?.updatedAt]);
+  useEffect(() => {
+    setHeaderLogoError(false);
+  }, [cleanHeaderLogoUrl]);
+
+  // Active student object (for single-student view or first student summary)
   const activeStudent = useMemo(() => {
-    return classStudents.find((s) => s.id === selectedStudentId) || classStudents[0] || null;
-  }, [classStudents, selectedStudentId]);
+    if (isAllClassStudentsSelected) {
+      return classStudents[0] || null;
+    }
+    return (
+      classStudents.find((s) => s.id === selectedStudentId) ||
+      allActiveStudents.find((s) => s.id === selectedStudentId) ||
+      classStudents[0] ||
+      null
+    );
+  }, [classStudents, allActiveStudents, selectedStudentId, isAllClassStudentsSelected]);
+
+  // List of students to render as report card pages (1 student = 1 page)
+  const studentsToRender = useMemo(() => {
+    if (isAllClassStudentsSelected && classStudents.length > 0) {
+      return classStudents;
+    }
+    return activeStudent ? [activeStudent] : [null];
+  }, [isAllClassStudentsSelected, classStudents, activeStudent]);
 
   // Selected academic year object
   const selectedYear = useMemo(() => {
@@ -523,149 +619,181 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
     return map;
   }, [diniyahSubjects, classStudents, scores, selectedClassId, selectedYearId, selectedYear, selectedSemester, currentAcademicSetting]);
 
-  // Calculate detailed subject scores for the active selected student (Diniyah only)
-  const studentSubjectScores = useMemo(() => {
-    if (!activeStudent) return [];
+  // Helper function to compute report data for any student (supports 1 student or multi-student class print)
+  const buildStudentReportData = (targetStudent: (typeof students)[number] | null | undefined) => {
+    const targetClassId = targetStudent?.classId || selectedClassId;
+    const targetClass =
+      classes.find((c) => c.id === targetClassId) || selectedClass;
+    const targetHomeroomTeacher = teachers.find(
+      (t) => t.id === targetClass?.homeroomTeacherId || t.id === targetClass?.teacherId
+    );
 
-    return diniyahSubjects.map((sub) => {
-      const subScores = scores.filter(
-        (sc) =>
-          sc.studentId === activeStudent.id &&
-          sc.classId === selectedClassId &&
-          sc.subjectId === sub.id &&
-          (sc.academicYearId === selectedYearId || sc.academicYearId === selectedYear?.name) &&
-          (!sc.semester || sc.semester === selectedSemester)
-      );
+    const subjectScoresList = !targetStudent
+      ? []
+      : diniyahSubjects.map((sub) => {
+          const subScores = scores.filter(
+            (sc) =>
+              sc.studentId === targetStudent.id &&
+              sc.classId === targetClassId &&
+              sc.subjectId === sub.id &&
+              (sc.academicYearId === selectedYearId || sc.academicYearId === selectedYear?.name) &&
+              (!sc.semester || sc.semester === selectedSemester)
+          );
 
-      const effectiveKkm =
-        currentAcademicSetting.subjectKkmOverrides?.[sub.id] ?? sub.kkm ?? 75;
+          const effectiveKkm =
+            currentAcademicSetting.subjectKkmOverrides?.[sub.id] ?? sub.kkm ?? 75;
 
-      const calcResult = calculateStudentScore(
-        currentAcademicSetting,
-        subScores,
-        effectiveKkm,
-        sub.id
-      );
+          const calcResult = calculateStudentScore(
+            currentAcademicSetting,
+            subScores,
+            effectiveKkm,
+            sub.id
+          );
 
-      // Arabic name resolver: check custom sub.nameArab first, then dictionary
-      const lowerName = sub.name.toLowerCase().trim();
-      const arabicTitle = sub.nameArab || (sub as any).arabicName || ARABIC_SUBJECT_MAP[lowerName] || null;
+          const lowerName = sub.name.toLowerCase().trim();
+          const arabicTitle =
+            sub.nameArab || (sub as any).arabicName || ARABIC_SUBJECT_MAP[lowerName] || null;
 
-      return {
-        subject: sub,
-        arabicTitle,
-        effectiveKkm,
-        calcResult,
-        finalScore: calcResult.finalScore,
-        formattedScore: calcResult.formattedFinalScore,
-        terbilangScore: scoreToTerbilang(calcResult.formattedFinalScore, calcResult.finalScore),
-        classAverage: classSubjectAverages[sub.id]?.averageFormatted || '-',
-        isPassing: calcResult.isPassing
+          return {
+            subject: sub,
+            arabicTitle,
+            effectiveKkm,
+            calcResult,
+            finalScore: calcResult.finalScore,
+            formattedScore: calcResult.formattedFinalScore,
+            terbilangScore: scoreToTerbilang(
+              calcResult.formattedFinalScore,
+              calcResult.finalScore
+            ),
+            classAverage: classSubjectAverages[sub.id]?.averageFormatted || '-',
+            isPassing: calcResult.isPassing
+          };
+        });
+
+    const groups: Record<string, typeof subjectScoresList> = {};
+    if (subjectScoresList.length > 0) {
+      groups['Diniyah'] = subjectScoresList;
+    }
+
+    const scoredList = subjectScoresList.filter((s) => s.finalScore !== null);
+    let totals: { totalScore: string; averageScore: string; rawAverage: number | null } = {
+      totalScore: '-',
+      averageScore: '-',
+      rawAverage: null
+    };
+    if (scoredList.length > 0) {
+      const total = scoredList.reduce((acc, curr) => acc + (curr.finalScore || 0), 0);
+      const rawAvg = total / scoredList.length;
+      totals = {
+        totalScore: formatFinalScore(total, currentAcademicSetting.rounding),
+        averageScore: formatFinalScore(rawAvg, currentAcademicSetting.rounding),
+        rawAverage: rawAvg
       };
-    });
-  }, [activeStudent, diniyahSubjects, scores, selectedClassId, selectedYearId, selectedYear, selectedSemester, currentAcademicSetting, classSubjectAverages]);
-
-  // Group subjects exclusively under Diniyah
-  const groupedSubjects = useMemo(() => {
-    const groups: Record<string, typeof studentSubjectScores> = {};
-    if (studentSubjectScores.length > 0) {
-      groups['Diniyah'] = studentSubjectScores;
-    }
-    return groups;
-  }, [studentSubjectScores]);
-
-  // Summary totals for student
-  const studentTotals = useMemo(() => {
-    const scoredList = studentSubjectScores.filter((s) => s.finalScore !== null);
-    if (scoredList.length === 0) {
-      return { totalScore: '-', averageScore: '-', rawAverage: null };
     }
 
-    const total = scoredList.reduce((acc, curr) => acc + (curr.finalScore || 0), 0);
-    const rawAvg = total / scoredList.length;
-    const formattedTotal = formatFinalScore(total, currentAcademicSetting.rounding);
-    const formattedAvg = formatFinalScore(rawAvg, currentAcademicSetting.rounding);
+    let attSummary = { sakit: 0, izin: 0, alpa: 0, total: 0 };
+    if (targetStudent) {
+      const attList = attendance.filter(
+        (a) =>
+          a.studentId === targetStudent.id &&
+          a.classId === targetClassId &&
+          (a.academicYearId === selectedYearId || a.academicYearId === selectedYear?.name) &&
+          (!a.semester || a.semester === selectedSemester)
+      );
+      attSummary = {
+        sakit: attList.filter((a) => a.status === 'Sakit').length,
+        izin: attList.filter((a) => a.status === 'Izin').length,
+        alpa: attList.filter((a) => a.status === 'Alpa').length,
+        total: attList.length
+      };
+    }
 
-    return { totalScore: formattedTotal, averageScore: formattedAvg, rawAverage: rawAvg };
-  }, [studentSubjectScores, currentAcademicSetting.rounding]);
-
-  // Attendance summary for this student in chosen class & period
-  const studentAttendance = useMemo(() => {
-    if (!activeStudent) return { sakit: 0, izin: 0, alpa: 0, total: 0 };
-
-    const attList = attendance.filter(
-      (a) =>
-        a.studentId === activeStudent.id &&
-        a.classId === selectedClassId &&
-        (a.academicYearId === selectedYearId || a.academicYearId === selectedYear?.name) &&
-        (!a.semester || a.semester === selectedSemester)
-    );
-
-    const sakit = attList.filter((a) => a.status === 'Sakit').length;
-    const izin = attList.filter((a) => a.status === 'Izin').length;
-    const alpa = attList.filter((a) => a.status === 'Alpa').length;
-
-    return { sakit, izin, alpa, total: attList.length };
-  }, [attendance, activeStudent, selectedClassId, selectedYearId, selectedYear, selectedSemester]);
-
-  // Extracurricular activities & scores strictly for the active student in chosen period
-  const studentExtracurriculars = useMemo(() => {
-    if (!activeStudent) return [];
-
-    const eksMasterList = subjects.filter(
-      (s) => s.type === 'extracurricular' && s.isActive !== false
-    );
-
-    // 1. Find extracurricular IDs that this student participates in for the selected period
-    const studentParticipations = extracurricularParticipants.filter((p) => {
-      if (p.studentId !== activeStudent.id) return false;
-      if (p.status === 'inactive') return false;
-      if (selectedClassId && p.classId && p.classId !== selectedClassId) return false;
-      const yearMatches =
-        !p.academicYearId ||
-        p.academicYearId === selectedYearId ||
-        p.academicYearId === selectedYear?.name;
-      if (!yearMatches) return false;
-      if (p.semester && p.semester !== selectedSemester) return false;
-      return true;
-    });
-
-    const participatedEksIds = new Set(studentParticipations.map((p) => p.extracurricularId));
-
-    // 2. Find extracurricular scores saved specifically for this student in the selected period
-    const studentEksScores = extracurricularScores.filter((sc) => {
-      if (sc.studentId !== activeStudent.id) return false;
-      if (selectedClassId && sc.classId && sc.classId !== selectedClassId) return false;
-      const yearMatches =
-        !sc.academicYearId ||
-        sc.academicYearId === selectedYearId ||
-        sc.academicYearId === selectedYear?.name;
-      if (!yearMatches) return false;
-      if (sc.semester && sc.semester !== selectedSemester) return false;
-      return true;
-    });
-
-    // Only include extracurriculars followed by this student
-    return eksMasterList
-      .filter((eks) => participatedEksIds.has(eks.id))
-      .map((eks) => {
-        const scoreRecord = studentEksScores.find((sc) => sc.extracurricularId === eks.id);
-        return {
-          extracurricular: eks,
-          nilai: scoreRecord?.nilai || '-',
-          keterangan: scoreRecord?.keterangan || ''
-        };
+    let eksList: Array<{ extracurricular: typeof subjects[0]; nilai: string; keterangan: string }> = [];
+    if (targetStudent) {
+      const eksMasterList = subjects.filter(
+        (s) => s.type === 'extracurricular' && s.isActive !== false
+      );
+      const studentParticipations = extracurricularParticipants.filter((p) => {
+        if (p.studentId !== targetStudent.id) return false;
+        if (p.status === 'inactive') return false;
+        if (targetClassId && p.classId && p.classId !== targetClassId) return false;
+        const yearMatches =
+          !p.academicYearId ||
+          p.academicYearId === selectedYearId ||
+          p.academicYearId === selectedYear?.name;
+        if (!yearMatches) return false;
+        if (p.semester && p.semester !== selectedSemester) return false;
+        return true;
       });
-  }, [
-    activeStudent,
-    subjects,
-    extracurricularParticipants,
-    extracurricularScores,
-    selectedClassId,
-    selectedYearId,
-    selectedYear,
-    selectedSemester
-  ]);
+      const participatedEksIds = new Set(studentParticipations.map((p) => p.extracurricularId));
+      const studentEksScores = extracurricularScores.filter((sc) => {
+        if (sc.studentId !== targetStudent.id) return false;
+        if (targetClassId && sc.classId && sc.classId !== targetClassId) return false;
+        const yearMatches =
+          !sc.academicYearId ||
+          sc.academicYearId === selectedYearId ||
+          sc.academicYearId === selectedYear?.name;
+        if (!yearMatches) return false;
+        if (sc.semester && sc.semester !== selectedSemester) return false;
+        return true;
+      });
+
+      eksList = eksMasterList
+        .filter((eks) => participatedEksIds.has(eks.id))
+        .map((eks) => {
+          const scoreRecord = studentEksScores.find((sc) => sc.extracurricularId === eks.id);
+          return {
+            extracurricular: eks,
+            nilai: scoreRecord?.nilai || '-',
+            keterangan: scoreRecord?.keterangan || ''
+          };
+        });
+    }
+
+    const reportNote = targetStudent
+      ? getStudentReportNote(
+          targetStudent.id,
+          selectedYearId,
+          selectedSemester,
+          targetClassId
+        )
+      : null;
+
+    return {
+      student: targetStudent,
+      studentClass: targetClass,
+      homeroomTeacher: targetHomeroomTeacher,
+      groupedSubjects: groups,
+      studentTotals: totals,
+      studentAttendance: attSummary,
+      studentExtracurriculars: eksList,
+      reportNote
+    };
+  };
+
+  // Summary totals for activeStudent (used in the top filter summary bar)
+  const activeStudentData = useMemo(
+    () => buildStudentReportData(activeStudent),
+    [
+      activeStudent,
+      diniyahSubjects,
+      scores,
+      selectedClassId,
+      selectedYearId,
+      selectedYear,
+      selectedSemester,
+      currentAcademicSetting,
+      classSubjectAverages,
+      attendance,
+      subjects,
+      extracurricularParticipants,
+      extracurricularScores,
+      studentReportNotes,
+      reportCards
+    ]
+  );
+
+  const studentTotals = activeStudentData.studentTotals;
 
   // Print Handler
   const handlePrint = () => {
@@ -701,16 +829,18 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
     );
   }
 
+  const isF4 = paperSize === 'F4';
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 print:space-y-0 print:m-0 print:p-0">
       {/* ========================================================
           SCREEN-ONLY: FILTER BAR & CONTROLS
          ======================================================== */}
       <div className="no-print space-y-4">
         {/* Top Header & Actions */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {onBack && (
                 <button
                   onClick={onBack}
@@ -724,19 +854,53 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                 <Printer className="w-3.5 h-3.5" />
                 Format Cetak Rapor Resmi
               </span>
-              <span className="text-xs text-slate-400 font-medium">
-                Standard A4 Portrait &bull; Format Buku Rapor
+              <span className="text-xs text-slate-500 font-medium">
+                {isF4
+                  ? 'Ukuran F4 / Folio Portrait (215 × 330 mm)'
+                  : 'Ukuran A4 Portrait (210 × 297 mm)'}{' '}
+                &bull; 1 Siswa = 1 Lembar Kertas
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mt-1 tracking-tight">
               Cetak Lembar Hasil Belajar Siswa
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-              Template formal siap cetak dengan konversi nilai huruf otomatis, rata-rata kelas, dan tipografi Arab.
+              Header identitas pesantren dinamis, ukuran kertas A4/F4 akurat untuk Preview maupun Print/PDF, serta tata letak 1 halaman penuh.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Segmented Paper Size Toggle: [ A4 ] [ F4 ] */}
+            <div className="inline-flex items-center bg-slate-100 border border-slate-200 rounded-xl p-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 px-2.5">
+                Ukuran Kertas:
+              </span>
+              <button
+                type="button"
+                onClick={() => setPaperSize('A4')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
+                  paperSize === 'A4'
+                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                }`}
+                title="Kertas A4 Portrait (210 × 297 mm)"
+              >
+                A4 (210×297 mm)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaperSize('F4')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
+                  paperSize === 'F4'
+                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                }`}
+                title="Kertas F4 / Folio Portrait (215 × 330 mm)"
+              >
+                F4 (215×330 mm)
+              </button>
+            </div>
+
             <button
               onClick={handlePrint}
               className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition shadow-sm inline-flex items-center gap-2 cursor-pointer"
@@ -757,7 +921,7 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
 
         {/* Filter Controls Card */}
         <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
             {/* 1. Class Picker */}
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
@@ -768,7 +932,6 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                 onChange={(e) => {
                   const newClassId = e.target.value;
                   setSelectedClassId(newClassId);
-                  // Auto-select first active student in that class
                   const firstInClass = allActiveStudents.find(
                     (s) => s.classId === newClassId
                   );
@@ -796,9 +959,13 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                 Pilih Siswa ({classStudents.length} Siswa di Kelas {selectedClass?.name || '-'}):
               </label>
               <select
-                value={activeStudent?.id || ''}
+                value={isAllClassStudentsSelected ? '__ALL_CLASS_STUDENTS__' : activeStudent?.id || ''}
                 onChange={(e) => {
                   const chosenId = e.target.value;
+                  if (chosenId === '__ALL_CLASS_STUDENTS__') {
+                    setSelectedStudentId('__ALL_CLASS_STUDENTS__');
+                    return;
+                  }
                   const chosenStudent = allActiveStudents.find((s) => s.id === chosenId);
                   if (chosenStudent) {
                     if (chosenStudent.classId && chosenStudent.classId !== selectedClassId) {
@@ -814,13 +981,20 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                 {classStudents.length === 0 ? (
                   <option value="">-- Belum ada siswa di kelas {selectedClass?.name || ''} --</option>
                 ) : (
-                  <optgroup label={`Siswa Kelas ${selectedClass?.name || ''}`}>
-                    {classStudents.map((st) => (
-                      <option key={st.id} value={st.id}>
-                        {st.name} (NISN: {st.nisn || st.nis || '-'})
+                  <>
+                    {classStudents.length > 1 && (
+                      <option value="__ALL_CLASS_STUDENTS__">
+                        Semua Siswa Kelas {selectedClass?.name || ''} ({classStudents.length} Siswa — 1 Siswa 1 Halaman)
                       </option>
-                    ))}
-                  </optgroup>
+                    )}
+                    <optgroup label={`Siswa Kelas ${selectedClass?.name || ''}`}>
+                      {classStudents.map((st) => (
+                        <option key={st.id} value={st.id}>
+                          {st.name} (NISN: {st.nisn || st.nis || '-'})
+                        </option>
+                      ))}
+                    </optgroup>
+                  </>
                 )}
                 {effectiveRole !== 'WALI_KELAS' &&
                   allActiveStudents.some((s) => s.classId !== selectedClassId) && (
@@ -879,6 +1053,21 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                 ))}
               </select>
             </div>
+
+            {/* 5. Paper Size Dropdown */}
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                Ukuran Kertas:
+              </label>
+              <select
+                value={paperSize}
+                onChange={(e) => setPaperSize(e.target.value as 'A4' | 'F4')}
+                className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              >
+                <option value="A4">A4 Portrait (210 × 297 mm)</option>
+                <option value="F4">F4 / Folio Portrait (215 × 330 mm)</option>
+              </select>
+            </div>
           </div>
 
           {/* Quick info strip (Read-Only Summary) */}
@@ -886,28 +1075,43 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
             <div className="text-slate-500 flex flex-wrap items-center gap-2">
               <span className="font-semibold text-slate-700">Wali Kelas:</span>{' '}
               {classHomeroomTeacher?.name || '-'} &bull;{' '}
-              <span className="font-semibold text-slate-700">Rata-rata Nilai:</span>{' '}
-              <strong className="text-indigo-600">{studentTotals.averageScore}</strong> &bull;{' '}
-              <span className="font-semibold text-slate-700">Predikat:</span>{' '}
-              <span
-                className="px-2.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-arabic font-bold text-sm"
-                dir="rtl"
-              >
-                {getPredicateText(studentTotals.rawAverage)}
-              </span>
+              <span className="font-semibold text-slate-700">Ukuran Kertas Aktif:</span>{' '}
+              <strong className="text-indigo-600">
+                {isF4 ? 'F4 / Folio (215 × 330 mm)' : 'A4 (210 × 297 mm)'}
+              </strong>{' '}
+              &bull;{' '}
+              {isAllClassStudentsSelected ? (
+                <span>
+                  Mode Cetak Massal: <strong>{classStudents.length} Lembar Rapor</strong> (1 Siswa = 1 Halaman)
+                </span>
+              ) : (
+                <>
+                  <span className="font-semibold text-slate-700">Rata-rata Nilai:</span>{' '}
+                  <strong className="text-indigo-600">{studentTotals.averageScore}</strong> &bull;{' '}
+                  <span className="font-semibold text-slate-700">Predikat:</span>{' '}
+                  <span
+                    className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-arabic font-bold text-sm"
+                    dir="rtl"
+                  >
+                    {getPredicateText(studentTotals.rawAverage)}
+                  </span>
+                </>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
-              {activeStudentReportNote?.note?.trim() ? (
-                <span className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold inline-flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  Catatan Raport Individual Tersedia (Read-Only)
-                </span>
-              ) : (
-                <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium inline-flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-amber-600" />
-                  Catatan Raport belum diisi (Isi melalui menu Data Siswa &rarr; Catatan Raport)
-                </span>
+              {!isAllClassStudentsSelected && (
+                activeStudentReportNote?.note?.trim() ? (
+                  <span className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold inline-flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    Catatan Raport Individual Tersedia (Read-Only)
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium inline-flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-amber-600" />
+                    Catatan Raport belum diisi (Isi melalui menu Data Siswa &rarr; Catatan Raport)
+                  </span>
+                )
               )}
             </div>
           </div>
@@ -915,7 +1119,7 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
       </div>
 
       {/* ========================================================
-          RAPOR SHEET (A4 PORTRAIT TEMPLATE DESIGN)
+          RAPOR SHEET PREVIEW & PRINT PAGES (A4 / F4 DYNAMIC)
          ======================================================== */}
       {!activeStudent && (
         <div className="no-print bg-amber-50 rounded-2xl border border-amber-200 p-3.5 text-center text-xs text-amber-800 font-medium">
@@ -923,418 +1127,576 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
         </div>
       )}
 
-      <div className="flex justify-center">
-        <div
-          id="print-rapor-sheet"
-          className="w-full max-w-[210mm] min-h-[297mm] bg-white p-6 sm:p-10 border border-slate-200 shadow-md rounded-xl text-slate-900 print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-none print:w-full print:rounded-none"
-          style={{
-            fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"
-          }}
-        >
-          {/* ========================================================
-              1. HEADER
-             ======================================================== */}
-          <div className="pb-3 border-b-2 border-slate-900">
-            {schoolIdentity?.logoUrl?.trim() ? (
-              <div className="flex items-center justify-between gap-4">
-                <SchoolLogo
-                  logoUrl={schoolIdentity.logoUrl}
-                  schoolName={schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}
-                  size="print"
-                  variant="plain"
-                  hideIfEmpty
-                  className="shrink-0"
-                />
-                <div className="flex-1 text-center">
-                  <div className="text-xs sm:text-sm font-bold uppercase tracking-wide text-slate-700">
-                    {schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}
-                  </div>
-                  <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-900 mt-0.5">
-                    LAPORAN HASIL BELAJAR SISWA
-                  </h1>
-                  {schoolIdentity.address && (
-                    <div className="text-[10px] text-slate-500 mt-0.5">
-                      {schoolIdentity.address}
-                    </div>
-                  )}
-                </div>
-                {/* Balanced spacer so title remains centered */}
-                <div className="w-16 sm:w-20 shrink-0 hidden sm:block" aria-hidden="true" />
+      <div className="flex flex-col items-center gap-6 print:block print:gap-0 print:m-0 print:p-0">
+        {studentsToRender.map((studentItem, pageIdx) => {
+          const pageData = buildStudentReportData(studentItem);
+          const isLastPage = pageIdx === studentsToRender.length - 1;
+          const hasLogo = cleanHeaderLogoUrl.length > 0 && !headerLogoError;
+
+          return (
+            <div
+              key={studentItem?.id || `preview-sheet-${pageIdx}`}
+              id={pageIdx === 0 ? 'print-rapor-sheet' : `print-rapor-sheet-${pageIdx}`}
+              className={`report-card-page w-full bg-white border border-slate-300 shadow-md rounded-xl text-slate-900 box-border transition-all duration-150 ${
+                isF4
+                  ? 'max-w-[215mm] min-h-[330mm] px-6 py-5 sm:px-9 sm:py-7'
+                  : 'max-w-[210mm] min-h-[297mm] px-6 py-4 sm:px-8 sm:py-5'
+              } print:border-none print:shadow-none print:p-0 print:m-0 print:max-w-none print:w-full print:min-h-0 print:rounded-none ${
+                !isLastPage ? 'report-card-page-break' : ''
+              }`}
+              style={{
+                fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"
+              }}
+            >
+              {/* Screen-only paper indicator badge */}
+              <div className="no-print flex items-center justify-between text-[10px] text-slate-400 font-medium mb-2 pb-1.5 border-b border-dashed border-slate-200">
+                <span>
+                  Pratinjau Kertas:{' '}
+                  <strong className="text-slate-600">
+                    {isF4 ? 'F4 / Folio (215 × 330 mm)' : 'A4 (210 × 297 mm)'}
+                  </strong>
+                </span>
+                <span>
+                  {studentsToRender.length > 1
+                    ? `Lembar ${pageIdx + 1} dari ${studentsToRender.length} — ${studentItem?.name || ''}`
+                    : '1 Siswa = 1 Lembar Kertas'}
+                </span>
               </div>
-            ) : (
-              <div className="text-center">
-                <h1 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-900">
+
+              {/* ========================================================
+                  1. HEADER RAPOR DINAMIS (LOGO -> NAMA SEKOLAH -> ALAMAT -> JUDUL)
+                 ======================================================== */}
+              <div
+                className={`text-center border-b-2 border-slate-900 ${
+                  isF4 ? 'pb-2.5' : 'pb-2'
+                }`}
+              >
+                {hasLogo && (
+                  <div className="flex justify-center mb-1.5">
+                    <img
+                      src={cleanHeaderLogoUrl}
+                      alt={`Logo ${schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}`}
+                      onError={() => setHeaderLogoError(true)}
+                      className={`${
+                        isF4
+                          ? 'h-12 sm:h-14 print:h-[13.5mm]'
+                          : 'h-10 sm:h-12 print:h-[11.5mm]'
+                      } w-auto max-w-[45mm] object-contain select-none`}
+                    />
+                  </div>
+                )}
+
+                <div
+                  className={`${
+                    isF4 ? 'text-sm sm:text-[15px]' : 'text-xs sm:text-[13.5px]'
+                  } font-extrabold uppercase tracking-wide text-slate-900 leading-tight`}
+                >
+                  {schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}
+                </div>
+
+                {schoolIdentity.address && (
+                  <div className="text-[10px] sm:text-[10.5px] text-slate-600 leading-snug mt-0.5 max-w-[175mm] mx-auto">
+                    {schoolIdentity.address}
+                  </div>
+                )}
+
+                <h1
+                  className={`${
+                    isF4 ? 'text-sm sm:text-[15px] mt-1.5' : 'text-xs sm:text-[13.5px] mt-1'
+                  } font-black tracking-wider uppercase text-slate-900 leading-tight`}
+                >
                   LAPORAN HASIL BELAJAR SISWA
                 </h1>
               </div>
-            )}
-          </div>
 
-          {/* Information Grid: Two Columns (Left & Right) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 py-3 text-[11px] sm:text-xs border-b border-slate-300">
-            {/* Left Column */}
-            <div className="space-y-1">
-              <div className="grid grid-cols-[100px_10px_1fr]">
-                <span className="font-semibold text-slate-700">Nama Sekolah</span>
-                <span>:</span>
-                <span className="font-bold text-slate-900">
-                  {schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}
-                </span>
-              </div>
-              <div className="grid grid-cols-[100px_10px_1fr]">
-                <span className="font-semibold text-slate-700">Program</span>
-                <span>:</span>
-                <span className="font-semibold text-slate-900">
-                  {formatReportProgram(schoolIdentity.programName, selectedClass)}
-                </span>
-              </div>
-              <div className="grid grid-cols-[100px_10px_1fr]">
-                <span className="font-semibold text-slate-700">Alamat</span>
-                <span>:</span>
-                <span className="text-slate-800 leading-snug">
-                  {schoolIdentity.address || '-'}
-                </span>
-              </div>
-              <div className="grid grid-cols-[100px_10px_1fr]">
-                <span className="font-semibold text-slate-700">Nama</span>
-                <span>:</span>
-                <strong className="font-bold text-slate-900">
-                  {activeStudent ? activeStudent.name : '-'}
-                </strong>
-              </div>
-            </div>
+              {/* ========================================================
+                  2. IDENTITAS DATA RAPOR & SISWA (TWO COLUMNS)
+                 ======================================================== */}
+              <div
+                className={`grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-x-5 gap-y-0.5 ${
+                  isF4 ? 'py-2.5 text-[11px]' : 'py-1.5 text-[10.5px]'
+                } border-b border-slate-300 leading-snug`}
+              >
+                {/* Left Column */}
+                <div className="space-y-0.5">
+                  <div className="grid grid-cols-[92px_8px_1fr]">
+                    <span className="font-semibold text-slate-700">Nama Sekolah</span>
+                    <span>:</span>
+                    <span className="font-bold text-slate-900">
+                      {schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[92px_8px_1fr]">
+                    <span className="font-semibold text-slate-700">Program</span>
+                    <span>:</span>
+                    <span className="font-semibold text-slate-900">
+                      {formatReportProgram(schoolIdentity.programName, pageData.studentClass)}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[92px_8px_1fr]">
+                    <span className="font-semibold text-slate-700">Alamat</span>
+                    <span>:</span>
+                    <span className="text-slate-800 leading-tight">
+                      {schoolIdentity.address || '-'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[92px_8px_1fr]">
+                    <span className="font-semibold text-slate-700">Nama</span>
+                    <span>:</span>
+                    <strong className="font-bold text-slate-900">
+                      {pageData.student ? pageData.student.name : '-'}
+                    </strong>
+                  </div>
+                </div>
 
-            {/* Right Column */}
-            <div className="space-y-1">
-              <div className="grid grid-cols-[95px_10px_1fr]">
-                <span className="font-semibold text-slate-700">Kelas</span>
-                <span>:</span>
-                <strong className="font-bold text-slate-900">
-                  {formatReportClassLabel(selectedClass)}
-                </strong>
+                {/* Right Column */}
+                <div className="space-y-0.5">
+                  <div className="grid grid-cols-[88px_8px_1fr]">
+                    <span className="font-semibold text-slate-700">NISN</span>
+                    <span>:</span>
+                    <span className="font-mono text-slate-800">
+                      {pageData.student
+                        ? pageData.student.nisn || pageData.student.nis || '-'
+                        : '-'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[88px_8px_1fr]">
+                    <span className="font-semibold text-slate-700">Kelas</span>
+                    <span>:</span>
+                    <strong className="font-bold text-slate-900">
+                      {formatReportClassLabel(pageData.studentClass)}
+                    </strong>
+                  </div>
+                  <div className="grid grid-cols-[88px_8px_1fr]">
+                    <span className="font-semibold text-slate-700">Semester</span>
+                    <span>:</span>
+                    <span className="text-slate-800">{selectedSemester}</span>
+                  </div>
+                  <div className="grid grid-cols-[88px_8px_1fr]">
+                    <span className="font-semibold text-slate-700">Tahun Ajaran</span>
+                    <span>:</span>
+                    <span className="text-slate-800">
+                      {selectedYear?.name || activeAcademicYear?.name || '-'}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-[95px_10px_1fr]">
-                <span className="font-semibold text-slate-700">Semester</span>
-                <span>:</span>
-                <span className="text-slate-800">{selectedSemester}</span>
-              </div>
-              <div className="grid grid-cols-[95px_10px_1fr]">
-                <span className="font-semibold text-slate-700">Tahun Ajaran</span>
-                <span>:</span>
-                <span className="text-slate-800">
-                  {selectedYear?.name || activeAcademicYear?.name || '-'}
-                </span>
-              </div>
-              <div className="grid grid-cols-[95px_10px_1fr]">
-                <span className="font-semibold text-slate-700">NISN</span>
-                <span>:</span>
-                <span className="font-mono text-slate-800">
-                  {activeStudent ? activeStudent.nisn || activeStudent.nis || '-' : '-'}
-                </span>
-              </div>
-            </div>
-          </div>
 
-            {/* ========================================================
-                2. TABEL NILAI (MAIN GRADES TABLE)
-               ======================================================== */}
-            <div className="mt-3">
-              <table className="w-full text-left border-collapse border border-slate-400 text-[11px] sm:text-xs">
-                <thead>
-                  <tr className="bg-blue-700 text-white font-bold text-center border-b border-blue-900">
-                    <th rowSpan={2} className="border border-slate-400 px-2 py-2 w-10">
-                      No.
-                    </th>
-                    <th rowSpan={2} className="border border-slate-400 px-3 py-2 text-left">
-                      Mata Pelajaran
-                    </th>
-                    <th colSpan={2} className="border border-slate-400 px-2 py-1">
-                      Nilai
-                    </th>
-                    <th rowSpan={2} className="border border-slate-400 px-2 py-2 w-28 text-center">
-                      Rata-rata Kelas
-                    </th>
-                  </tr>
-                  <tr className="bg-blue-800 text-white font-bold text-center border-b border-blue-900 text-[10px]">
-                    <th className="border border-slate-400 px-2 py-1 w-16">Angka</th>
-                    <th className="border border-slate-400 px-2 py-1 w-40">Terbilang</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.keys(groupedSubjects).length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="border border-slate-300 px-3 py-4 text-center text-slate-400">
-                        Tidak ada mata pelajaran terdaftar.
-                      </td>
-                    </tr>
-                  ) : (
-                    Object.entries(groupedSubjects).map(([category, items], groupIdx) => {
-                      const alphabet = String.fromCharCode(65 + groupIdx); // A, B, C...
-                      return (
-                        <React.Fragment key={category}>
-                          {/* Group Category Header Row */}
-                          <tr className="bg-slate-100 font-bold text-slate-900 border-t border-b border-slate-300">
-                            <td colSpan={5} className="border border-slate-400 px-3 py-1 text-[11px] bg-slate-100">
-                              {alphabet}. {category}
-                            </td>
-                          </tr>
-
-                          {/* Subject rows */}
-                          {items.map((sr, idx) => (
-                            <tr key={sr.subject.id} className="hover:bg-slate-50/50">
-                              <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-600 font-mono">
-                                {idx + 1}
-                              </td>
-                              <td className="border border-slate-300 px-3 py-1.5 text-slate-800">
-                                <div className="flex items-center justify-between">
-                                  <span className="font-medium text-slate-900">{sr.subject.name}</span>
-                                  {sr.arabicTitle && (
-                                    <span
-                                      className="font-arabic font-bold text-slate-700 text-xs sm:text-sm tracking-wide ml-2"
-                                      dir="rtl"
-                                    >
-                                      {sr.arabicTitle}
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="border border-slate-300 px-2 py-1.5 text-center font-bold text-slate-900 font-mono">
-                                {sr.formattedScore}
-                              </td>
-                              <td className="border border-slate-300 px-2 py-1.5 text-center font-semibold text-slate-800">
-                                {sr.terbilangScore}
-                              </td>
-                              <td className="border border-slate-300 px-2 py-1.5 text-center text-slate-700 font-mono">
-                                {sr.classAverage}
-                              </td>
-                            </tr>
-                          ))}
-                        </React.Fragment>
-                      );
-                    })
-                  )}
-
-                  {/* ========================================================
-                      5. JUMLAH DAN RATA-RATA ROW
-                     ======================================================== */}
-                  <tr className="bg-slate-50 font-bold border-t-2 border-slate-400 text-slate-900">
-                    <td colSpan={2} className="border border-slate-400 px-3 py-1.5 text-right font-semibold">
-                      Jumlah / <span className="font-arabic text-xs font-bold" dir="rtl">مجموع الدرجات</span>
-                    </td>
-                    <td className="border border-slate-400 px-2 py-1.5 text-center font-bold font-mono text-sm">
-                      {studentTotals.totalScore}
-                    </td>
-                    <td colSpan={2} className="border border-slate-400 bg-slate-50" />
-                  </tr>
-                  <tr className="bg-slate-50 font-bold border-b border-slate-400 text-slate-900">
-                    <td colSpan={2} className="border border-slate-400 px-3 py-1.5 text-right font-semibold">
-                      Nilai Rata-rata / <span className="font-arabic text-xs font-bold" dir="rtl">معدل التراكم</span>
-                    </td>
-                    <td className="border border-slate-400 px-2 py-1.5 text-center font-bold font-mono text-sm text-indigo-900">
-                      {studentTotals.averageScore}
-                    </td>
-                    <td colSpan={2} className="border border-slate-400 bg-slate-50" />
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* ========================================================
-                6. EKSTRAKURIKULER + 7. ABSENSI + 8. PREDIKAT (3-COLUMN SECTION)
-               ======================================================== */}
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mt-3">
-              {/* 6. Ekstrakurikuler Table (5 Cols) */}
-              <div className="md:col-span-5">
-                <table className="w-full text-left border-collapse border border-slate-400 text-[10px] sm:text-[11px]">
+              {/* ========================================================
+                  3. TABEL NILAI (MAIN GRADES TABLE)
+                 ======================================================== */}
+              <div className={isF4 ? 'mt-2.5' : 'mt-1.5'}>
+                <table
+                  className={`w-full text-left border-collapse border border-slate-400 ${
+                    isF4 ? 'text-[11px]' : 'text-[10.5px]'
+                  } leading-tight`}
+                >
                   <thead>
-                    <tr className="bg-blue-700 text-white font-bold text-center">
-                      <th className="border border-slate-400 px-1.5 py-1 w-8">No.</th>
-                      <th className="border border-slate-400 px-2 py-1 text-left">
-                        Kegiatan Ekstrakurikuler
+                    <tr className="bg-blue-700 text-white font-bold text-center border-b border-blue-900">
+                      <th
+                        rowSpan={2}
+                        className={`border border-slate-400 px-1.5 ${
+                          isF4 ? 'py-1.5' : 'py-1'
+                        } w-9`}
+                      >
+                        No.
                       </th>
-                      <th className="border border-slate-400 px-1.5 py-1 w-12 text-center">Nilai</th>
+                      <th
+                        rowSpan={2}
+                        className={`border border-slate-400 px-2.5 ${
+                          isF4 ? 'py-1.5' : 'py-1'
+                        } text-left`}
+                      >
+                        Mata Pelajaran
+                      </th>
+                      <th
+                        colSpan={2}
+                        className={`border border-slate-400 px-2 ${
+                          isF4 ? 'py-1' : 'py-0.5'
+                        }`}
+                      >
+                        Nilai
+                      </th>
+                      <th
+                        rowSpan={2}
+                        className={`border border-slate-400 px-2 ${
+                          isF4 ? 'py-1.5' : 'py-1'
+                        } w-24 text-center`}
+                      >
+                        Rata-rata Kelas
+                      </th>
+                    </tr>
+                    <tr className="bg-blue-800 text-white font-bold text-center border-b border-blue-900 text-[10px]">
+                      <th
+                        className={`border border-slate-400 px-1.5 ${
+                          isF4 ? 'py-1' : 'py-0.5'
+                        } w-14`}
+                      >
+                        Angka
+                      </th>
+                      <th
+                        className={`border border-slate-400 px-2 ${
+                          isF4 ? 'py-1' : 'py-0.5'
+                        } w-40`}
+                      >
+                        Terbilang
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {studentExtracurriculars.length === 0 ? (
+                    {Object.keys(pageData.groupedSubjects).length === 0 ? (
                       <tr>
-                        <td className="border border-slate-300 px-1.5 py-1 text-center font-mono text-slate-400">
-                          -
-                        </td>
-                        <td className="border border-slate-300 px-2 py-1 text-slate-400 italic">
-                          Tidak mengikuti ekstrakurikuler
-                        </td>
-                        <td className="border border-slate-300 px-1.5 py-1 text-center font-semibold text-slate-400">
-                          -
+                        <td
+                          colSpan={5}
+                          className="border border-slate-300 px-3 py-3 text-center text-slate-400"
+                        >
+                          Tidak ada mata pelajaran terdaftar.
                         </td>
                       </tr>
                     ) : (
-                      studentExtracurriculars.map((item, idx) => (
-                        <tr key={item.extracurricular.id}>
-                          <td className="border border-slate-300 px-1.5 py-1 text-center font-mono">
-                            {idx + 1}
+                      Object.entries(pageData.groupedSubjects).map(
+                        ([category, items], groupIdx) => {
+                          const alphabet = String.fromCharCode(65 + groupIdx);
+                          return (
+                            <React.Fragment key={category}>
+                              {/* Group Category Header Row */}
+                              <tr className="bg-slate-100 font-bold text-slate-900 border-t border-b border-slate-300">
+                                <td
+                                  colSpan={5}
+                                  className={`border border-slate-400 px-2.5 ${
+                                    isF4 ? 'py-1' : 'py-0.5'
+                                  } text-[10.5px] bg-slate-100`}
+                                >
+                                  {alphabet}. {category}
+                                </td>
+                              </tr>
+
+                              {/* Subject rows */}
+                              {items.map((sr, idx) => (
+                                <tr key={sr.subject.id}>
+                                  <td
+                                    className={`border border-slate-300 px-1.5 ${
+                                      isF4 ? 'py-1' : 'py-[3px]'
+                                    } text-center text-slate-600 font-mono`}
+                                  >
+                                    {idx + 1}
+                                  </td>
+                                  <td
+                                    className={`border border-slate-300 px-2.5 ${
+                                      isF4 ? 'py-1' : 'py-[3px]'
+                                    } text-slate-800`}
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-medium text-slate-900">
+                                        {sr.subject.name}
+                                      </span>
+                                      {sr.arabicTitle && (
+                                        <span
+                                          className="font-arabic font-bold text-slate-700 text-xs tracking-wide shrink-0"
+                                          dir="rtl"
+                                        >
+                                          {sr.arabicTitle}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td
+                                    className={`border border-slate-300 px-1.5 ${
+                                      isF4 ? 'py-1' : 'py-[3px]'
+                                    } text-center font-bold text-slate-900 font-mono`}
+                                  >
+                                    {sr.formattedScore}
+                                  </td>
+                                  <td
+                                    className={`border border-slate-300 px-2 ${
+                                      isF4 ? 'py-1' : 'py-[3px]'
+                                    } text-center font-semibold text-slate-800`}
+                                  >
+                                    {sr.terbilangScore}
+                                  </td>
+                                  <td
+                                    className={`border border-slate-300 px-2 ${
+                                      isF4 ? 'py-1' : 'py-[3px]'
+                                    } text-center text-slate-700 font-mono`}
+                                  >
+                                    {sr.classAverage}
+                                  </td>
+                                </tr>
+                              ))}
+                            </React.Fragment>
+                          );
+                        }
+                      )
+                    )}
+
+                    {/* ========================================================
+                        4. JUMLAH DAN RATA-RATA ROW
+                       ======================================================== */}
+                    <tr className="bg-slate-50 font-bold border-t-2 border-slate-400 text-slate-900">
+                      <td
+                        colSpan={2}
+                        className={`border border-slate-400 px-2.5 ${
+                          isF4 ? 'py-1' : 'py-[3px]'
+                        } text-right font-semibold`}
+                      >
+                        Jumlah /{' '}
+                        <span className="font-arabic text-xs font-bold" dir="rtl">
+                          مجموع الدرجات
+                        </span>
+                      </td>
+                      <td
+                        className={`border border-slate-400 px-1.5 ${
+                          isF4 ? 'py-1' : 'py-[3px]'
+                        } text-center font-bold font-mono text-xs`}
+                      >
+                        {pageData.studentTotals.totalScore}
+                      </td>
+                      <td colSpan={2} className="border border-slate-400 bg-slate-50" />
+                    </tr>
+                    <tr className="bg-slate-50 font-bold border-b border-slate-400 text-slate-900">
+                      <td
+                        colSpan={2}
+                        className={`border border-slate-400 px-2.5 ${
+                          isF4 ? 'py-1' : 'py-[3px]'
+                        } text-right font-semibold`}
+                      >
+                        Nilai Rata-rata /{' '}
+                        <span className="font-arabic text-xs font-bold" dir="rtl">
+                          معدل التراكم
+                        </span>
+                      </td>
+                      <td
+                        className={`border border-slate-400 px-1.5 ${
+                          isF4 ? 'py-1' : 'py-[3px]'
+                        } text-center font-bold font-mono text-xs text-indigo-900`}
+                      >
+                        {pageData.studentTotals.averageScore}
+                      </td>
+                      <td colSpan={2} className="border border-slate-400 bg-slate-50" />
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* ========================================================
+                  5. EKSTRAKURIKULER + ABSENSI + PREDIKAT (3-COLUMN SECTION)
+                 ======================================================== */}
+              <div
+                className={`grid grid-cols-1 sm:grid-cols-12 print:grid-cols-12 gap-2.5 ${
+                  isF4 ? 'mt-2.5' : 'mt-1.5'
+                }`}
+              >
+                {/* Ekstrakurikuler Table (5 Cols) */}
+                <div className="sm:col-span-5 print:col-span-5">
+                  <table className="w-full text-left border-collapse border border-slate-400 text-[10px] leading-tight">
+                    <thead>
+                      <tr className="bg-blue-700 text-white font-bold text-center">
+                        <th className="border border-slate-400 px-1.5 py-0.5 w-7">No.</th>
+                        <th className="border border-slate-400 px-2 py-0.5 text-left">
+                          Kegiatan Ekstrakurikuler
+                        </th>
+                        <th className="border border-slate-400 px-1.5 py-0.5 w-11 text-center">
+                          Nilai
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageData.studentExtracurriculars.length === 0 ? (
+                        <tr>
+                          <td className="border border-slate-300 px-1.5 py-1 text-center font-mono text-slate-400">
+                            -
                           </td>
-                          <td className="border border-slate-300 px-2 py-1 text-slate-800 font-medium">
-                            {item.extracurricular.name}
+                          <td className="border border-slate-300 px-2 py-1 text-slate-400 italic">
+                            Tidak mengikuti ekstrakurikuler
                           </td>
-                          <td className="border border-slate-300 px-1.5 py-1 text-center font-bold text-slate-900 font-mono">
-                            {item.nilai}
+                          <td className="border border-slate-300 px-1.5 py-1 text-center font-semibold text-slate-400">
+                            -
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      ) : (
+                        pageData.studentExtracurriculars.map((item, idx) => (
+                          <tr key={item.extracurricular.id}>
+                            <td className="border border-slate-300 px-1.5 py-0.5 text-center font-mono">
+                              {idx + 1}
+                            </td>
+                            <td className="border border-slate-300 px-2 py-0.5 text-slate-800 font-medium">
+                              {item.extracurricular.name}
+                            </td>
+                            <td className="border border-slate-300 px-1.5 py-0.5 text-center font-bold text-slate-900 font-mono">
+                              {item.nilai}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
 
-              {/* 7. Absensi Table (4 Cols) */}
-              <div className="md:col-span-4">
-                <table className="w-full text-left border-collapse border border-slate-400 text-[10px] sm:text-[11px]">
-                  <thead>
-                    <tr className="bg-blue-700 text-white font-bold text-center">
-                      <th className="border border-slate-400 px-2 py-1 text-left">Absensi</th>
-                      <th className="border border-slate-400 px-2 py-1 w-20 text-center">Hari</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td className="border border-slate-300 px-2 py-1 text-slate-700">Sakit</td>
-                      <td className="border border-slate-300 px-2 py-1 text-center font-mono font-bold text-slate-900">
-                        {studentAttendance.sakit}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="border border-slate-300 px-2 py-1 text-slate-700">Izin</td>
-                      <td className="border border-slate-300 px-2 py-1 text-center font-mono font-bold text-slate-900">
-                        {studentAttendance.izin}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="border border-slate-300 px-2 py-1 text-slate-700">Ghoib</td>
-                      <td className="border border-slate-300 px-2 py-1 text-center font-mono font-bold text-slate-900">
-                        {studentAttendance.alpa}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
+                {/* Absensi Table (4 Cols) */}
+                <div className="sm:col-span-4 print:col-span-4">
+                  <table className="w-full text-left border-collapse border border-slate-400 text-[10px] leading-tight">
+                    <thead>
+                      <tr className="bg-blue-700 text-white font-bold text-center">
+                        <th className="border border-slate-400 px-2 py-0.5 text-left">Absensi</th>
+                        <th className="border border-slate-400 px-2 py-0.5 w-16 text-center">
+                          Hari
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="border border-slate-300 px-2 py-0.5 text-slate-700">
+                          Sakit
+                        </td>
+                        <td className="border border-slate-300 px-2 py-0.5 text-center font-mono font-bold text-slate-900">
+                          {pageData.studentAttendance.sakit}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="border border-slate-300 px-2 py-0.5 text-slate-700">Izin</td>
+                        <td className="border border-slate-300 px-2 py-0.5 text-center font-mono font-bold text-slate-900">
+                          {pageData.studentAttendance.izin}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="border border-slate-300 px-2 py-0.5 text-slate-700">
+                          Ghoib
+                        </td>
+                        <td className="border border-slate-300 px-2 py-0.5 text-center font-mono font-bold text-slate-900">
+                          {pageData.studentAttendance.alpa}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
 
-              {/* 8. Predikat Box (3 Cols) */}
-              <div className="md:col-span-3">
-                <div className="border border-slate-400 h-full flex flex-col">
-                  <div className="bg-blue-700 text-white font-bold text-[10px] sm:text-[11px] px-2 py-1 text-center">
-                    Predikat
-                  </div>
-                  <div className="flex-1 flex flex-col items-center justify-center p-2 text-center bg-slate-50/50">
-                    <span
-                      className="text-xl sm:text-2xl font-bold text-slate-900 font-arabic leading-relaxed"
-                      dir="rtl"
-                    >
-                      {getPredicateText(studentTotals.rawAverage)}
-                    </span>
+                {/* Predikat Box (3 Cols) */}
+                <div className="sm:col-span-3 print:col-span-3">
+                  <div className="border border-slate-400 h-full flex flex-col">
+                    <div className="bg-blue-700 text-white font-bold text-[10px] px-2 py-0.5 text-center leading-tight">
+                      Predikat
+                    </div>
+                    <div className="flex-1 flex flex-col items-center justify-center p-1.5 text-center bg-slate-50/50">
+                      <span
+                        className="text-lg sm:text-xl font-bold text-slate-900 font-arabic leading-snug"
+                        dir="rtl"
+                      >
+                        {getPredicateText(pageData.studentTotals.rawAverage)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* ========================================================
-                9. CATATAN WALI KELAS (FULL WIDTH BOX - READ-ONLY PER STUDENT)
-               ======================================================== */}
-            <div className="mt-3 border border-slate-400">
-              <div className="bg-blue-700 text-white font-bold text-[10px] sm:text-[11px] px-3 py-1">
-                Catatan
-              </div>
-              <div className="p-3 text-[11px] text-slate-800 min-h-[46px] leading-relaxed">
-                {activeStudentReportNote?.note?.trim() ? (
-                  <span className="italic">{activeStudentReportNote.note}</span>
-                ) : (
-                  <>
-                    <span className="no-print text-slate-400 italic">
-                      Belum ada catatan raport untuk {activeStudent?.name || 'santri ini'} pada Semester {selectedSemester} Tahun Ajaran {selectedYear?.name || activeAcademicYear?.name || '-'}.
-                    </span>
-                    <span className="hidden print:inline text-slate-500">-</span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* ========================================================
-                10. TANDA TANGAN (SIGNATURES SECTION)
-               ======================================================== */}
-            <div className="mt-6 pt-2 text-[11px] sm:text-xs">
-              {/* Date & Location */}
-              <div className="text-right text-slate-700 mb-2">
-                <span>{schoolIdentity.city || 'Jakarta'}, </span>
-                <span>
-                  {new Date().toLocaleDateString('id-ID', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
-                  })}
-                </span>
+              {/* ========================================================
+                  6. CATATAN WALI KELAS (FULL WIDTH BOX - READ-ONLY PER STUDENT)
+                 ======================================================== */}
+              <div className={`${isF4 ? 'mt-2.5' : 'mt-1.5'} border border-slate-400`}>
+                <div className="bg-blue-700 text-white font-bold text-[10px] px-2.5 py-0.5 leading-tight">
+                  Catatan
+                </div>
+                <div
+                  className={`${
+                    isF4 ? 'p-2.5 min-h-[40px]' : 'p-2 min-h-[30px]'
+                  } text-[10.5px] text-slate-800 leading-snug`}
+                >
+                  {pageData.reportNote?.note?.trim() ? (
+                    <span className="italic">{pageData.reportNote.note}</span>
+                  ) : (
+                    <>
+                      <span className="no-print text-slate-400 italic">
+                        Belum ada catatan raport untuk {pageData.student?.name || 'santri ini'} pada Semester {selectedSemester} Tahun Ajaran {selectedYear?.name || activeAcademicYear?.name || '-'}.
+                      </span>
+                      <span className="hidden print:inline text-slate-500">-</span>
+                    </>
+                  )}
+                </div>
               </div>
 
-              {/* 3 Columns Signatures */}
-              <div className="grid grid-cols-3 gap-2 text-center">
-                {/* 1. Wali Santri / Orang Tua */}
-                <div className="flex flex-col justify-between">
-                  <div>
-                    <p className="text-slate-600">Mengetahui</p>
-                    <p className="font-semibold text-slate-800">Wali Santri / Orang Tua</p>
-                  </div>
-                  <div className="h-16" />
-                  <div>
-                    <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-36">
-                      {activeStudent?.parentName || '(..........................................)'}
-                    </p>
-                  </div>
+              {/* ========================================================
+                  7. TANDA TANGAN (SIGNATURES SECTION - KEPT ON SAME PAGE)
+                 ======================================================== */}
+              <div
+                className={`${
+                  isF4 ? 'mt-4 pt-1.5 text-[11px]' : 'mt-2.5 pt-1 text-[10.5px]'
+                } leading-tight break-inside-avoid`}
+              >
+                {/* Date & Location */}
+                <div className="text-right text-slate-700 mb-1.5">
+                  <span>{schoolIdentity.city || 'Tulang Bawang Barat'}, </span>
+                  <span>
+                    {new Date().toLocaleDateString('id-ID', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric'
+                    })}
+                  </span>
                 </div>
 
-                {/* 2. Wali Kelas */}
-                <div className="flex flex-col justify-between">
-                  <div>
-                    <p className="text-transparent select-none">&nbsp;</p>
-                    <p className="font-semibold text-slate-800">
-                      Wali Kelas {selectedClass?.name || ''}
-                    </p>
-                  </div>
-                  <div className="h-16" />
-                  <div>
-                    <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-36">
-                      {classHomeroomTeacher?.name || '(..........................................)'}
-                    </p>
-                    {classHomeroomTeacher?.nip && (
-                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                        NIP. {classHomeroomTeacher.nip}
+                {/* 3 Columns Signatures */}
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  {/* 1. Wali Santri / Orang Tua */}
+                  <div className="flex flex-col justify-between">
+                    <div>
+                      <p className="text-slate-600">Mengetahui</p>
+                      <p className="font-semibold text-slate-800">Wali Santri / Orang Tua</p>
+                    </div>
+                    <div className={isF4 ? 'h-14' : 'h-10'} />
+                    <div>
+                      <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-32">
+                        {pageData.student?.parentName || '(..........................................)'}
                       </p>
-                    )}
+                    </div>
                   </div>
-                </div>
 
-                {/* 3. Mengetahui Mudir / Kepala Sekolah (dari Identitas Sekolah) */}
-                <div className="flex flex-col justify-between">
-                  <div>
-                    <p className="text-slate-600">Mengetahui</p>
-                    <p className="font-semibold text-slate-800">
-                      {schoolIdentity.leaderTitle || 'Mudir / Kepala Sekolah'}
-                    </p>
-                  </div>
-                  <div className="h-16" />
-                  <div>
-                    <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-36">
-                      {schoolIdentity.mudirName || '(..........................................)'}
-                    </p>
-                    {schoolIdentity.mudirNip && (
-                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                        NIP/NIK. {schoolIdentity.mudirNip}
+                  {/* 2. Wali Kelas */}
+                  <div className="flex flex-col justify-between">
+                    <div>
+                      <p className="text-transparent select-none">&nbsp;</p>
+                      <p className="font-semibold text-slate-800">
+                        Wali Kelas {pageData.studentClass?.name || ''}
                       </p>
-                    )}
+                    </div>
+                    <div className={isF4 ? 'h-14' : 'h-10'} />
+                    <div>
+                      <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-32">
+                        {pageData.homeroomTeacher?.name ||
+                          '(..........................................)'}
+                      </p>
+                      {pageData.homeroomTeacher?.nip && (
+                        <p className="text-[9.5px] text-slate-500 font-mono mt-0.5">
+                          NIP. {pageData.homeroomTeacher.nip}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3. Mengetahui Mudir / Kepala Sekolah (dari Identitas Sekolah) */}
+                  <div className="flex flex-col justify-between">
+                    <div>
+                      <p className="text-slate-600">Mengetahui</p>
+                      <p className="font-semibold text-slate-800">
+                        {schoolIdentity.leaderTitle || 'Mudir / Kepala Sekolah'}
+                      </p>
+                    </div>
+                    <div className={isF4 ? 'h-14' : 'h-10'} />
+                    <div>
+                      <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-32">
+                        {schoolIdentity.mudirName || '(..........................................)'}
+                      </p>
+                      {schoolIdentity.mudirNip && (
+                        <p className="text-[9.5px] text-slate-500 font-mono mt-0.5">
+                          NIP/NIK. {schoolIdentity.mudirNip}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

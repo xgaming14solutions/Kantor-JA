@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import {
@@ -7,15 +8,67 @@ import {
   sendPasswordResetViaApi,
 } from './src/server/adminAuthService.ts';
 
+const SCHOOL_IDENTITY_STORAGE_DIR = path.join(process.cwd(), 'public', 'uploads');
+const SCHOOL_IDENTITY_FILE_PATH = path.join(SCHOOL_IDENTITY_STORAGE_DIR, 'school-identity.json');
+
+function readPersistedSchoolIdentity(): Record<string, any> | null {
+  try {
+    if (fs.existsSync(SCHOOL_IDENTITY_FILE_PATH)) {
+      const raw = fs.readFileSync(SCHOOL_IDENTITY_FILE_PATH, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not read persisted school-identity.json:', err);
+  }
+  return null;
+}
+
+function writePersistedSchoolIdentity(data: Record<string, any>): void {
+  try {
+    if (!fs.existsSync(SCHOOL_IDENTITY_STORAGE_DIR)) {
+      fs.mkdirSync(SCHOOL_IDENTITY_STORAGE_DIR, { recursive: true });
+    }
+    fs.writeFileSync(SCHOOL_IDENTITY_FILE_PATH, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Could not write persisted school-identity.json:', err);
+  }
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '5mb' }));
 
   // Health check endpoint
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', server: 'KantoJA Server' });
+  });
+
+  // Persistent School Identity & Logo endpoints (synchronized with Firestore academicSettings/school_identity)
+  app.get('/api/school-identity', (req, res) => {
+    const stored = readPersistedSchoolIdentity();
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res.json({ success: true, data: stored });
+  });
+
+  app.post('/api/school-identity', (req, res) => {
+    try {
+      const payload = req.body;
+      if (!payload || typeof payload !== 'object') {
+        return res.status(400).json({ success: false, error: 'Payload identitas sekolah tidak valid.' });
+      }
+      writePersistedSchoolIdentity(payload);
+      return res.json({ success: true, data: payload });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        error: err?.message || 'Gagal menyimpan identitas sekolah di server.',
+      });
+    }
   });
 
   // Admin user creation endpoint: Creates genuine user in Firebase Authentication

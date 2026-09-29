@@ -213,8 +213,10 @@ export async function validateAndPreviewLogoFile(file: File): Promise<ProcessedL
   const naturalWidth = img.naturalWidth || img.width || 256;
   const naturalHeight = img.naturalHeight || img.height || 256;
 
-  // Optimize dimensions proportionally (max 480px on longest side) while preserving exact aspect ratio & transparency
-  const MAX_DIMENSION = 480;
+  // Optimize dimensions proportionally (max 240px on longest side) while preserving exact aspect ratio & transparency.
+  // 240px provides crystal-clear rendering on retina screens & print headers while keeping Base64 size compact (< 35 KB)
+  // so Firestore setDoc over long-polling and mobile localStorage never fail or time out.
+  const MAX_DIMENSION = 240;
   let targetWidth = naturalWidth;
   let targetHeight = naturalHeight;
 
@@ -246,28 +248,80 @@ export async function validateAndPreviewLogoFile(file: File): Promise<ProcessedL
   ctx.clearRect(0, 0, targetWidth, targetHeight);
   ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 
-  const isTransparentFormat =
-    file.type === 'image/png' ||
-    file.type === 'image/webp' ||
-    fileNameLower.endsWith('.png') ||
-    fileNameLower.endsWith('.webp');
+  // Detect whether the image actually contains transparent pixels
+  let hasTransparentPixels = false;
+  try {
+    const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight).data;
+    for (let i = 3; i < imageData.length; i += 16) {
+      if (imageData[i] < 250) {
+        hasTransparentPixels = true;
+        break;
+      }
+    }
+  } catch {
+    hasTransparentPixels =
+      file.type === 'image/png' ||
+      file.type === 'image/webp' ||
+      fileNameLower.endsWith('.png') ||
+      fileNameLower.endsWith('.webp');
+  }
 
-  const outputMime = isTransparentFormat ? 'image/png' : 'image/jpeg';
-  let optimizedDataUrl = canvas.toDataURL(outputMime, 0.9);
+  let outputMime = 'image/jpeg';
+  let optimizedDataUrl = '';
 
-  // Ensure data URL fits comfortably in Firestore document (< 350 KB)
-  if (optimizedDataUrl.length > 350_000) {
-    const smallerMax = 320;
-    const ratio = Math.min(smallerMax / naturalWidth, smallerMax / naturalHeight, 1);
-    canvas.width = Math.max(1, Math.round(naturalWidth * ratio));
-    canvas.height = Math.max(1, Math.round(naturalHeight * ratio));
+  if (hasTransparentPixels) {
+    // Try WebP first (supports transparency with small size), fallback to PNG if browser does not encode WebP
+    const webpAttempt = canvas.toDataURL('image/webp', 0.86);
+    if (webpAttempt.startsWith('data:image/webp') && webpAttempt.length < 65_000) {
+      outputMime = 'image/webp';
+      optimizedDataUrl = webpAttempt;
+    } else {
+      outputMime = 'image/png';
+      optimizedDataUrl = canvas.toDataURL('image/png');
+    }
+  } else {
+    // Fill white background for opaque images and encode as high-clarity JPEG
+    const opaqueCanvas = document.createElement('canvas');
+    opaqueCanvas.width = targetWidth;
+    opaqueCanvas.height = targetHeight;
+    const oCtx = opaqueCanvas.getContext('2d');
+    if (oCtx) {
+      oCtx.fillStyle = '#FFFFFF';
+      oCtx.fillRect(0, 0, targetWidth, targetHeight);
+      oCtx.imageSmoothingEnabled = true;
+      oCtx.imageSmoothingQuality = 'high';
+      oCtx.drawImage(canvas, 0, 0);
+      outputMime = 'image/jpeg';
+      optimizedDataUrl = opaqueCanvas.toDataURL('image/jpeg', 0.88);
+    } else {
+      optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+    }
+  }
+
+  // Second pass if still > 55 KB (e.g., complex transparent PNG on iOS Safari where WebP encode falls back to PNG)
+  if (optimizedDataUrl.length > 55_000) {
+    const compactMax = 160;
+    const ratio = Math.min(compactMax / naturalWidth, compactMax / naturalHeight, 1);
+    const cW = Math.max(1, Math.round(naturalWidth * ratio));
+    const cH = Math.max(1, Math.round(naturalHeight * ratio));
+    canvas.width = cW;
+    canvas.height = cH;
     const ctx2 = canvas.getContext('2d');
     if (ctx2) {
       ctx2.imageSmoothingEnabled = true;
       ctx2.imageSmoothingQuality = 'high';
-      ctx2.clearRect(0, 0, canvas.width, canvas.height);
-      ctx2.drawImage(img, 0, 0, canvas.width, canvas.height);
-      optimizedDataUrl = canvas.toDataURL(isTransparentFormat ? 'image/webp' : 'image/jpeg', 0.85);
+      ctx2.clearRect(0, 0, cW, cH);
+      ctx2.drawImage(img, 0, 0, cW, cH);
+      const webp2 = canvas.toDataURL('image/webp', 0.82);
+      if (webp2.startsWith('data:image/webp')) {
+        outputMime = 'image/webp';
+        optimizedDataUrl = webp2;
+      } else {
+        outputMime = hasTransparentPixels ? 'image/png' : 'image/jpeg';
+        optimizedDataUrl = canvas.toDataURL(outputMime, 0.82);
+      }
+      targetWidth = cW;
+      targetHeight = cH;
     }
   }
 
@@ -283,8 +337,8 @@ export async function validateAndPreviewLogoFile(file: File): Promise<ProcessedL
 }
 
 /**
- * Returns the validated, aspect-ratio-preserved optimized Data URL for immediate persistence
- * in schoolIdentity.logoUrl (Firestore & localStorage) without external CORS dependencies.
+ * Returns the validated, aspect-ratio-preserved compact Data URL (< 35 KB) for immediate persistence
+ * in Firestore (academicSettings/school_identity), backend server storage, and localStorage.
  */
 export async function uploadSchoolLogoWithFallback(
   processed: ProcessedLogoResult

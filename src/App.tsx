@@ -116,14 +116,19 @@ export default function App() {
     }
   }, [currentUser, loading]);
 
-  // Handle browser back and forward button navigation
+  // Handle browser back and forward button navigation smoothly without full page reload
   useEffect(() => {
-    const handlePopState = () => {
+    const handlePopState = (e: PopStateEvent) => {
+      const stateTab = e.state?.tab;
+      if (stateTab && NAVIGATION_ITEMS.some((item) => item.id === stateTab)) {
+        setCurrentTab(stateTab);
+        return;
+      }
       const path = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
       const matchingItem = NAVIGATION_ITEMS.find((item) => item.id === path);
       if (matchingItem) {
         setCurrentTab(matchingItem.id);
-      } else if (!path || path === 'dashboard') {
+      } else if (!path || path === 'dashboard' || path === 'login') {
         setCurrentTab('dashboard');
       }
     };
@@ -137,7 +142,7 @@ export default function App() {
     setNotifOpen(false);
     setProfileOpen(false);
     if (window.location.pathname.replace(/^\/+|\/+$/g, '') !== tab) {
-      window.history.pushState(null, '', `/${tab}`);
+      window.history.pushState({ tab }, '', `/${tab}`);
     }
   };
 
@@ -352,7 +357,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#F4F7F8] text-[#24343D]">
+    <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-[#F4F7F8] text-[#24343D] print:min-h-0 print:max-w-none print:bg-white print:overflow-visible">
       {/* Sidebar Navigation */}
       <Sidebar
         currentTab={currentTab}
@@ -364,7 +369,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <div
-        className={`min-h-screen flex flex-col min-w-0 w-full max-w-full overflow-x-hidden transition-all duration-200 box-border ${
+        className={`min-h-screen flex flex-col min-w-0 w-full max-w-full overflow-x-hidden transition-all duration-200 box-border print:min-h-0 print:pl-0 print:overflow-visible ${
           sidebarCollapsed ? 'lg:pl-[72px]' : 'lg:pl-64'
         }`}
       >
@@ -562,7 +567,7 @@ export default function App() {
         </header>
 
         {/* Page Content Body */}
-        <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full min-w-0 mx-auto box-border">
+        <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full min-w-0 mx-auto box-border print:p-0 print:m-0 print:max-w-none print:overflow-visible">
           {renderContent()}
         </main>
       </div>
