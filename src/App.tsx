@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense, lazy } from 'react';
 import { useAuth } from './context/AuthContext';
 import { useMasterData } from './context/MasterDataContext';
 import { LoginView } from './components/LoginView';
@@ -8,25 +8,6 @@ import {
   MENU_GROUP_LABELS,
   formatRoleLabel,
 } from './components/Sidebar';
-import { DashboardView } from './components/DashboardView';
-import { MudirDashboardView } from './components/MudirDashboardView';
-import { StudentsView } from './components/StudentsView';
-import { TeachersView } from './components/TeachersView';
-import { ClassesView } from './components/ClassesView';
-import { ScoresView } from './components/ScoresView';
-import { AttendanceView } from './components/AttendanceView';
-import { AcademicYearsView } from './components/AcademicYearsView';
-import { SubjectsView } from './components/SubjectsView';
-import { AssignmentsView } from './components/AssignmentsView';
-import { UsersView } from './components/UsersView';
-import { AcademicSettingsView } from './components/AcademicSettingsView';
-import { ReportCardsView } from './components/ReportCardsView';
-import { PrintReportCardView } from './components/PrintReportCardView';
-import { MyClassesView } from './components/MyClassesView';
-import { GenericModuleView } from './components/GenericModuleView';
-import { KesantrianView } from './components/KesantrianView';
-import { AtkView } from './components/AtkView';
-import { AcademicCalendarView } from './components/AcademicCalendarView';
 import { SchoolLogo } from './components/SchoolLogo';
 import { calculateAtkStockStatus } from './types';
 import {
@@ -42,6 +23,100 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
+
+// Lazy-load internal administrative modules so the public profile page (/) stays fast and lightweight
+const DashboardView = lazy(() =>
+  import('./components/DashboardView').then((m) => ({ default: m.DashboardView }))
+);
+const MudirDashboardView = lazy(() =>
+  import('./components/MudirDashboardView').then((m) => ({ default: m.MudirDashboardView }))
+);
+const StudentsView = lazy(() =>
+  import('./components/StudentsView').then((m) => ({ default: m.StudentsView }))
+);
+const TeachersView = lazy(() =>
+  import('./components/TeachersView').then((m) => ({ default: m.TeachersView }))
+);
+const ClassesView = lazy(() =>
+  import('./components/ClassesView').then((m) => ({ default: m.ClassesView }))
+);
+const ScoresView = lazy(() =>
+  import('./components/ScoresView').then((m) => ({ default: m.ScoresView }))
+);
+const AttendanceView = lazy(() =>
+  import('./components/AttendanceView').then((m) => ({ default: m.AttendanceView }))
+);
+const AcademicYearsView = lazy(() =>
+  import('./components/AcademicYearsView').then((m) => ({ default: m.AcademicYearsView }))
+);
+const SubjectsView = lazy(() =>
+  import('./components/SubjectsView').then((m) => ({ default: m.SubjectsView }))
+);
+const AssignmentsView = lazy(() =>
+  import('./components/AssignmentsView').then((m) => ({ default: m.AssignmentsView }))
+);
+const UsersView = lazy(() =>
+  import('./components/UsersView').then((m) => ({ default: m.UsersView }))
+);
+const AcademicSettingsView = lazy(() =>
+  import('./components/AcademicSettingsView').then((m) => ({ default: m.AcademicSettingsView }))
+);
+const ReportCardsView = lazy(() =>
+  import('./components/ReportCardsView').then((m) => ({ default: m.ReportCardsView }))
+);
+const PrintReportCardView = lazy(() =>
+  import('./components/PrintReportCardView').then((m) => ({ default: m.PrintReportCardView }))
+);
+const MyClassesView = lazy(() =>
+  import('./components/MyClassesView').then((m) => ({ default: m.MyClassesView }))
+);
+const GenericModuleView = lazy(() =>
+  import('./components/GenericModuleView').then((m) => ({ default: m.GenericModuleView }))
+);
+const KesantrianView = lazy(() =>
+  import('./components/KesantrianView').then((m) => ({ default: m.KesantrianView }))
+);
+const AtkView = lazy(() =>
+  import('./components/AtkView').then((m) => ({ default: m.AtkView }))
+);
+const AcademicCalendarView = lazy(() =>
+  import('./components/AcademicCalendarView').then((m) => ({ default: m.AcademicCalendarView }))
+);
+
+const PUBLIC_SEO_TITLE = "Pesantren Islam Mutiara Insan | Pendidikan Tahfiz Al-Qur'an";
+const PUBLIC_CANONICAL_URL = 'https://mutiarainsantbb.vercel.app/';
+const PUBLIC_ROBOTS_CONTENT =
+  'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
+const PRIVATE_ROBOTS_CONTENT = 'noindex, nofollow';
+
+const updateSeoRobotsAndTitle = (isPublicRoot: boolean, pageTitle: string) => {
+  if (typeof document === 'undefined') return;
+  document.title = pageTitle;
+
+  let robotsMeta = document.querySelector('meta[name="robots"]') as HTMLMetaElement | null;
+  if (!robotsMeta) {
+    robotsMeta = document.createElement('meta');
+    robotsMeta.name = 'robots';
+    robotsMeta.id = 'meta-robots-tag';
+    document.head.appendChild(robotsMeta);
+  }
+  robotsMeta.content = isPublicRoot ? PUBLIC_ROBOTS_CONTENT : PRIVATE_ROBOTS_CONTENT;
+
+  // Ensure exactly ONE canonical tag exists on the public page
+  const canonicalLinks = document.querySelectorAll('link[rel="canonical"]');
+  if (canonicalLinks.length === 0) {
+    const link = document.createElement('link');
+    link.rel = 'canonical';
+    link.id = 'canonical-url-tag';
+    link.href = PUBLIC_CANONICAL_URL;
+    document.head.appendChild(link);
+  } else {
+    (canonicalLinks[0] as HTMLLinkElement).href = PUBLIC_CANONICAL_URL;
+    for (let i = 1; i < canonicalLinks.length; i++) {
+      canonicalLinks[i].parentNode?.removeChild(canonicalLinks[i]);
+    }
+  }
+};
 
 // Helper to parse clean tab from URL path
 const getInitialTab = (): string => {
@@ -89,32 +164,48 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  // Sync URL with tab and auth state
+  // Sync URL with tab, auth state, and SEO indexing directives
   useEffect(() => {
-    if (loading) return;
+    const rawPath = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
 
     if (!currentUser) {
-      window.history.replaceState(null, '', '/login');
+      // If a crawler or user accessed a private path directly while unauthenticated, mark it noindex
+      const isRootPath = !rawPath;
+      updateSeoRobotsAndTitle(isRootPath, PUBLIC_SEO_TITLE);
+      if (!loading && rawPath === 'login') {
+        window.history.replaceState(null, '', '/');
+        updateSeoRobotsAndTitle(true, PUBLIC_SEO_TITLE);
+      }
       return;
     }
 
-    const path = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
-    if (path === 'login' || !path) {
+    if (loading) return;
+
+    let resolvedTab = currentTab;
+    if (rawPath === 'login' || !rawPath) {
       const targetTab =
         role === 'ADMIN' || role === 'MUDIR' || role === 'mudir' ? 'dashboard' : currentTab;
       if (targetTab !== currentTab) {
         setCurrentTab(targetTab);
       }
+      resolvedTab = targetTab;
       window.history.replaceState(null, '', `/${targetTab}`);
     } else {
-      const matchingItem = NAVIGATION_ITEMS.find((item) => item.id === path);
+      const matchingItem = NAVIGATION_ITEMS.find((item) => item.id === rawPath);
       if (matchingItem) {
         setCurrentTab(matchingItem.id);
+        resolvedTab = matchingItem.id;
       } else {
         window.history.replaceState(null, '', `/${currentTab}`);
       }
     }
-  }, [currentUser, loading]);
+
+    const activeItem = NAVIGATION_ITEMS.find((item) => item.id === resolvedTab);
+    const internalTitle = activeItem
+      ? `${activeItem.label} — AKSARA | Pesantren Islam Mutiara Insan`
+      : 'Dashboard — AKSARA | Pesantren Islam Mutiara Insan';
+    updateSeoRobotsAndTitle(false, internalTitle);
+  }, [currentUser, loading, role, currentTab]);
 
   // Handle browser back and forward button navigation smoothly without full page reload
   useEffect(() => {
@@ -231,7 +322,12 @@ export default function App() {
     return list;
   }, [kesantrianRecords, mabitPeriods, atkItems, atkRequests]);
 
-  // If loading session
+  // If user is not logged in, render public profile / Login screen immediately so Googlebot & visitors never hit a loading gate
+  if (!currentUser || !role) {
+    return <LoginView />;
+  }
+
+  // If loading session for an authenticated user
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F4F7F8] flex items-center justify-center">
@@ -243,11 +339,6 @@ export default function App() {
         </div>
       </div>
     );
-  }
-
-  // If user is not logged in, render Login screen
-  if (!currentUser || !role) {
-    return <LoginView />;
   }
 
   // Enforce RBAC on current tab
@@ -553,7 +644,11 @@ export default function App() {
 
                   <div className="border-t border-[#DCE5E8] pt-1 mt-1">
                     <button
-                      onClick={logout}
+                      onClick={() => {
+                        window.history.replaceState(null, '', '/');
+                        updateSeoRobotsAndTitle(true, PUBLIC_SEO_TITLE);
+                        logout();
+                      }}
                       className="w-full text-left px-4 py-2 text-[#C96A6A] hover:bg-[#FBF1F1] font-semibold flex items-center gap-2 cursor-pointer"
                     >
                       <LogOut className="w-3.5 h-3.5" />
@@ -568,7 +663,18 @@ export default function App() {
 
         {/* Page Content Body */}
         <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full min-w-0 mx-auto box-border print:p-0 print:m-0 print:max-w-none print:overflow-visible">
-          {renderContent()}
+          <Suspense
+            fallback={
+              <div className="py-16 flex flex-col items-center justify-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[#24485A] text-white flex items-center justify-center animate-pulse">
+                  <School className="w-4 h-4" />
+                </div>
+                <p className="text-xs font-medium text-[#71818A]">Memuat modul...</p>
+              </div>
+            }
+          >
+            {renderContent()}
+          </Suspense>
         </main>
       </div>
     </div>

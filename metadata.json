@@ -1,6 +1,6 @@
 {
   "name": "KantoJA",
-  "description": "KantoJA - Sistem Informasi Manajemen Sekolah untuk Admin, Kepala Sekolah, Wali Kelas, dan Guru Mata Pelajaran",
+  "description": "Pesantren Islam Mutiara Insan merupakan lembaga pendidikan yang berfokus pada tahfiz Al-Qur'an, pendidikan diniyah, pembinaan akhlak, ilmu, dan kemandirian santri.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

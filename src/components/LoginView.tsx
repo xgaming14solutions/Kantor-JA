@@ -134,33 +134,33 @@ const SANTRI_LIFE_ASPECTS = [
 const INTEGRATED_EDUCATION_ITEMS = [
   {
     number: '01',
-    title: 'Pendidikan akademik',
+    title: "Tahfiz Al-Qur'an",
     description:
-      'Penyelenggaraan pembelajaran mata pelajaran umum secara sistematis guna menunjang kompetensi keilmuan dan kelanjutan studi santri.',
+      "Program inti pendidikan tahfiz untuk penghafalan dan penjagaan Al-Qur'an melalui halaqah rutin pagi dan petang dengan bimbingan pengampu tahfiz.",
   },
   {
     number: '02',
-    title: 'Pendidikan diniyah',
+    title: 'Pendidikan Diniyah',
     description:
       'Pendalaman ilmu-ilmu dasar keislaman meliputi aqidah, akhlak, fiqih ibadah, hadits, serta bahasa Arab sebagai fondasi pemahaman agama.',
   },
   {
     number: '03',
-    title: 'Tahfiz Al-Qur’an',
+    title: 'Pembinaan Akhlak',
     description:
-      'Program inti penghafalan dan penjagaan Al-Qur’an melalui halaqah rutin pagi dan petang dengan bimbingan pengampu tahfiz.',
+      'Keteladanan dan pembiasaan adab islami dalam bertutur kata, bersikap hormat kepada guru, serta berinteraksi dengan sesama santri.',
   },
   {
     number: '04',
-    title: 'Pembinaan akhlak',
+    title: 'Pendidikan Akademik',
     description:
-      'Keteladanan dan pembiasaan adab islami dalam bertutur kata, bersikap hormat kepada guru, serta berinteraksi dengan sesama.',
+      'Penyelenggaraan pembelajaran mata pelajaran umum secara sistematis guna menunjang kompetensi keilmuan dan kelanjutan studi santri.',
   },
   {
     number: '05',
-    title: 'Kegiatan kepesantrenan',
+    title: 'Kegiatan Kepesantrenan',
     description:
-      'Rangkaian aktivitas asrama, ibadah berjamaah, latihan kemandirian, dan kegiatan kebersamaan yang membentuk karakter santri.',
+      'Rangkaian aktivitas asrama, ibadah berjamaah, latihan kemandirian santri, dan kegiatan kebersamaan yang membentuk karakter.',
   },
 ];
 
@@ -299,8 +299,11 @@ export const LoginView: React.FC = () => {
       : DEFAULT_PESANTREN_FACILITIES
   ).filter((item) => item.isAvailable !== false);
 
+  const rawSchoolName = schoolIdentity?.schoolName?.trim() || '';
   const pesantrenName =
-    schoolIdentity?.schoolName?.trim() || 'Pesantren Islam Mutiara Insan';
+    !rawSchoolName || rawSchoolName.toLowerCase() === 'pesantren islam mutiara insan'
+      ? 'Pesantren Islam Mutiara Insan'
+      : rawSchoolName;
   const pesantrenLogoUrl = schoolIdentity?.logoUrl?.trim() || '';
   const pesantrenAddress =
     schoolIdentity?.address ||
@@ -405,7 +408,7 @@ export const LoginView: React.FC = () => {
                         variant="light"
                       />
                       <div className="min-w-0">
-                        <h2 className="text-base font-bold text-stone-900">Masuk ke AKSARA</h2>
+                        <div className="text-base font-bold text-stone-900">Masuk ke AKSARA</div>
                         <p className="text-xs text-stone-500 mt-0.5 truncate">
                           {pesantrenName}
                         </p>
@@ -664,7 +667,7 @@ export const LoginView: React.FC = () => {
               </div>
 
               <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white leading-[1.1] text-balance">
-                {pesantrenName}
+                Pesantren Islam Mutiara Insan
               </h1>
 
               <p className="font-display text-xl sm:text-2xl text-amber-200 font-medium leading-snug text-balance">
@@ -672,7 +675,7 @@ export const LoginView: React.FC = () => {
               </p>
 
               <p className="text-sm sm:text-base text-emerald-100/90 leading-relaxed max-w-2xl">
-                Pesantren Islam Mutiara Insan merupakan lembaga pendidikan Islam yang berfokus pada pembinaan generasi Qur’ani melalui program Tahfiz Al-Qur’an, pendidikan keislaman, pembentukan akhlak, serta pengembangan kemampuan akademik dan kemandirian santri.
+                Pesantren Islam Mutiara Insan merupakan lembaga pendidikan dan pesantren tahfiz Al-Qur’an yang berfokus pada pendidikan tahfiz Al-Qur’an, pendidikan diniyah, pembinaan akhlak, ilmu, dan kemandirian santri.
               </p>
 
               <div className="pt-2 flex flex-wrap items-center gap-3.5">
@@ -738,14 +741,14 @@ export const LoginView: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-start">
             <div className="lg:col-span-5 space-y-4">
               <div className="text-xs font-semibold uppercase tracking-widest text-emerald-800">
-                Profil Lembaga
+                Tentang Lembaga &middot; {pesantrenName}
               </div>
               <h2 className="font-display text-3xl sm:text-4xl font-bold text-stone-900 leading-tight text-balance">
-                Tentang Pesantren Islam Mutiara Insan
+                Profil Pesantren
               </h2>
               <div className="w-16 h-0.5 bg-amber-500" />
               <p className="text-xs sm:text-sm text-stone-500 leading-relaxed pt-2">
-                Menyelenggarakan pendidikan Islam terpadu yang memadukan tahfiz Al-Qur’an, keilmuan diniyah, dan pendidikan formal secara berkesinambungan.
+                Menyelenggarakan pendidikan Islam terpadu yang memadukan Tahfiz Al-Qur’an, pendidikan diniyah, dan pembinaan santri secara berkesinambungan.
               </p>
             </div>
 
@@ -778,10 +781,10 @@ export const LoginView: React.FC = () => {
                 Fokus Utama Pembinaan
               </div>
               <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight text-balance">
-                Program Tahfiz Al-Qur’an
+                Program Tahfiz Al-Qur'an
               </h2>
               <p className="text-sm sm:text-base text-emerald-100/90 leading-relaxed max-w-2xl">
-                Program Tahfiz Al-Qur’an menjadi salah satu fokus utama pembinaan santri di Pesantren Islam Mutiara Insan. Proses hafalan dilakukan secara bertahap dan terarah dengan memperhatikan kualitas bacaan, ziyadah, murajaah, dan ketuntasan hafalan.
+                Program Tahfiz Al-Qur'an menjadi salah satu fokus utama pembinaan santri di Pesantren Islam Mutiara Insan. Proses hafalan dilakukan secara bertahap dan terarah dengan memperhatikan kualitas bacaan, ziyadah, murajaah, dan ketuntasan hafalan.
               </p>
             </div>
 
@@ -916,13 +919,13 @@ export const LoginView: React.FC = () => {
             <div className="lg:col-span-5 space-y-6">
               <div className="space-y-3">
                 <div className="text-xs font-semibold uppercase tracking-widest text-emerald-800">
-                  Sistem Kurikulum
+                  Sistem Kurikulum Terintegrasi
                 </div>
                 <h2 className="font-display text-3xl sm:text-4xl font-bold text-stone-900 leading-tight text-balance">
-                  Pendidikan yang Terintegrasi
+                  Program Pendidikan
                 </h2>
                 <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
-                  Pesantren Islam Mutiara Insan mengintegrasikan kurikulum keislaman, penghafalan Al-Qur’an, dan pendidikan akademik dalam satu kesatuan pembinaan harian.
+                  Pesantren Islam Mutiara Insan mengintegrasikan pendidikan tahfiz Al-Qur’an, pendidikan diniyah, pembinaan akhlak, kemandirian santri, dan pendidikan akademik dalam satu kesatuan pembinaan harian.
                 </p>
               </div>
 
@@ -1059,10 +1062,10 @@ export const LoginView: React.FC = () => {
           <div className="bg-emerald-950 text-white rounded-3xl p-8 sm:p-12 lg:p-16 border border-emerald-900">
             <div className="max-w-3xl space-y-6">
               <div className="text-xs font-semibold uppercase tracking-widest text-amber-300">
-                Penerimaan Santri Baru
+                Penerimaan Santri Baru &middot; {pesantrenName}
               </div>
               <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-bold text-white leading-tight text-balance">
-                Bergabung Bersama Pesantren Islam Mutiara Insan
+                Informasi Penerimaan Santri
               </h2>
               <p className="text-sm sm:text-base text-emerald-100/90 leading-relaxed">
                 {pesantrenPpdbInfo}
@@ -1099,7 +1102,7 @@ export const LoginView: React.FC = () => {
               Kanal Komunikasi Resmi
             </div>
             <h2 className="font-display text-3xl sm:text-4xl font-bold text-stone-900 leading-tight text-balance">
-              Hubungi Kami
+              Kontak dan Informasi Pesantren
             </h2>
             <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
               Silakan mengunjungi atau menghubungi sekretariat Pesantren Islam Mutiara Insan untuk informasi pendidikan dan penerimaan santri.

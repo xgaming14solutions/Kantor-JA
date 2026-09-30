@@ -1,7 +1,36 @@
 {
+  "headers": [
+    {
+      "source": "/robots.txt",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        }
+      ]
+    },
+    {
+      "source": "/sitemap.xml",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/xml; charset=utf-8"
+        }
+      ]
+    },
+    {
+      "source": "/(dashboard|login|students|teachers|classes|subjects|assignments|my-classes|scores|attendance|report-cards|print-report|academic-calendar|kesantrian-.*|atk-.*|users|settings|academic-settings|academic-years|admin|pengguna|siswa|guru|penilaian|absensi|rapor|kesantrian|atk|pengaturan)(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!robots\\.txt|sitemap\\.xml|og-pesantren-mutiara-insan\\.jpg|assets/).*)",
       "destination": "/index.html"
     }
   ]

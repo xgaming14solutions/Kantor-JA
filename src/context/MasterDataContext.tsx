@@ -731,6 +731,29 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // Load all master data collections
   const refreshAll = async () => {
     try {
+      // On public profile page (before login), only load schoolIdentity so internal collections are not fetched
+      if (!currentUser) {
+        const loadedSchoolIdentity = await fetchSchoolIdentity();
+        setSchoolIdentity((prev) => {
+          if (
+            lastSavedIdentityAtRef.current &&
+            (!loadedSchoolIdentity.updatedAt ||
+              loadedSchoolIdentity.updatedAt < lastSavedIdentityAtRef.current)
+          ) {
+            return prev;
+          }
+          if (
+            prev.updatedAt &&
+            loadedSchoolIdentity.updatedAt &&
+            prev.updatedAt > loadedSchoolIdentity.updatedAt
+          ) {
+            return prev;
+          }
+          return loadedSchoolIdentity;
+        });
+        return;
+      }
+
       // First attempt to seed if completely empty
       await seedDatabaseIfEmpty();
 

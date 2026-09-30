@@ -43,6 +43,17 @@ async function startServer() {
 
   app.use(express.json({ limit: '5mb' }));
 
+  // Serve public SEO assets (robots.txt, sitemap.xml, Open Graph image)
+  app.get('/robots.txt', (req, res) => {
+    res.type('text/plain; charset=utf-8');
+    res.sendFile(path.join(process.cwd(), 'public', 'robots.txt'));
+  });
+
+  app.get('/sitemap.xml', (req, res) => {
+    res.type('application/xml; charset=utf-8');
+    res.sendFile(path.join(process.cwd(), 'public', 'sitemap.xml'));
+  });
+
   // Health check endpoint
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', server: 'KantoJA Server' });

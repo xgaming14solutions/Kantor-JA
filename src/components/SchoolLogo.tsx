@@ -117,24 +117,28 @@ export const SchoolLogo: React.FC<SchoolLogoProps> = ({
   const sizeStyle = SIZE_CLASSES[size] || SIZE_CLASSES.sm;
   const variantStyle = VARIANT_CLASSES[variant] || VARIANT_CLASSES.light;
   const IconComponent = fallbackIcon === 'book' ? BookOpen : School;
+  const normalizedAltName =
+    !schoolName || schoolName.toLowerCase().includes('mutiara insan')
+      ? 'Pesantren Islam Mutiara Insan'
+      : schoolName;
 
   return (
     <div
       className={`inline-flex items-center justify-center shrink-0 overflow-hidden select-none ${
         sizeStyle.box
       } ${hasValidLogo ? variantStyle.withLogo : variantStyle.withoutLogo} ${className}`}
-      title={schoolName}
+      title={normalizedAltName}
     >
       {hasValidLogo ? (
         <img
           key={resolvedSrc.slice(-32)}
           src={resolvedSrc}
-          alt={`Logo ${schoolName}`}
+          alt={`Logo ${normalizedAltName}`}
           onError={() => setImgError(true)}
           className={`${sizeStyle.img} ${imgClassName}`}
         />
       ) : (
-        <IconComponent className={sizeStyle.icon} />
+        <IconComponent className={sizeStyle.icon} aria-label={`Logo ${normalizedAltName}`} />
       )}
     </div>
   );

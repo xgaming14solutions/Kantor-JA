@@ -1,0 +1,51 @@
+User-agent: *
+Allow: /
+
+# Halaman Internal Sistem AKSARA (Private - Membutuhkan Login)
+Disallow: /dashboard
+Disallow: /login
+Disallow: /students
+Disallow: /teachers
+Disallow: /classes
+Disallow: /subjects
+Disallow: /assignments
+Disallow: /my-classes
+Disallow: /scores
+Disallow: /attendance
+Disallow: /report-cards
+Disallow: /print-report
+Disallow: /academic-calendar
+Disallow: /kesantrian-dashboard
+Disallow: /kesantrian-pelanggaran
+Disallow: /kesantrian-sakit
+Disallow: /kesantrian-izin
+Disallow: /kesantrian-mabit
+Disallow: /kesantrian-obat
+Disallow: /kesantrian-laporan
+Disallow: /atk-dashboard
+Disallow: /atk-items
+Disallow: /atk-requests
+Disallow: /atk-incoming
+Disallow: /atk-outgoing
+Disallow: /atk-restock
+Disallow: /atk-history
+Disallow: /atk-reports
+Disallow: /users
+Disallow: /settings
+Disallow: /academic-settings
+Disallow: /academic-years
+Disallow: /api/
+
+# Path Alias Internal
+Disallow: /admin
+Disallow: /pengguna
+Disallow: /siswa
+Disallow: /guru
+Disallow: /penilaian
+Disallow: /absensi
+Disallow: /rapor
+Disallow: /kesantrian
+Disallow: /atk
+Disallow: /pengaturan
+
+Sitemap: https://mutiarainsantbb.vercel.app/sitemap.xml
