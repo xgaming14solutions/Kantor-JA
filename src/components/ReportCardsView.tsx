@@ -735,30 +735,24 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
             <div className="flex-1 overflow-y-auto p-6 space-y-6 print:p-0">
               {/* Report Header Card */}
               <div className="border border-slate-200 rounded-2xl p-5 bg-slate-50/50 space-y-4">
-                {schoolIdentity?.logoUrl?.trim() && (
-                  <div className="flex items-center gap-3.5 pb-3.5 border-b border-slate-200">
-                    <SchoolLogo
-                      logoUrl={schoolIdentity.logoUrl}
-                      schoolName={schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}
-                      size="lg"
-                      variant="light"
-                      hideIfEmpty
-                    />
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold text-slate-900 uppercase">
-                        {schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}
-                      </div>
-                      <div className="text-xs text-slate-600">
-                        {formatReportProgram(schoolIdentity.programName, selectedClass)}
-                      </div>
-                      {schoolIdentity.address && (
-                        <div className="text-[11px] text-slate-500 mt-0.5">
-                          {schoolIdentity.address}
-                        </div>
-                      )}
+                <div className="flex flex-row items-center justify-between gap-4 pb-3.5 border-b-2 border-slate-900">
+                  {schoolIdentity?.logoUrl?.trim() && (
+                    <div className="shrink-0 flex items-center justify-start">
+                      <SchoolLogo
+                        logoUrl={schoolIdentity.logoUrl}
+                        schoolName={schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}
+                        size="lg"
+                        variant="light"
+                        hideIfEmpty
+                      />
                     </div>
+                  )}
+                  <div className="flex-1 flex items-center justify-center">
+                    <h1 className="text-sm sm:text-base font-black tracking-wider uppercase text-slate-900 leading-tight text-center">
+                      LAPORAN HASIL BELAJAR SISWA
+                    </h1>
                   </div>
-                )}
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
                   {/* Left Column */}
                   <div className="space-y-1.5">
@@ -793,6 +787,13 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
                   {/* Right Column */}
                   <div className="space-y-1.5">
                     <div className="grid grid-cols-[95px_10px_1fr]">
+                      <span className="font-semibold text-slate-600">NISN</span>
+                      <span>:</span>
+                      <span className="font-mono text-slate-800">
+                        {activeStudentDetail.student.nisn || activeStudentDetail.student.nis || '-'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-[95px_10px_1fr]">
                       <span className="font-semibold text-slate-600">Kelas</span>
                       <span>:</span>
                       <strong className="font-bold text-slate-900">
@@ -808,13 +809,6 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
                       <span className="font-semibold text-slate-600">Tahun Ajaran</span>
                       <span>:</span>
                       <span className="text-slate-800">{activeAcademicYear?.name || '2025/2026'}</span>
-                    </div>
-                    <div className="grid grid-cols-[95px_10px_1fr]">
-                      <span className="font-semibold text-slate-600">NISN</span>
-                      <span>:</span>
-                      <span className="font-mono text-slate-800">
-                        {activeStudentDetail.student.nisn || activeStudentDetail.student.nis || '-'}
-                      </span>
                     </div>
                   </div>
                 </div>
