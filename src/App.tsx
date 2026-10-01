@@ -82,6 +82,9 @@ const AtkView = lazy(() =>
 const AcademicCalendarView = lazy(() =>
   import('./components/AcademicCalendarView').then((m) => ({ default: m.AcademicCalendarView }))
 );
+const SpmbBrochuresAdminView = lazy(() =>
+  import('./components/SpmbBrochuresAdminView').then((m) => ({ default: m.SpmbBrochuresAdminView }))
+);
 
 const PUBLIC_SEO_TITLE = "Pesantren Islam Mutiara Insan | Pendidikan Tahfiz Al-Qur'an";
 const PUBLIC_CANONICAL_URL = 'https://mutiarainsantbb.vercel.app/';
@@ -332,9 +335,13 @@ export default function App() {
     return (
       <div className="min-h-screen bg-[#F4F7F8] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#24485A] text-white flex items-center justify-center animate-pulse">
-            <School className="w-5 h-5" />
-          </div>
+          <SchoolLogo
+            logoUrl={schoolIdentity?.logoUrl}
+            schoolName={schoolIdentity?.schoolName || 'Pesantren Islam Mutiara Insan'}
+            size="md"
+            variant="navy"
+            className="animate-pulse"
+          />
           <p className="text-xs font-medium text-[#71818A]">Memuat AKSARA...</p>
         </div>
       </div>
@@ -421,6 +428,8 @@ export default function App() {
         return <UsersView userRole={role} />;
       case 'academic-settings':
         return <AcademicSettingsView userRole={role} />;
+      case 'spmb-brochures':
+        return <SpmbBrochuresAdminView userRole={role} />;
       case 'report-cards':
         return (
           <ReportCardsView

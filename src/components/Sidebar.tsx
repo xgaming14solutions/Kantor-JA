@@ -32,6 +32,7 @@ import {
   ShoppingCart,
   History,
   BarChart3,
+  FileImage,
 } from 'lucide-react';
 
 export type MenuGroup =
@@ -404,6 +405,13 @@ export const NAVIGATION_ITEMS: MenuItem[] = [
   // =======================================================
   // PENGATURAN
   // =======================================================
+  {
+    id: 'spmb-brochures',
+    label: 'Brosur SPMB',
+    icon: FileImage,
+    allowedRoles: ['ADMIN', 'MUDIR', 'mudir', 'KEPALA_SEKOLAH'],
+    group: 'PENGATURAN',
+  },
   {
     id: 'academic-settings',
     label: 'Pengaturan Akademik',

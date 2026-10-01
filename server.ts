@@ -9,7 +9,7 @@ import {
 } from './src/server/adminAuthService.ts';
 
 const SCHOOL_IDENTITY_STORAGE_DIR = path.join(process.cwd(), 'public', 'uploads');
-const SCHOOL_IDENTITY_FILE_PATH = path.join(SCHOOL_IDENTITY_STORAGE_DIR, 'school-identity.json');
+const SCHOOL_IDENTITY_FILE_PATH = path.join(SCHOOL_IDENTITY_STORAGE_DIR, 'school-identity-runtime.json');
 
 function readPersistedSchoolIdentity(): Record<string, any> | null {
   try {
@@ -21,7 +21,7 @@ function readPersistedSchoolIdentity(): Record<string, any> | null {
       }
     }
   } catch (err) {
-    console.warn('Could not read persisted school-identity.json:', err);
+    console.warn('Could not read persisted school-identity-runtime.json:', err);
   }
   return null;
 }
@@ -31,9 +31,16 @@ function writePersistedSchoolIdentity(data: Record<string, any>): void {
     if (!fs.existsSync(SCHOOL_IDENTITY_STORAGE_DIR)) {
       fs.mkdirSync(SCHOOL_IDENTITY_STORAGE_DIR, { recursive: true });
     }
-    fs.writeFileSync(SCHOOL_IDENTITY_FILE_PATH, JSON.stringify(data, null, 2), 'utf-8');
+    const existing = readPersistedSchoolIdentity();
+    const merged = { ...(existing || {}), ...data };
+    // Never overwrite a non-empty logoUrl with an empty string unless logoRemoved is explicitly true
+    if (!merged.logoUrl && existing?.logoUrl && data.logoRemoved !== true) {
+      merged.logoUrl = existing.logoUrl;
+      merged.logoUpdatedAt = existing.logoUpdatedAt || existing.updatedAt;
+    }
+    fs.writeFileSync(SCHOOL_IDENTITY_FILE_PATH, JSON.stringify(merged, null, 2), 'utf-8');
   } catch (err) {
-    console.warn('Could not write persisted school-identity.json:', err);
+    console.warn('Could not write persisted school-identity-runtime.json:', err);
   }
 }
 
@@ -45,13 +52,23 @@ async function startServer() {
 
   // Serve public SEO assets (robots.txt, sitemap.xml, Open Graph image)
   app.get('/robots.txt', (req, res) => {
-    res.type('text/plain; charset=utf-8');
-    res.sendFile(path.join(process.cwd(), 'public', 'robots.txt'));
+    const publicRobots = path.join(process.cwd(), 'public', 'robots.txt');
+    const distRobots = path.join(process.cwd(), 'dist', 'robots.txt');
+    const targetFile = fs.existsSync(publicRobots) ? publicRobots : distRobots;
+    res.status(200);
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    res.sendFile(targetFile);
   });
 
   app.get('/sitemap.xml', (req, res) => {
-    res.type('application/xml; charset=utf-8');
-    res.sendFile(path.join(process.cwd(), 'public', 'sitemap.xml'));
+    const publicSitemap = path.join(process.cwd(), 'public', 'sitemap.xml');
+    const distSitemap = path.join(process.cwd(), 'dist', 'sitemap.xml');
+    const targetFile = fs.existsSync(publicSitemap) ? publicSitemap : distSitemap;
+    res.status(200);
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    res.sendFile(targetFile);
   });
 
   // Health check endpoint

@@ -6,6 +6,10 @@
         {
           "key": "Content-Type",
           "value": "text/plain; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
         }
       ]
     },
@@ -15,6 +19,10 @@
         {
           "key": "Content-Type",
           "value": "application/xml; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
         }
       ]
     },
@@ -30,7 +38,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!robots\\.txt|sitemap\\.xml|og-pesantren-mutiara-insan\\.jpg|assets/).*)",
+      "source": "/((?!robots\\.txt|sitemap\\.xml|og-pesantren-mutiara-insan\\.jpg|assets/|uploads/|api/).*)",
       "destination": "/index.html"
     }
   ]

@@ -341,11 +341,18 @@ export async function validateAndPreviewLogoFile(file: File): Promise<ProcessedL
 }
 
 /**
- * Returns the validated, aspect-ratio-preserved compact Data URL (< 35 KB) for immediate persistence
- * in Firestore (academicSettings/school_identity), backend server storage, and localStorage.
+ * Returns the validated, aspect-ratio-preserved compact Data URL (< 35 KB)
+ * for immediate, permanent persistence in Firestore (academicSettings/school_identity & school_logo)
+ * and server storage without triggering browser CORS/403 storage errors.
  */
 export async function uploadSchoolLogoWithFallback(
   processed: ProcessedLogoResult
 ): Promise<string> {
+  try {
+    localStorage.setItem('kantoja_school_logo_backup', processed.previewDataUrl);
+    localStorage.setItem('kantoja_school_logo_removed', 'false');
+  } catch {
+    // ignore localStorage quota error
+  }
   return processed.previewDataUrl;
 }

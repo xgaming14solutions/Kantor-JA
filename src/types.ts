@@ -264,6 +264,8 @@ export interface SchoolIdentity {
   leaderTitle: string; // Jabatan Pimpinan (misal: Mudir / Kepala Sekolah)
   city: string; // Kota/Kabupaten
   logoUrl?: string; // URL atau Data URL Logo Sekolah / Pesantren
+  logoUpdatedAt?: string; // Waktu terakhir logo diperbarui
+  logoRemoved?: boolean; // Penanda eksplisit jika logo sengaja dihapus oleh Admin
   whatsapp?: string; // Nomor WhatsApp Resmi Pesantren
   email?: string; // Email Resmi Pesantren
   socialMedia?: string; // Kanal Media Sosial Resmi
@@ -740,6 +742,27 @@ export function canManageAcademicCalendar(role?: UserRole | string | null): bool
   const r = String(role || '').trim().toUpperCase();
   return r === 'ADMIN' || r === 'MUDIR' || r === 'KEPALA_SEKOLAH';
 }
+
+export interface SpmbBrochure {
+  id: string;
+  title: string;
+  academicYear: string;
+  description: string;
+  imageUrls: string[];
+  storagePaths: string[];
+  pageDocIds?: string[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  uploadedBy: string;
+  uploadedByName?: string;
+}
+
+export function canManageBrochures(role?: UserRole | string | null): boolean {
+  const r = String(role || '').trim().toUpperCase();
+  return r === 'ADMIN' || r === 'MUDIR' || r === 'KEPALA_SEKOLAH';
+}
+
 
 
 

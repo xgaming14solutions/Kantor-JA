@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import fs from 'fs';
 import path from 'path';
 import { defineConfig, type Plugin } from 'vite';
 import {
@@ -13,6 +14,28 @@ function adminApiPlugin(): Plugin {
     name: 'admin-api-plugin',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
+        if (req.url === '/sitemap.xml' || req.url?.startsWith('/sitemap.xml?')) {
+          const sitemapPath = path.join(process.cwd(), 'public', 'sitemap.xml');
+          if (fs.existsSync(sitemapPath)) {
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+            res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+            res.end(fs.readFileSync(sitemapPath, 'utf-8'));
+            return;
+          }
+        }
+
+        if (req.url === '/robots.txt' || req.url?.startsWith('/robots.txt?')) {
+          const robotsPath = path.join(process.cwd(), 'public', 'robots.txt');
+          if (fs.existsSync(robotsPath)) {
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+            res.end(fs.readFileSync(robotsPath, 'utf-8'));
+            return;
+          }
+        }
+
         if (req.url === '/api/health') {
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ status: 'ok', server: 'KantoJA Middleware' }));

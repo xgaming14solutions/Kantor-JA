@@ -6,6 +6,7 @@ import {
   setLogLevel,
   Firestore
 } from 'firebase/firestore';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Suppress noisy internal @firebase/firestore WebChannel timeout console.error logs
@@ -39,5 +40,14 @@ try {
 }
 
 export const db = firestoreDb;
+
+let storageInstance: FirebaseStorage | null = null;
+try {
+  storageInstance = getStorage(app);
+} catch {
+  storageInstance = null;
+}
+
+export const storage = storageInstance;
 
 export default app;

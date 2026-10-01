@@ -150,6 +150,7 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
       const finalLogoUrl = await uploadSchoolLogoWithFallback(pendingLogo);
       await saveSchoolIdentity({
         logoUrl: finalLogoUrl,
+        logoRemoved: false,
       });
       setPendingLogo(null);
       setLogoSuccess(
@@ -174,6 +175,7 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
     try {
       await saveSchoolIdentity({
         logoUrl: '',
+        logoRemoved: true,
       });
       setPendingLogo(null);
       setConfirmRemoveLogo(false);
@@ -225,8 +227,10 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
     setIsSaving(true);
     try {
       let nextLogoUrl = schoolIdentity.logoUrl || '';
+      let nextLogoRemoved = schoolIdentity.logoRemoved === true;
       if (pendingLogo) {
         nextLogoUrl = await uploadSchoolLogoWithFallback(pendingLogo);
+        nextLogoRemoved = false;
       }
       await saveSchoolIdentity({
         schoolName: formData.schoolName.trim(),
@@ -238,6 +242,7 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
         leaderTitle: formData.leaderTitle.trim() || 'Mudir / Kepala Sekolah',
         city: formData.city.trim() || 'Tulang Bawang Barat',
         logoUrl: nextLogoUrl,
+        logoRemoved: nextLogoRemoved,
         whatsapp: formData.whatsapp.trim(),
         email: formData.email.trim(),
         socialMedia: formData.socialMedia.trim(),
@@ -603,7 +608,7 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
                     </div>
                     <span className="text-xs font-semibold text-[#24343D]">Belum ada logo</span>
                     <span className="text-[10px] text-[#71818A] leading-tight">
-                      Gunakan tombol Pilih Logo
+                      Gunakan tombol Upload Logo
                     </span>
                   </div>
                 )}
@@ -612,8 +617,8 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
               {/* Controls & File Info */}
               <div className="flex-1 w-full space-y-3 text-center sm:text-left">
                 <div className="space-y-1">
-                  <div className="text-xs font-bold text-[#24343D]">
-                    {formData.schoolName || 'Pesantren Islam Mutiara Insan'}
+                  <div className="text-sm font-bold text-[#24343D]">
+                    {formData.schoolName || schoolIdentity.schoolName || 'Pesantren Islam Mutiara Insan'}
                   </div>
                   <p className="text-[11px] text-[#71818A] leading-relaxed">
                     Format yang didukung: <strong>PNG, JPG, JPEG, WEBP</strong> &bull; Ukuran maksimal: <strong>2 MB</strong>. Rasio gambar asli akan dipertahankan secara proporsional (tidak gepeng atau terpotong).
@@ -637,7 +642,7 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
 
                 {canManageIdentity ? (
                   <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 pt-1">
-                    {/* [ Pilih Logo ] */}
+                    {/* [ Ubah Logo / Upload Logo ] */}
                     <button
                       type="button"
                       disabled={isSavingLogo}
@@ -645,7 +650,7 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
                       className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-[#24485A] text-white hover:bg-[#1C3948] transition inline-flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
                     >
                       <Upload className="w-3.5 h-3.5" />
-                      <span>{savedLogoUrl ? 'Pilih / Ganti Logo' : 'Pilih Logo'}</span>
+                      <span>{savedLogoUrl && !previewImgBroken ? 'Ubah Logo' : 'Upload Logo'}</span>
                     </button>
 
                     {/* [ Simpan Logo ] & [ Batal ] when a new logo is previewed */}

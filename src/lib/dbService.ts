@@ -385,9 +385,14 @@ function safeSetItem(key: string, value: string): void {
       localStorage.setItem(key, value);
     } catch (e) {
       // If quota exceeded when saving critical school identity, free up non-essential cache keys and retry
-      if (key === 'kantoja_school_identity' || key === 'kantoja_school_logo_url') {
+      if (
+        key === 'kantoja_school_identity' ||
+        key === 'kantoja_school_logo_url' ||
+        key === 'kantoja_school_logo_backup'
+      ) {
         try {
           const removableKeys = [
+            'kantoja_spmb_brochures_v1',
             'kantoja_academicSettingLogs',
             'kantoja_academicSettings',
             'kantoja_atkTransactions',
@@ -485,10 +490,15 @@ export async function fetchCollection<T extends { id: string }>(
 
   // Save the normalized list back to cache only if Firestore read succeeded or cache already existed
   if (firestoreReadSucceeded) {
-    // Exclude school_identity from kantoja_academicSettings cache to avoid duplicating logoUrl in localStorage
+    // Exclude school_identity, school_logo, and atk_config from kantoja_academicSettings cache
     const toCache =
       collectionName === 'academicSettings'
-        ? items.filter((item: any) => item.id !== 'school_identity')
+        ? items.filter(
+            (item: any) =>
+              item.id !== 'school_identity' &&
+              item.id !== 'school_logo' &&
+              item.id !== 'atk_config'
+          )
         : items;
     safeSetItem(`kantoja_${collectionName}`, JSON.stringify(toCache));
   }
@@ -640,7 +650,7 @@ export const DEFAULT_SCHOOL_IDENTITY: SchoolIdentity = {
   mudirNip: '',
   leaderTitle: 'Mudir / Kepala Sekolah',
   city: 'Tulang Bawang Barat',
-  logoUrl: '',
+  logoUrl: '/assets/logo-pesantren-mutiara-insan.webp',
   whatsapp: '',
   email: '',
   socialMedia: '',
@@ -736,6 +746,74 @@ export function formatReportClassLabel(
   return `${cleaned} (${mapped.word})`;
 }
 
+export function isValidPersistedLogoUrl(url?: string | null): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.startsWith('blob:')) return false;
+  return (
+    trimmed.startsWith('data:image/') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('/')
+  );
+}
+
+export function recoverLocalLogoBackup(): { logoUrl: string; logoRemoved: boolean } {
+  try {
+    const removedFlag = safeGetItem('kantoja_school_logo_removed') === 'true';
+    if (removedFlag) {
+      return { logoUrl: '', logoRemoved: true };
+    }
+
+    const candidates: Array<string | null> = [
+      safeGetItem('kantoja_school_logo_backup'),
+      safeGetItem('kantoja_school_logo_url'),
+    ];
+
+    const cachedIdentityRaw = safeGetItem('kantoja_school_identity');
+    if (cachedIdentityRaw) {
+      try {
+        const parsed = JSON.parse(cachedIdentityRaw);
+        if (parsed && typeof parsed === 'object') {
+          if (parsed.logoRemoved === true) {
+            return { logoUrl: '', logoRemoved: true };
+          }
+          candidates.push(
+            parsed.logoUrl ?? parsed.logo ?? parsed.schoolLogo ?? parsed.logoDataUrl ?? null
+          );
+        }
+      } catch {
+        // ignore JSON parse error
+      }
+    }
+
+    const cachedSettingsRaw = safeGetItem('kantoja_academicSettings');
+    if (cachedSettingsRaw) {
+      try {
+        const list = JSON.parse(cachedSettingsRaw);
+        if (Array.isArray(list)) {
+          for (const item of list) {
+            if (item && (item.id === 'school_identity' || item.id === 'school_logo')) {
+              candidates.push(item.logoUrl ?? item.logo ?? null);
+            }
+          }
+        }
+      } catch {
+        // ignore JSON parse error
+      }
+    }
+
+    for (const c of candidates) {
+      if (isValidPersistedLogoUrl(c)) {
+        return { logoUrl: String(c).trim(), logoRemoved: false };
+      }
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return { logoUrl: '', logoRemoved: false };
+}
+
 export function normalizeSchoolIdentity(raw: any): SchoolIdentity {
   if (!raw || typeof raw !== 'object') {
     return { ...DEFAULT_SCHOOL_IDENTITY };
@@ -758,6 +836,16 @@ export function normalizeSchoolIdentity(raw: any): SchoolIdentity {
   const rawCity = String(raw.city ?? raw.kota ?? '').trim();
   const isLegacyCity = !rawCity || rawCity === 'Jakarta';
 
+  const explicitlyRemoved = raw.logoRemoved === true;
+  const candidateLogo = String(
+    raw.logoUrl ?? raw.logo ?? raw.schoolLogo ?? raw.logoDataUrl ?? raw.imageUrl ?? ''
+  ).trim();
+  const validLogoUrl = explicitlyRemoved
+    ? ''
+    : isValidPersistedLogoUrl(candidateLogo)
+    ? candidateLogo
+    : DEFAULT_SCHOOL_IDENTITY.logoUrl || '';
+
   return {
     id: 'school_identity',
     schoolName: isLegacySchoolName ? DEFAULT_SCHOOL_IDENTITY.schoolName : rawSchoolName,
@@ -770,7 +858,9 @@ export function normalizeSchoolIdentity(raw: any): SchoolIdentity {
       String(raw.leaderTitle ?? raw.jabatanPimpinan ?? DEFAULT_SCHOOL_IDENTITY.leaderTitle).trim() ||
       'Mudir / Kepala Sekolah',
     city: isLegacyCity ? DEFAULT_SCHOOL_IDENTITY.city : rawCity,
-    logoUrl: String(raw.logoUrl ?? raw.logo ?? '').trim(),
+    logoUrl: validLogoUrl,
+    logoUpdatedAt: raw.logoUpdatedAt ? String(raw.logoUpdatedAt) : undefined,
+    logoRemoved: raw.logoRemoved === true,
     whatsapp: String(raw.whatsapp ?? '').trim(),
     email: String(raw.email ?? '').trim(),
     socialMedia: String(raw.socialMedia ?? '').trim(),
@@ -793,17 +883,17 @@ export function normalizeSchoolIdentity(raw: any): SchoolIdentity {
 
 export function getInitialSchoolIdentity(): SchoolIdentity {
   try {
-    const dedicatedLogo = safeGetItem('kantoja_school_logo_url');
+    const recovery = recoverLocalLogoBackup();
     const cached = safeGetItem('kantoja_school_identity');
     if (cached) {
       const parsed = normalizeSchoolIdentity(JSON.parse(cached));
-      if (!parsed.logoUrl && dedicatedLogo !== null) {
-        parsed.logoUrl = dedicatedLogo;
+      if (!parsed.logoUrl && !parsed.logoRemoved && recovery.logoUrl) {
+        parsed.logoUrl = recovery.logoUrl;
       }
       return parsed;
     }
-    if (dedicatedLogo) {
-      return { ...DEFAULT_SCHOOL_IDENTITY, logoUrl: dedicatedLogo };
+    if (recovery.logoUrl && !recovery.logoRemoved) {
+      return { ...DEFAULT_SCHOOL_IDENTITY, logoUrl: recovery.logoUrl };
     }
   } catch {
     // ignore parse errors
@@ -812,23 +902,24 @@ export function getInitialSchoolIdentity(): SchoolIdentity {
 }
 
 export async function fetchSchoolIdentity(): Promise<SchoolIdentity> {
-  // 1. Read local cache
+  // 1. Read local cache & backup logo recovery
   let cachedIdentity: SchoolIdentity | null = null;
-  const dedicatedLogo = safeGetItem('kantoja_school_logo_url');
+  const localRecovery = recoverLocalLogoBackup();
   try {
     const cached = safeGetItem('kantoja_school_identity');
     if (cached) {
       cachedIdentity = normalizeSchoolIdentity(JSON.parse(cached));
-      if (!cachedIdentity.logoUrl && dedicatedLogo) {
-        cachedIdentity.logoUrl = dedicatedLogo;
+      if (!cachedIdentity.logoUrl && !cachedIdentity.logoRemoved && localRecovery.logoUrl) {
+        cachedIdentity.logoUrl = localRecovery.logoUrl;
       }
     }
   } catch (err) {
     console.warn('Error reading school identity from localStorage:', err);
   }
 
-  // 2. Read from Backend Server (/api/school-identity) and Firestore (academicSettings/school_identity) in parallel
+  // 2. Read from Firestore (academicSettings/school_identity AND academicSettings/school_logo) and Server in parallel
   const docRef = doc(db, 'academicSettings', 'school_identity');
+  const logoDocRef = doc(db, 'academicSettings', 'school_logo');
 
   const fetchServerPromise: Promise<SchoolIdentity | null> = (async () => {
     if (typeof window === 'undefined') return null;
@@ -849,33 +940,60 @@ export async function fetchSchoolIdentity(): Promise<SchoolIdentity> {
     return null;
   })();
 
-  const fetchFirestorePromise: Promise<SchoolIdentity | null> = (async () => {
+  const fetchFirestoreIdentityPromise: Promise<SchoolIdentity | null> = (async () => {
     try {
-      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000));
-      const getTask = (async () => {
-        try {
-          const snap = await getDocFromServer(docRef);
-          if (snap.exists()) {
-            return normalizeSchoolIdentity({ id: snap.id, ...snap.data() });
-          }
-          return null;
-        } catch {
-          const snap = await getDoc(docRef);
-          if (snap.exists()) {
-            return normalizeSchoolIdentity({ id: snap.id, ...snap.data() });
-          }
-          return null;
-        }
-      })();
-      return await Promise.race([getTask, timeout]);
+      const serverTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+      const serverTask = getDocFromServer(docRef)
+        .then((snap) => (snap.exists() ? normalizeSchoolIdentity({ id: snap.id, ...snap.data() }) : null))
+        .catch(() => null);
+      const fromServer = await Promise.race([serverTask, serverTimeout]);
+      if (fromServer) return fromServer;
+
+      const cacheTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+      const cacheTask = getDoc(docRef)
+        .then((snap) => (snap.exists() ? normalizeSchoolIdentity({ id: snap.id, ...snap.data() }) : null))
+        .catch(() => null);
+      return await Promise.race([cacheTask, cacheTimeout]);
     } catch {
       return null;
     }
   })();
 
-  const [serverIdentity, firestoreIdentity] = await Promise.all([
+  const fetchFirestoreLogoPromise: Promise<{
+    logoUrl: string;
+    logoRemoved: boolean;
+    logoUpdatedAt?: string;
+  } | null> = (async () => {
+    const parseLogoSnap = (d: any) => {
+      const rawUrl = String(d.logoUrl ?? d.logoDataUrl ?? d.logo ?? '').trim();
+      return {
+        logoUrl: isValidPersistedLogoUrl(rawUrl) ? rawUrl : '',
+        logoRemoved: d.logoRemoved === true,
+        logoUpdatedAt: d.logoUpdatedAt || d.updatedAt,
+      };
+    };
+    try {
+      const serverTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+      const serverTask = getDocFromServer(logoDocRef)
+        .then((snap) => (snap.exists() ? parseLogoSnap(snap.data()) : null))
+        .catch(() => null);
+      const fromServer = await Promise.race([serverTask, serverTimeout]);
+      if (fromServer) return fromServer;
+
+      const cacheTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+      const cacheTask = getDoc(logoDocRef)
+        .then((snap) => (snap.exists() ? parseLogoSnap(snap.data()) : null))
+        .catch(() => null);
+      return await Promise.race([cacheTask, cacheTimeout]);
+    } catch {
+      return null;
+    }
+  })();
+
+  const [serverIdentity, firestoreIdentity, firestoreLogoDoc] = await Promise.all([
     fetchServerPromise,
-    fetchFirestorePromise,
+    fetchFirestoreIdentityPromise,
+    fetchFirestoreLogoPromise,
   ]);
 
   // Pick the most recent authoritative identity across Firestore, Server, and Local Cache
@@ -883,36 +1001,81 @@ export async function fetchSchoolIdentity(): Promise<SchoolIdentity> {
     (item): item is SchoolIdentity => item !== null
   );
 
+  // Determine whether the logo was explicitly removed by Admin
+  const explicitlyRemoved =
+    firestoreLogoDoc?.logoRemoved === true ||
+    firestoreIdentity?.logoRemoved === true ||
+    (firestoreLogoDoc === null &&
+      firestoreIdentity === null &&
+      serverIdentity?.logoRemoved === true);
+
+  // Resolve the single authoritative logoUrl across all sources (never let an accidental empty string wipe a valid logo)
+  const resolvedLogoUrl = explicitlyRemoved
+    ? ''
+    : [
+        firestoreLogoDoc?.logoUrl,
+        firestoreIdentity?.logoUrl,
+        serverIdentity?.logoUrl,
+        cachedIdentity?.logoUrl,
+        localRecovery.logoUrl,
+      ].find((u) => isValidPersistedLogoUrl(u)) || '';
+
   if (candidates.length > 0) {
     candidates.sort((a, b) => {
       const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
       const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
       if (timeA !== timeB) return timeB - timeA;
-      // Tie-breaker: prefer candidate with non-empty logoUrl
       if (a.logoUrl && !b.logoUrl) return -1;
       if (!a.logoUrl && b.logoUrl) return 1;
       return 0;
     });
 
-    const winner = candidates[0];
+    const winner: SchoolIdentity = {
+      ...candidates[0],
+      logoUrl: resolvedLogoUrl,
+      logoRemoved: explicitlyRemoved,
+      logoUpdatedAt:
+        firestoreLogoDoc?.logoUpdatedAt ||
+        candidates[0].logoUpdatedAt ||
+        candidates[0].updatedAt,
+    };
 
-    // Ensure local cache, server, and Firestore are all in sync with the winner
+    // Update local cache
     safeSetItem('kantoja_school_identity', JSON.stringify(winner));
     safeSetItem('kantoja_school_logo_url', winner.logoUrl || '');
-
-    if (
-      !firestoreIdentity ||
-      (winner.updatedAt && firestoreIdentity.updatedAt !== winner.updatedAt) ||
-      firestoreIdentity.logoUrl !== winner.logoUrl
-    ) {
-      setDoc(docRef, sanitizeDataForFirestore(winner), { merge: true }).catch(() => {});
+    if (winner.logoUrl) {
+      safeSetItem('kantoja_school_logo_backup', winner.logoUrl);
+      safeSetItem('kantoja_school_logo_removed', 'false');
+    } else if (explicitlyRemoved) {
+      safeSetItem('kantoja_school_logo_backup', '');
+      safeSetItem('kantoja_school_logo_removed', 'true');
     }
 
+    // Self-heal Firestore ONLY when we have a valid non-empty logoUrl that was missing in Firestore
+    if (winner.logoUrl) {
+      if (!firestoreIdentity || firestoreIdentity.logoUrl !== winner.logoUrl) {
+        setDoc(docRef, sanitizeDataForFirestore(winner), { merge: true }).catch(() => {});
+      }
+      if (!firestoreLogoDoc || firestoreLogoDoc.logoUrl !== winner.logoUrl) {
+        setDoc(
+          logoDocRef,
+          sanitizeDataForFirestore({
+            id: 'school_logo',
+            logoUrl: winner.logoUrl,
+            logoRemoved: false,
+            logoUpdatedAt: winner.logoUpdatedAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }),
+          { merge: true }
+        ).catch(() => {});
+      }
+    }
+
+    // Sync runtime server cache if needed (never push empty logo over existing server logo unless explicitly removed)
     if (
       typeof window !== 'undefined' &&
-      (!serverIdentity ||
-        (winner.updatedAt && serverIdentity.updatedAt !== winner.updatedAt) ||
-        serverIdentity.logoUrl !== winner.logoUrl)
+      (winner.logoUrl || explicitlyRemoved) &&
+      (!serverIdentity || serverIdentity.logoUrl !== winner.logoUrl)
     ) {
       fetch('/api/school-identity', {
         method: 'POST',
@@ -924,16 +1087,13 @@ export async function fetchSchoolIdentity(): Promise<SchoolIdentity> {
     return winner;
   }
 
-  // Seed initial school_identity document if none exists yet
-  const initialToSave: SchoolIdentity = {
+  // Fallback in-memory identity (DO NOT write empty default identity to Firestore on read!)
+  const fallbackIdentity: SchoolIdentity = {
     ...DEFAULT_SCHOOL_IDENTITY,
-    logoUrl: dedicatedLogo || '',
-    updatedAt: new Date().toISOString(),
+    logoUrl: resolvedLogoUrl,
+    logoRemoved: explicitlyRemoved,
   };
-  safeSetItem('kantoja_school_identity', JSON.stringify(initialToSave));
-  safeSetItem('kantoja_school_logo_url', initialToSave.logoUrl || '');
-  setDoc(docRef, sanitizeDataForFirestore(initialToSave), { merge: true }).catch(() => {});
-  return initialToSave;
+  return fallbackIdentity;
 }
 
 export async function fetchAtkConfig(): Promise<{ allowTeacherViewAtkStock: boolean }> {
@@ -979,9 +1139,23 @@ export async function saveAtkConfig(allowTeacherViewAtkStock: boolean, updatedBy
 }
 
 export async function saveSchoolIdentityDoc(data: Partial<SchoolIdentity>): Promise<SchoolIdentity> {
+  const nowIso = new Date().toISOString();
   const cleanProgram = String(data.programName ?? DEFAULT_SCHOOL_IDENTITY.programName)
     .replace(/\s*\(\s*paket\s+[abc]\s*\)\s*$/i, '')
     .trim();
+
+  const explicitlyRemoved = data.logoRemoved === true;
+  const incomingLogo = String(data.logoUrl ?? '').trim();
+  const localRecovery = recoverLocalLogoBackup();
+
+  let effectiveLogoUrl = '';
+  if (!explicitlyRemoved) {
+    if (isValidPersistedLogoUrl(incomingLogo)) {
+      effectiveLogoUrl = incomingLogo;
+    } else if (isValidPersistedLogoUrl(localRecovery.logoUrl)) {
+      effectiveLogoUrl = localRecovery.logoUrl;
+    }
+  }
 
   const normalized: SchoolIdentity = {
     id: 'school_identity',
@@ -993,7 +1167,12 @@ export async function saveSchoolIdentityDoc(data: Partial<SchoolIdentity>): Prom
     mudirNip: String(data.mudirNip ?? '').trim(),
     leaderTitle: String(data.leaderTitle ?? 'Mudir / Kepala Sekolah').trim() || 'Mudir / Kepala Sekolah',
     city: String(data.city ?? DEFAULT_SCHOOL_IDENTITY.city).trim() || DEFAULT_SCHOOL_IDENTITY.city,
-    logoUrl: String(data.logoUrl ?? '').trim(),
+    logoUrl: effectiveLogoUrl,
+    logoUpdatedAt:
+      effectiveLogoUrl || explicitlyRemoved
+        ? nowIso
+        : data.logoUpdatedAt || nowIso,
+    logoRemoved: explicitlyRemoved,
     whatsapp: String(data.whatsapp ?? '').trim(),
     email: String(data.email ?? '').trim(),
     socialMedia: String(data.socialMedia ?? '').trim(),
@@ -1004,17 +1183,25 @@ export async function saveSchoolIdentityDoc(data: Partial<SchoolIdentity>): Prom
       Array.isArray(data.facilities) && data.facilities.length > 0
         ? data.facilities
         : DEFAULT_PESANTREN_FACILITIES,
-    updatedAt: new Date().toISOString(),
+    updatedAt: nowIso,
     updatedBy: data.updatedBy
   };
   const sanitized = sanitizeDataForFirestore(normalized);
 
-  // 1. Update local cache immediately
+  // 1. Update local cache & backup immediately
   safeSetItem('kantoja_school_identity', JSON.stringify(sanitized));
   safeSetItem('kantoja_school_logo_url', sanitized.logoUrl || '');
+  if (sanitized.logoUrl) {
+    safeSetItem('kantoja_school_logo_backup', sanitized.logoUrl);
+    safeSetItem('kantoja_school_logo_removed', 'false');
+  } else if (explicitlyRemoved) {
+    safeSetItem('kantoja_school_logo_backup', '');
+    safeSetItem('kantoja_school_logo_removed', 'true');
+  }
 
-  // 2. Persist to Backend Server (/api/school-identity) and Firestore (academicSettings/school_identity)
+  // 2. Persist to Firestore (academicSettings/school_identity + academicSettings/school_logo) and Backend Server
   const docRef = doc(db, 'academicSettings', 'school_identity');
+  const logoDocRef = doc(db, 'academicSettings', 'school_logo');
 
   const saveServerPromise: Promise<boolean> = (async () => {
     if (typeof window === 'undefined') return false;
@@ -1032,9 +1219,42 @@ export async function saveSchoolIdentityDoc(data: Partial<SchoolIdentity>): Prom
 
   const saveFirestorePromise: Promise<boolean> = (async () => {
     try {
-      const writeTask = setDoc(docRef, sanitized, { merge: true }).then(() => true);
-      const timeout = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 4500));
-      return await Promise.race([writeTask, timeout]);
+      // Never overwrite an existing logoUrl in Firestore with an empty string unless explicitlyRemoved is true
+      const firestorePayload: Record<string, any> = { ...sanitized };
+      if (!sanitized.logoUrl && !explicitlyRemoved) {
+        delete firestorePayload.logoUrl;
+        delete firestorePayload.logoRemoved;
+        delete firestorePayload.logoUpdatedAt;
+      }
+
+      const writeIdentityTask = setDoc(docRef, firestorePayload, { merge: true }).then(() => true);
+      const writeLogoTask =
+        sanitized.logoUrl || explicitlyRemoved
+          ? setDoc(
+              logoDocRef,
+              sanitizeDataForFirestore({
+                id: 'school_logo',
+                logoUrl: sanitized.logoUrl || '',
+                logoDataUrl:
+                  localRecovery.logoUrl && localRecovery.logoUrl.startsWith('data:image/')
+                    ? localRecovery.logoUrl
+                    : sanitized.logoUrl?.startsWith('data:image/')
+                    ? sanitized.logoUrl
+                    : undefined,
+                logoRemoved: explicitlyRemoved,
+                logoUpdatedAt: nowIso,
+                updatedAt: nowIso,
+                updatedBy: data.updatedBy || 'Administrator',
+              }),
+              { merge: true }
+            ).then(() => true)
+          : Promise.resolve(true);
+
+      const combinedTask = Promise.all([writeIdentityTask, writeLogoTask]).then(
+        ([idOk]) => idOk
+      );
+      const timeout = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 8000));
+      return await Promise.race([combinedTask, timeout]);
     } catch (e) {
       console.warn('Firestore write error for academicSettings/school_identity:', e);
       return false;

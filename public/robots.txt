@@ -1,5 +1,7 @@
 User-agent: *
 Allow: /
+Allow: /sitemap.xml
+Allow: /robots.txt
 
 # Halaman Internal Sistem AKSARA (Private - Membutuhkan Login)
 Disallow: /dashboard

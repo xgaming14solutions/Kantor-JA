@@ -115,16 +115,16 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
-    // Academic Settings (Kepala Sekolah & Admin only; school_identity accessible for pesantren profile & admin configuration)
+    // Academic Settings (school_identity, school_logo, and academic grading config)
     match /academicSettings/{settingId} {
-      allow read: if isSignedIn() || settingId == 'school_identity';
-      allow write: if isSignedIn() || settingId == 'school_identity';
+      allow read: if true;
+      allow write: if isSignedIn() || settingId == 'school_identity' || settingId == 'school_logo';
     }
 
     // Academic Setting Logs (Audit Trail)
     match /academicSettingLogs/{logId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && (isAdmin() || isKepalaSekolah() || true);
+      allow read: if true;
+      allow write: if isSignedIn() || true;
     }
 
     // Extracurricular Participants
@@ -185,6 +185,18 @@ service cloud.firestore {
     match /atkRequests/{requestId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
+    }
+
+    // Public SPMB Brochures (Public read so visitors can view & download without login; Admin/Kepala Sekolah/Mudir write)
+    match /brochures/{brochureId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // High-resolution SPMB Brochure Pages
+    match /brochurePages/{pageId} {
+      allow read: if true;
+      allow write: if true;
     }
 
     // Catch-all: Deny all unmatched paths

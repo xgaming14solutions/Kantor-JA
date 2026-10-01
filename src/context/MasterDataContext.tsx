@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import {
   AcademicYear,
@@ -47,6 +47,8 @@ import {
   getInitialSchoolIdentity,
   fetchSchoolIdentity,
   saveSchoolIdentityDoc,
+  recoverLocalLogoBackup,
+  isValidPersistedLogoUrl,
   fetchAtkConfig,
   saveAtkConfig
 } from '../lib/dbService';
@@ -749,6 +751,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           ) {
             return prev;
           }
+          if (!loadedSchoolIdentity.logoUrl && !loadedSchoolIdentity.logoRemoved && prev.logoUrl && !prev.logoRemoved) {
+            return { ...loadedSchoolIdentity, logoUrl: prev.logoUrl };
+          }
           return loadedSchoolIdentity;
         });
         return;
@@ -911,8 +916,15 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         kkm: typeof s.kkm === 'number' ? s.kkm : 75,
       }));
 
-      // Ensure default setting for active year exists (exclude school_identity & atk_config docs from academic grading settings)
-      let settingsList = rawSettings.filter((s: any) => s.id !== 'school_identity' && s.id !== 'atk_config');
+      // Ensure default setting for active year exists (exclude school_identity, school_logo & atk_config docs from academic grading settings)
+      let settingsList = rawSettings.filter(
+        (s: any) =>
+          s &&
+          s.id !== 'school_identity' &&
+          s.id !== 'school_logo' &&
+          s.id !== 'atk_config' &&
+          Array.isArray(s.components)
+      );
       if (activeYear) {
         const activeSettingExists = settingsList.some(
           s => s.academicYearId === activeYear.id && s.semester === activeYear.semester
@@ -999,6 +1011,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           prev.updatedAt > loadedSchoolIdentity.updatedAt
         ) {
           return prev;
+        }
+        if (!loadedSchoolIdentity.logoUrl && !loadedSchoolIdentity.logoRemoved && prev.logoUrl && !prev.logoRemoved) {
+          return { ...loadedSchoolIdentity, logoUrl: prev.logoUrl };
         }
         return loadedSchoolIdentity;
       });
@@ -1094,10 +1109,12 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     refreshAll();
   }, [currentUser?.uid, currentUser?.id]);
 
-  // Real-time Firestore listener for academicSettings/school_identity so logo & identity stay synced across reloads/navigation/devices
+  // Real-time Firestore listener for academicSettings/school_identity & school_logo so logo & identity stay synced across reloads/navigation/devices
   useEffect(() => {
     const docRef = doc(db, 'academicSettings', 'school_identity');
-    const unsubscribe = onSnapshot(
+    const logoDocRef = doc(db, 'academicSettings', 'school_logo');
+
+    const unsubscribeIdentity = onSnapshot(
       docRef,
       (snap) => {
         if (!snap.exists()) return;
@@ -1113,9 +1130,41 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           if (prev.updatedAt && remote.updatedAt && prev.updatedAt > remote.updatedAt) {
             return prev;
           }
+
+          // Never let an accidental empty remote logoUrl overwrite a valid existing logo unless logoRemoved is explicitly true
+          if (!remote.logoUrl && !remote.logoRemoved) {
+            const localBackup = recoverLocalLogoBackup();
+            const fallbackLogo =
+              (!prev.logoRemoved && isValidPersistedLogoUrl(prev.logoUrl) ? prev.logoUrl : '') ||
+              localBackup.logoUrl ||
+              '';
+            if (fallbackLogo) {
+              remote.logoUrl = fallbackLogo;
+              setDoc(docRef, { logoUrl: fallbackLogo, logoRemoved: false }, { merge: true }).catch(() => {});
+              setDoc(
+                logoDocRef,
+                {
+                  id: 'school_logo',
+                  logoUrl: fallbackLogo,
+                  logoRemoved: false,
+                  updatedAt: new Date().toISOString(),
+                },
+                { merge: true }
+              ).catch(() => {});
+            }
+          }
+
           try {
             localStorage.setItem('kantoja_school_identity', JSON.stringify(remote));
-            localStorage.setItem('kantoja_school_logo_url', remote.logoUrl || '');
+            if (remote.logoUrl) {
+              localStorage.setItem('kantoja_school_logo_url', remote.logoUrl);
+              localStorage.setItem('kantoja_school_logo_backup', remote.logoUrl);
+              localStorage.setItem('kantoja_school_logo_removed', 'false');
+            } else if (remote.logoRemoved) {
+              localStorage.setItem('kantoja_school_logo_url', '');
+              localStorage.setItem('kantoja_school_logo_backup', '');
+              localStorage.setItem('kantoja_school_logo_removed', 'true');
+            }
           } catch {
             // ignore storage errors
           }
@@ -1126,7 +1175,59 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         // ignore snapshot errors when offline
       }
     );
-    return () => unsubscribe();
+
+    const unsubscribeLogo = onSnapshot(
+      logoDocRef,
+      (snap) => {
+        if (!snap.exists()) return;
+        const d = snap.data();
+        const rawUrl = String(d.logoUrl ?? d.logoDataUrl ?? d.logo ?? '').trim();
+        const validUrl = isValidPersistedLogoUrl(rawUrl) ? rawUrl : '';
+        const explicitlyRemoved = d.logoRemoved === true;
+
+        setSchoolIdentity((prev) => {
+          if (explicitlyRemoved) {
+            if (!prev.logoUrl && prev.logoRemoved) return prev;
+            const next = { ...prev, logoUrl: '', logoRemoved: true };
+            try {
+              localStorage.setItem('kantoja_school_identity', JSON.stringify(next));
+              localStorage.setItem('kantoja_school_logo_url', '');
+              localStorage.setItem('kantoja_school_logo_backup', '');
+              localStorage.setItem('kantoja_school_logo_removed', 'true');
+            } catch {
+              // ignore
+            }
+            return next;
+          }
+          if (validUrl && prev.logoUrl !== validUrl) {
+            const next = {
+              ...prev,
+              logoUrl: validUrl,
+              logoRemoved: false,
+              logoUpdatedAt: d.logoUpdatedAt || d.updatedAt || prev.logoUpdatedAt,
+            };
+            try {
+              localStorage.setItem('kantoja_school_identity', JSON.stringify(next));
+              localStorage.setItem('kantoja_school_logo_url', validUrl);
+              localStorage.setItem('kantoja_school_logo_backup', validUrl);
+              localStorage.setItem('kantoja_school_logo_removed', 'false');
+            } catch {
+              // ignore
+            }
+            return next;
+          }
+          return prev;
+        });
+      },
+      () => {
+        // ignore snapshot errors when offline
+      }
+    );
+
+    return () => {
+      unsubscribeIdentity();
+      unsubscribeLogo();
+    };
   }, []);
 
   const activeAcademicYear = academicYears.find((ay) => ay.isActive) || null;
@@ -1808,9 +1909,17 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const updaterName = currentUser?.displayName || currentUser?.name || currentUser?.email || 'Administrator';
     const nowIso = new Date().toISOString();
     lastSavedIdentityAtRef.current = nowIso;
+    const isExplicitLogoRemoval =
+      data.logoRemoved === true ||
+      (data.logoUrl === '' && data.logoRemoved !== false && Object.keys(data).length <= 2);
     const merged: Partial<SchoolIdentity> = {
       ...schoolIdentity,
       ...data,
+      logoRemoved: isExplicitLogoRemoval
+        ? true
+        : data.logoUrl && data.logoUrl.trim().length > 0
+        ? false
+        : schoolIdentity.logoRemoved,
       id: 'school_identity',
       updatedBy: updaterName,
       updatedAt: nowIso

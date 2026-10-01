@@ -453,6 +453,36 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "title", "category", "startDate", "endDate", "academicYearId", "semester", "status", "createdBy", "createdAt", "updatedAt"]
+    },
+    "SpmbBrochure": {
+      "title": "SpmbBrochure",
+      "description": "Data brosur penerimaan santri baru (SPMB) untuk ditampilkan di halaman publik",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "academicYear": { "type": "string" },
+        "description": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "uploadedBy": { "type": "string" },
+        "uploadedByName": { "type": "string" }
+      },
+      "required": ["id", "title", "academicYear", "isActive", "createdAt", "updatedAt", "uploadedBy"]
+    },
+    "BrochurePage": {
+      "title": "BrochurePage",
+      "description": "Penyimpanan gambar halaman brosur beresolusi tinggi",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "brochureId": { "type": "string" },
+        "pageIndex": { "type": "number" },
+        "dataUrl": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "brochureId", "pageIndex", "dataUrl"]
     }
   },
   "firestore": {
@@ -543,6 +573,14 @@
     "/academicCalendar/{eventId}": {
       "schema": "AcademicCalendarEvent",
       "description": "Koleksi agenda Kalender Akademik sekolah dan pesantren"
+    },
+    "/brochures/{brochureId}": {
+      "schema": "SpmbBrochure",
+      "description": "Koleksi brosur resmi SPMB yang ditampilkan di halaman publik"
+    },
+    "/brochurePages/{pageId}": {
+      "schema": "BrochurePage",
+      "description": "Penyimpanan halaman gambar brosur beresolusi tinggi"
     }
   }
 }
