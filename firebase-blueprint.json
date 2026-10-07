@@ -228,6 +228,7 @@
         "leaderTitle": { "type": "string" },
         "city": { "type": "string" },
         "logoUrl": { "type": "string" },
+        "educationFacilities": { "type": "object" },
         "updatedAt": { "type": "string" },
         "updatedBy": { "type": "string" }
       },

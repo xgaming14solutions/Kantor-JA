@@ -76,7 +76,9 @@ import {
   Attendance,
   ReportCard,
   SchoolIdentity,
-  PesantrenFacilityItem
+  PesantrenFacilityItem,
+  EducationFacilitiesMap,
+  EducationFacilityLevel
 } from '../types';
 import {
   INITIAL_ACADEMIC_YEARS,
@@ -640,6 +642,33 @@ export const DEFAULT_PESANTREN_FACILITIES: PesantrenFacilityItem[] = [
   },
 ];
 
+export const DEFAULT_EDUCATION_FACILITIES: EducationFacilitiesMap = {
+  tk: {
+    title: 'TK',
+    description:
+      'Gedung dan lingkungan belajar ramah anak untuk pembiasaan adab Islami, hafalan Juz 30, doa, hadits pilihan, dan pengenalan calistung secara ceria.',
+    imageUrl: '',
+  },
+  sd: {
+    title: 'SD',
+    description:
+      'Ruang kelas dan fasilitas terpadu untuk pembelajaran tahfiz Al-Qur’an (target 4 juz), bahasa Arab dasar, adab, dan kurikulum akademik dasar.',
+    imageUrl: '',
+  },
+  smp: {
+    title: 'SMP',
+    description:
+      'Gedung kelas, asrama santri, dan sarana halaqah Al-Qur’an untuk program intensif 30 juz, kitab hadits Umdatul Ahkam, dan penguasaan bahasa Arab.',
+    imageUrl: '',
+  },
+  sma: {
+    title: 'SMA',
+    description:
+      'Fasilitas pendidikan lanjutan, asrama santri, laboratorium, dan pembinaan kemandirian (life skill) untuk mencetak lulusan berilmu dan berakhlak mandiri.',
+    imageUrl: '',
+  },
+};
+
 export const DEFAULT_SCHOOL_IDENTITY: SchoolIdentity = {
   id: 'school_identity',
   schoolName: 'Pesantren Islam Mutiara Insan',
@@ -656,6 +685,7 @@ export const DEFAULT_SCHOOL_IDENTITY: SchoolIdentity = {
   socialMedia: '',
   ppdbInfo: 'Informasi penerimaan santri baru, persyaratan, tahapan pendaftaran, dan informasi pendidikan dapat diperoleh melalui kanal resmi Pesantren Islam Mutiara Insan.',
   facilities: DEFAULT_PESANTREN_FACILITIES,
+  educationFacilities: DEFAULT_EDUCATION_FACILITIES,
 };
 
 /**
@@ -876,6 +906,28 @@ export function normalizeSchoolIdentity(raw: any): SchoolIdentity {
             isAvailable: f.isAvailable !== false,
           }))
         : DEFAULT_PESANTREN_FACILITIES,
+    educationFacilities: (() => {
+      const ef = raw.educationFacilities;
+      if (!ef || typeof ef !== 'object') return { ...DEFAULT_EDUCATION_FACILITIES };
+      const norm = (key: 'tk' | 'sd' | 'smp' | 'sma') => {
+        const item = ef[key];
+        const def = DEFAULT_EDUCATION_FACILITIES[key]!;
+        if (!item || typeof item !== 'object') return def;
+        return {
+          title: String(item.title || def.title).trim(),
+          description: String(item.description || def.description).trim(),
+          imageUrl: String(item.imageUrl || item.url || '').trim(),
+          storagePath: item.storagePath ? String(item.storagePath).trim() : undefined,
+          updatedAt: item.updatedAt ? String(item.updatedAt) : undefined,
+        };
+      };
+      return {
+        tk: norm('tk'),
+        sd: norm('sd'),
+        smp: norm('smp'),
+        sma: norm('sma'),
+      };
+    })(),
     updatedAt: raw.updatedAt ? String(raw.updatedAt) : undefined,
     updatedBy: raw.updatedBy ? String(raw.updatedBy) : undefined
   };
@@ -1183,6 +1235,10 @@ export async function saveSchoolIdentityDoc(data: Partial<SchoolIdentity>): Prom
       Array.isArray(data.facilities) && data.facilities.length > 0
         ? data.facilities
         : DEFAULT_PESANTREN_FACILITIES,
+    educationFacilities:
+      data.educationFacilities !== undefined
+        ? data.educationFacilities
+        : DEFAULT_EDUCATION_FACILITIES,
     updatedAt: nowIso,
     updatedBy: data.updatedBy
   };

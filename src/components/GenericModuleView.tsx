@@ -42,7 +42,14 @@ import {
   Trash2,
   Image as ImageIcon,
   X,
+  Loader2,
 } from 'lucide-react';
+import {
+  uploadFacilityPhotoToStorage,
+  deleteFacilityPhotoFromStorage,
+} from '../lib/facilityPhotoService';
+import { EducationFacilitiesMap } from '../types';
+import { DEFAULT_EDUCATION_FACILITIES } from '../lib/dbService';
 
 export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
   const { role } = useAuth();
@@ -96,6 +103,115 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
   const [logoSuccess, setLogoSuccess] = useState<string | null>(null);
   const [confirmRemoveLogo, setConfirmRemoveLogo] = useState(false);
   const [previewImgBroken, setPreviewImgBroken] = useState(false);
+
+  // Foto Gedung & Jenjang Pendidikan state (TK, SD, SMP, SMA)
+  const [uploadingFacilityLevel, setUploadingFacilityLevel] = useState<'tk' | 'sd' | 'smp' | 'sma' | null>(null);
+  const [facilityPhotoSuccess, setFacilityPhotoSuccess] = useState<string | null>(null);
+  const [facilityPhotoError, setFacilityPhotoError] = useState<string | null>(null);
+  const [confirmDeleteFacilityLevel, setConfirmDeleteFacilityLevel] = useState<'tk' | 'sd' | 'smp' | 'sma' | null>(null);
+
+  const tkFacilityInputRef = useRef<HTMLInputElement | null>(null);
+  const sdFacilityInputRef = useRef<HTMLInputElement | null>(null);
+  const smpFacilityInputRef = useRef<HTMLInputElement | null>(null);
+  const smaFacilityInputRef = useRef<HTMLInputElement | null>(null);
+
+  const facilityInputRefs = {
+    tk: tkFacilityInputRef,
+    sd: sdFacilityInputRef,
+    smp: smpFacilityInputRef,
+    sma: smaFacilityInputRef,
+  };
+
+  const handleUploadFacilityPhoto = async (
+    level: 'tk' | 'sd' | 'smp' | 'sma',
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (facilityInputRefs[level].current) {
+      facilityInputRefs[level].current!.value = '';
+    }
+    if (!file) return;
+
+    if (!canManageIdentity) {
+      setFacilityPhotoError('Akses Ditolak: Hanya Administrator yang dapat mengunggah foto gedung.');
+      return;
+    }
+
+    setFacilityPhotoError(null);
+    setFacilityPhotoSuccess(null);
+    setUploadingFacilityLevel(level);
+
+    try {
+      const result = await uploadFacilityPhotoToStorage(level, file);
+      const currentFacilities = schoolIdentity.educationFacilities || DEFAULT_EDUCATION_FACILITIES;
+      const targetLevelData = currentFacilities[level] || DEFAULT_EDUCATION_FACILITIES[level];
+
+      const updatedEducationFacilities: EducationFacilitiesMap = {
+        ...currentFacilities,
+        [level]: {
+          ...targetLevelData,
+          imageUrl: result.downloadUrl,
+          storagePath: result.storagePath,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+
+      await saveSchoolIdentity({
+        educationFacilities: updatedEducationFacilities,
+      });
+
+      setFacilityPhotoSuccess(`Foto gedung jenjang ${level.toUpperCase()} berhasil diunggah ke Firebase Storage dan disimpan.`);
+      setTimeout(() => setFacilityPhotoSuccess(null), 5000);
+    } catch (err: any) {
+      console.error(`Error uploading facility photo for ${level}:`, err);
+      setFacilityPhotoError(err?.message || `Gagal mengunggah foto gedung jenjang ${level.toUpperCase()}.`);
+    } finally {
+      setUploadingFacilityLevel(null);
+    }
+  };
+
+  const handleDeleteFacilityPhoto = async (level: 'tk' | 'sd' | 'smp' | 'sma') => {
+    if (!canManageIdentity) {
+      setFacilityPhotoError('Akses Ditolak: Hanya Administrator yang dapat menghapus foto gedung.');
+      return;
+    }
+
+    setFacilityPhotoError(null);
+    setFacilityPhotoSuccess(null);
+    setUploadingFacilityLevel(level);
+
+    try {
+      const currentFacilities = schoolIdentity.educationFacilities || DEFAULT_EDUCATION_FACILITIES;
+      const targetLevelData = currentFacilities[level] || DEFAULT_EDUCATION_FACILITIES[level];
+
+      if (targetLevelData?.storagePath) {
+        await deleteFacilityPhotoFromStorage(targetLevelData.storagePath);
+      }
+
+      const updatedEducationFacilities: EducationFacilitiesMap = {
+        ...currentFacilities,
+        [level]: {
+          ...targetLevelData,
+          imageUrl: '',
+          storagePath: '',
+          updatedAt: new Date().toISOString(),
+        },
+      };
+
+      await saveSchoolIdentity({
+        educationFacilities: updatedEducationFacilities,
+      });
+
+      setConfirmDeleteFacilityLevel(null);
+      setFacilityPhotoSuccess(`Foto gedung jenjang ${level.toUpperCase()} berhasil dihapus dan dikembalikan ke placeholder.`);
+      setTimeout(() => setFacilityPhotoSuccess(null), 5000);
+    } catch (err: any) {
+      console.error(`Error deleting facility photo for ${level}:`, err);
+      setFacilityPhotoError(err?.message || `Gagal menghapus foto gedung jenjang ${level.toUpperCase()}.`);
+    } finally {
+      setUploadingFacilityLevel(null);
+    }
+  };
 
   const isAdmin = role === 'ADMIN';
   const canManageIdentity = role === 'ADMIN';
@@ -724,6 +840,180 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Card: Foto Gedung & Jenjang Pendidikan (TK, SD, SMP, SMA) */}
+          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-[#DCE5E8] shadow-xs space-y-4">
+            <div className="border-b border-[#EBF0F2] pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-bold text-[#24343D] flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-[#24485A]" />
+                  <span>Foto Gedung &amp; Jenjang Pendidikan</span>
+                </h3>
+                <p className="text-[11px] text-[#71818A] mt-0.5 leading-relaxed">
+                  Kelola foto gedung dan sarana untuk setiap jenjang pendidikan (TK, SD, SMP, SMA) yang ditampilkan pada profil publik Pesantren Islam Mutiara Insan.
+                </p>
+              </div>
+            </div>
+
+            {facilityPhotoSuccess && (
+              <div className="p-3.5 rounded-xl bg-[#EFF7F2] border border-[#CBE4D5] text-[#35694E] text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-[#5D9B7A] shrink-0" />
+                <span>{facilityPhotoSuccess}</span>
+              </div>
+            )}
+
+            {facilityPhotoError && (
+              <div className="p-3.5 rounded-xl bg-[#FBF1F1] border border-[#EBC6C6] text-[#A84848] text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-[#C96A6A] shrink-0" />
+                <span>{facilityPhotoError}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {(
+                [
+                  { key: 'tk', label: 'TK', fullName: 'Taman Kanak-kanak (TK)' },
+                  { key: 'sd', label: 'SD', fullName: 'Sekolah Dasar (SD)' },
+                  { key: 'smp', label: 'SMP', fullName: 'Sekolah Menengah Pertama (SMP)' },
+                  { key: 'sma', label: 'SMA', fullName: 'Sekolah Menengah Atas (SMA)' },
+                ] as const
+              ).map((item) => {
+                const facilityData =
+                  schoolIdentity.educationFacilities?.[item.key] ||
+                  DEFAULT_EDUCATION_FACILITIES[item.key];
+                const hasPhoto = Boolean(facilityData?.imageUrl?.trim());
+                const isUploadingThis = uploadingFacilityLevel === item.key;
+                const isConfirmingDelete = confirmDeleteFacilityLevel === item.key;
+
+                return (
+                  <div
+                    key={item.key}
+                    className="p-4 rounded-xl bg-[#F4F7F8]/70 border border-[#DCE5E8] flex flex-col justify-between space-y-3"
+                  >
+                    <div className="flex items-center justify-between gap-2 border-b border-[#EBF0F2] pb-2.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-7 h-7 rounded-lg bg-[#24485A] text-white text-xs font-bold font-mono flex items-center justify-center shrink-0">
+                          {item.label}
+                        </span>
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-[#24343D] truncate">{item.fullName}</h4>
+                          <span className="text-[10px] text-[#71818A] block">
+                            {hasPhoto ? 'Foto tersimpan' : 'Foto belum tersedia'}
+                          </span>
+                        </div>
+                      </div>
+                      {hasPhoto ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-[#EFF7F2] text-[#35694E] border border-[#CBE4D5] shrink-0">
+                          <CheckCircle2 className="w-3 h-3 text-[#5D9B7A]" />
+                          Aktif
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-stone-100 text-stone-500 border border-stone-200 shrink-0">
+                          Belum ada foto
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Preview Foto */}
+                    <div className="relative w-full aspect-16/10 rounded-xl overflow-hidden bg-white border border-[#DCE5E8] flex items-center justify-center">
+                      {hasPhoto ? (
+                        <img
+                          src={facilityData?.imageUrl}
+                          alt={`Gedung ${item.label} Pesantren Islam Mutiara Insan`}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center p-4 text-center text-[#71818A] space-y-1">
+                          <Building2 className="w-7 h-7 text-[#5D8295]" />
+                          <span className="text-xs font-semibold text-[#24343D]">Foto gedung belum tersedia</span>
+                          <span className="text-[10px] text-[#71818A] leading-tight">
+                            Gunakan tombol Upload Foto
+                          </span>
+                        </div>
+                      )}
+
+                      {isUploadingThis && (
+                        <div className="absolute inset-0 bg-white/85 backdrop-blur-xs flex flex-col items-center justify-center text-xs font-semibold text-[#24485A] gap-2 p-3 text-center">
+                          <Loader2 className="w-5 h-5 animate-spin text-[#24485A]" />
+                          <span>Mengunggah ke Firebase Storage...</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Hidden File Input */}
+                    <input
+                      ref={facilityInputRefs[item.key]}
+                      type="file"
+                      accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                      onChange={(e) => handleUploadFacilityPhoto(item.key, e)}
+                      className="hidden"
+                    />
+
+                    {/* Action Controls */}
+                    {canManageIdentity ? (
+                      <div className="space-y-2 pt-1">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={isUploadingThis}
+                            onClick={() => facilityInputRefs[item.key].current?.click()}
+                            className="flex-1 py-1.5 px-3 text-xs font-semibold rounded-xl bg-[#24485A] text-white hover:bg-[#1C3948] transition inline-flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>{hasPhoto ? 'Ubah Foto' : 'Upload Foto'}</span>
+                          </button>
+
+                          {hasPhoto && !isConfirmingDelete && (
+                            <button
+                              type="button"
+                              disabled={isUploadingThis}
+                              onClick={() => setConfirmDeleteFacilityLevel(item.key)}
+                              className="py-1.5 px-3 text-xs font-semibold rounded-xl bg-[#FBF1F1] text-[#C96A6A] border border-[#EBC6C6] hover:bg-[#F5E1E1] transition inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Hapus Foto</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* In-card Confirmation for Delete */}
+                        {isConfirmingDelete && (
+                          <div className="p-2.5 rounded-xl bg-[#FBF1F1] border border-[#EBC6C6] text-xs space-y-2">
+                            <p className="text-[#A84848] text-[11px] font-medium leading-tight">
+                              Hapus foto gedung {item.label}? Tampilan akan kembali ke placeholder belum tersedia.
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                disabled={isUploadingThis}
+                                onClick={() => handleDeleteFacilityPhoto(item.key)}
+                                className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-[#C96A6A] text-white hover:bg-[#B25555] transition cursor-pointer disabled:opacity-50"
+                              >
+                                {isUploadingThis ? 'Menghapus...' : 'Ya, Hapus'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isUploadingThis}
+                                onClick={() => setConfirmDeleteFacilityLevel(null)}
+                                className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-white text-[#24343D] border border-[#DCE5E8] hover:bg-[#F4F7F8] transition cursor-pointer"
+                              >
+                                Batal
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-2 rounded-lg bg-white border border-[#DCE5E8] text-[10px] text-[#71818A] flex items-center gap-1.5">
+                        <ShieldCheck className="w-3 h-3 text-[#24485A] shrink-0" />
+                        <span>Mode Lihat Saja</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 

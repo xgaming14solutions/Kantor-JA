@@ -39,7 +39,9 @@ import {
   ChevronRight,
   FileImage,
   FileText,
+  Building2,
 } from 'lucide-react';
+import { DEFAULT_EDUCATION_FACILITIES } from '../lib/dbService';
 import firebaseConfig from '../../firebase-applet-config.json';
 import heroPesantrenImg from '../assets/images/hero_pesantren_mutiara_1790506485327.jpg';
 import tahfizQuranImg from '../assets/images/tahfiz_quran_mushaf_1790506498260.jpg';
@@ -178,6 +180,9 @@ const OFFICIAL_WHATSAPP_CONTACT_NAME = 'Abu Al Fatih';
 const OFFICIAL_WHATSAPP_URL =
   'https://wa.me/628121098876?text=Assalamu%27alaikum%20warahmatullahi%20wabarakatuh%20Ustadz%20Abu%20Al%20Fatih%2C%20saya%20ingin%20memperoleh%20informasi%20pendaftaran%20santri%20baru%20(SPMB%20Mutiara%20Insan%20Tahun%20Ajaran%202027-2028).';
 
+// Sumber gambar banner utama Beranda (file di folder public, misal '/seluruh_pondok.jpg' atau '/halaman_pondok.jpg')
+const HERO_BANNER_SRC = '/seluruh_pondok.jpg';
+
 export const LoginView: React.FC = () => {
   const { login, loginWithGoogle, error, errorCode, setError } = useAuth();
   const { schoolIdentity } = useMasterData();
@@ -198,6 +203,7 @@ export const LoginView: React.FC = () => {
   const [heroImgError, setHeroImgError] = useState(false);
   const [tahfizImgError, setTahfizImgError] = useState(false);
   const [studyImgError, setStudyImgError] = useState(false);
+  const [brokenFacilityImages, setBrokenFacilityImages] = useState<Record<string, boolean>>({});
 
   // Public SPMB Brochure states
   const [brochures, setBrochures] = useState<SpmbBrochure[]>([DEFAULT_SPMB_BROCHURE]);
@@ -353,6 +359,7 @@ export const LoginView: React.FC = () => {
     { label: 'Profil', target: 'profil' },
     { label: 'SPMB 2027–2028', target: 'spmb-2027' },
     { label: 'Target Lulusan', target: 'target-lulusan' },
+    { label: 'Jenjang Pendidikan', target: 'jenjang-pendidikan' },
     { label: 'Biaya', target: 'biaya' },
     { label: 'Galeri', target: 'galeri' },
     { label: 'Pendaftaran', target: 'informasi-pendaftaran' },
@@ -749,7 +756,7 @@ export const LoginView: React.FC = () => {
               <div className="relative rounded-2xl overflow-hidden border border-emerald-800/80 bg-emerald-900 aspect-16/10 sm:aspect-16/9 lg:aspect-4/3 shadow-xl">
                 {!heroImgError ? (
                   <img
-                    src={heroPesantrenImg}
+                    src="/seluruh_pondok.jpg"
                     alt="Lingkungan Pesantren Islam Mutiara Insan"
                     referrerPolicy="no-referrer"
                     onError={() => setHeroImgError(true)}
@@ -1165,6 +1172,148 @@ export const LoginView: React.FC = () => {
       </section>
 
       {/* =====================================================================
+          SECTION: JENJANG PENDIDIKAN (#jenjang-pendidikan)
+          H2: Jenjang Pendidikan
+          Subjudul: "Pesantren Islam Mutiara Insan menyelenggarakan pendidikan berjenjang dari TK, SD, SMP, hingga SMA."
+          4 Kartu: TK, SD, SMP, SMA
+          - Foto gedung/fasilitas konsisten (aspect-16/10, object-cover)
+          - Jika belum ada foto: placeholder elegan "Foto gedung belum tersedia"
+          - SEO: Alt text deskriptif
+         ===================================================================== */}
+      <section
+        id="jenjang-pendidikan"
+        className="py-14 sm:py-20 bg-white border-b border-stone-200/80"
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+          <div className="max-w-3xl space-y-2.5">
+            <div className="text-xs font-semibold uppercase tracking-widest text-emerald-800">
+              Pendidikan Berjenjang &amp; Terpadu
+            </div>
+            <h2 className="font-display text-3xl sm:text-4xl font-bold text-stone-900 leading-tight text-balance">
+              Jenjang Pendidikan
+            </h2>
+            <p className="text-sm sm:text-base text-stone-600 leading-relaxed text-balance">
+              Pesantren Islam Mutiara Insan menyelenggarakan pendidikan berjenjang dari TK, SD, SMP, hingga SMA.
+            </p>
+            <p className="text-xs text-stone-500 leading-relaxed">
+              Pendidikan formal dan kepesantrenan terpadu TK, SD, SMP, dan SMA Pesantren Islam Mutiara Insan di Kabupaten Tulang Bawang Barat, Lampung yang memadukan pembinaan tahfiz Al-Qur&rsquo;an, diniyah, karakter mandiri, dan capaian akademik berjenjang.
+            </p>
+          </div>
+
+          {/* 4 Kartu Jenjang Pendidikan: Desktop 4 kartu per baris, Tablet 2, Mobile 1 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
+            {(
+              [
+                {
+                  key: 'tk',
+                  badge: 'TK',
+                  levelName: 'Taman Kanak-kanak',
+                  altText: 'Gedung TK Pesantren Islam Mutiara Insan',
+                  targetHighlight: 'Hafalan Juz 30 & Adab Islami',
+                },
+                {
+                  key: 'sd',
+                  badge: 'SD',
+                  levelName: 'Sekolah Dasar',
+                  altText: 'Gedung SD Pesantren Islam Mutiara Insan',
+                  targetHighlight: 'Tahfiz 4 Juz & Bahasa Arab Dasar',
+                },
+                {
+                  key: 'smp',
+                  badge: 'SMP',
+                  levelName: 'Sekolah Menengah Pertama',
+                  altText: 'Gedung SMP Pesantren Islam Mutiara Insan',
+                  targetHighlight: 'Tahfiz 30 Juz & Kitab Umdatul Ahkam',
+                },
+                {
+                  key: 'sma',
+                  badge: 'SMA',
+                  levelName: 'Sekolah Menengah Atas',
+                  altText: 'Gedung SMA Pesantren Islam Mutiara Insan',
+                  targetHighlight: '30 Juz, Mutun Ilmiah & Life Skill',
+                },
+              ] as const
+            ).map((item) => {
+              const defaultForLevel = DEFAULT_EDUCATION_FACILITIES[item.key];
+              const facilityData =
+                schoolIdentity?.educationFacilities?.[item.key] || defaultForLevel;
+              const photoUrl = facilityData?.imageUrl?.trim();
+              const isBroken = brokenFacilityImages[item.key];
+              const title = facilityData?.title || item.badge;
+              const description =
+                facilityData?.description || defaultForLevel?.description || '';
+
+              return (
+                <article
+                  key={item.key}
+                  className="bg-white rounded-2xl border border-stone-200/90 overflow-hidden flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200 group"
+                >
+                  <div>
+                    {/* Foto Gedung / Fasilitas (Aspect Ratio Konsisten 16:10, Object-Fit Cover) */}
+                    <div className="relative aspect-16/10 bg-emerald-950 overflow-hidden">
+                      {photoUrl && !isBroken ? (
+                        <img
+                          src={photoUrl}
+                          alt={item.altText}
+                          referrerPolicy="no-referrer"
+                          onError={() =>
+                            setBrokenFacilityImages((prev) => ({ ...prev, [item.key]: true }))
+                          }
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center p-5 text-center bg-gradient-to-br from-emerald-950 via-emerald-900 to-stone-900 text-white">
+                          <Building2 className="w-9 h-9 text-amber-300/80 mb-2 transition-transform group-hover:scale-110" />
+                          <span className="text-xs font-semibold text-emerald-100">
+                            Foto gedung belum tersedia
+                          </span>
+                          <span className="text-[10px] text-emerald-300/70 mt-0.5">
+                            Gedung {item.badge} Mutiara Insan
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Badge Jenjang di Pojok Kiri Atas */}
+                      <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-emerald-950/90 backdrop-blur-xs text-amber-300 text-xs font-bold font-mono border border-emerald-800/80 shadow-xs">
+                        JENJANG {item.badge}
+                      </div>
+
+                      <div className="absolute inset-0 bg-gradient-to-t from-emerald-950/60 via-transparent to-transparent pointer-events-none" />
+                    </div>
+
+                    {/* Konten Kartu Jenjang */}
+                    <div className="p-5 space-y-3">
+                      <div className="space-y-1">
+                        <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-emerald-800 block">
+                          Jenjang {title}
+                        </span>
+                        <h3 className="font-display text-xl sm:text-2xl font-bold text-emerald-950 leading-snug">
+                          {item.levelName} ({item.badge})
+                        </h3>
+                      </div>
+
+                      <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
+                        {description}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Footer Kartu: Target / Keunggulan */}
+                  <div className="px-5 py-3.5 bg-[#FAF8F5] border-t border-stone-200/80 flex items-center justify-between text-xs">
+                    <span className="text-stone-500 font-medium">Fokus Utama:</span>
+                    <span className="font-semibold text-emerald-900 text-right truncate ml-2">
+                      {item.targetHighlight}
+                    </span>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* =====================================================================
           8. EKSTRAKURIKULER (#ekstrakurikuler)
           H2: Ekstrakurikuler
           - Futsal
@@ -1279,7 +1428,7 @@ export const LoginView: React.FC = () => {
               <div className="aspect-4/3 bg-emerald-950 relative overflow-hidden">
                 {!heroImgError ? (
                   <img
-                    src={heroPesantrenImg}
+                    src="/halaman_pondok.jpg"
                     alt="Lingkungan Pesantren Islam Mutiara Insan"
                     referrerPolicy="no-referrer"
                     onError={() => setHeroImgError(true)}

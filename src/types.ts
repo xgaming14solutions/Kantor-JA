@@ -253,6 +253,21 @@ export interface PesantrenFacilityItem {
   isAvailable: boolean;
 }
 
+export interface EducationFacilityLevel {
+  imageUrl?: string;
+  storagePath?: string;
+  title?: string;
+  description?: string;
+  updatedAt?: string;
+}
+
+export interface EducationFacilitiesMap {
+  tk?: EducationFacilityLevel;
+  sd?: EducationFacilityLevel;
+  smp?: EducationFacilityLevel;
+  sma?: EducationFacilityLevel;
+}
+
 export interface SchoolIdentity {
   id: string; // 'school_identity'
   schoolName: string; // Nama Lembaga/Sekolah
@@ -271,6 +286,7 @@ export interface SchoolIdentity {
   socialMedia?: string; // Kanal Media Sosial Resmi
   ppdbInfo?: string; // Informasi / Catatan Penerimaan Santri Baru
   facilities?: PesantrenFacilityItem[]; // Daftar Fasilitas Pesantren yang tersedia
+  educationFacilities?: EducationFacilitiesMap; // Foto Gedung & Fasilitas setiap Jenjang: TK, SD, SMP, SMA
   updatedAt?: string;
   updatedBy?: string;
 }
