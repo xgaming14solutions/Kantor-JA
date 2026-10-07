@@ -48,7 +48,13 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json({ limit: '5mb' }));
+  app.use(express.json({ limit: '15mb' }));
+
+  // Serve static uploaded files (including education facility photos)
+  app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads'), {
+    maxAge: '1d',
+    etag: true,
+  }));
 
   // Serve public SEO assets (robots.txt, sitemap.xml, Open Graph image)
   app.get('/robots.txt', (req, res) => {
@@ -96,6 +102,76 @@ async function startServer() {
         success: false,
         error: err?.message || 'Gagal menyimpan identitas sekolah di server.',
       });
+    }
+  });
+
+  // Facility photo upload endpoint (saves file permanently to public/uploads/schoolIdentity/education/{level})
+  app.post('/api/upload-facility-photo', (req, res) => {
+    try {
+      const { level, fileName, base64Data, mimeType } = req.body;
+      if (!level || !base64Data) {
+        return res.status(400).json({ success: false, error: 'Data foto gedung tidak lengkap.' });
+      }
+
+      const validLevels = ['tk', 'sd', 'smp', 'sma'];
+      if (!validLevels.includes(level)) {
+        return res.status(400).json({ success: false, error: 'Jenjang pendidikan tidak valid.' });
+      }
+
+      let ext = 'jpg';
+      if (mimeType === 'image/png') ext = 'png';
+      else if (mimeType === 'image/webp') ext = 'webp';
+      else if (mimeType === 'image/jpeg') ext = 'jpg';
+      else if (fileName) {
+        const m = fileName.match(/\.(jpg|jpeg|png|webp)$/i);
+        if (m) ext = m[1].toLowerCase();
+      }
+
+      const targetDir = path.join(process.cwd(), 'public', 'uploads', 'schoolIdentity', 'education', level);
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+
+      const randomHash = Math.random().toString(36).substring(2, 8);
+      const safeFileName = `gedung_${level}_${Date.now()}_${randomHash}.${ext}`;
+      const filePath = path.join(targetDir, safeFileName);
+
+      const cleanedBase64 = base64Data.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
+      const buffer = Buffer.from(cleanedBase64, 'base64');
+
+      fs.writeFileSync(filePath, buffer);
+
+      const downloadUrl = `/uploads/schoolIdentity/education/${level}/${safeFileName}`;
+      const storagePath = `schoolIdentity/education/${level}/${safeFileName}`;
+
+      return res.json({
+        success: true,
+        downloadUrl,
+        storagePath,
+      });
+    } catch (err: any) {
+      console.error('Error saving facility photo on server:', err);
+      return res.status(500).json({
+        success: false,
+        error: err?.message || 'Gagal menyimpan foto gedung di server.',
+      });
+    }
+  });
+
+  // Facility photo delete endpoint
+  app.post('/api/delete-facility-photo', (req, res) => {
+    try {
+      const { storagePath } = req.body;
+      if (storagePath && typeof storagePath === 'string' && storagePath.startsWith('schoolIdentity/education/')) {
+        const safePath = path.normalize(storagePath).replace(/^(\.\.[\/\\])+/, '');
+        const targetFile = path.join(process.cwd(), 'public', 'uploads', safePath);
+        if (fs.existsSync(targetFile)) {
+          fs.unlinkSync(targetFile);
+        }
+      }
+      return res.json({ success: true });
+    } catch {
+      return res.json({ success: true });
     }
   });
 

@@ -146,10 +146,18 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
       const currentFacilities = schoolIdentity.educationFacilities || DEFAULT_EDUCATION_FACILITIES;
       const targetLevelData = currentFacilities[level] || DEFAULT_EDUCATION_FACILITIES[level];
 
+      const levelTitleMap: Record<string, string> = {
+        tk: 'Taman Kanak-kanak (TK)',
+        sd: 'Sekolah Dasar (SD)',
+        smp: 'Sekolah Menengah Pertama (SMP)',
+        sma: 'Sekolah Menengah Atas (SMA)',
+      };
+
       const updatedEducationFacilities: EducationFacilitiesMap = {
         ...currentFacilities,
         [level]: {
           ...targetLevelData,
+          title: levelTitleMap[level] || targetLevelData?.title || level.toUpperCase(),
           imageUrl: result.downloadUrl,
           storagePath: result.storagePath,
           updatedAt: new Date().toISOString(),
@@ -160,7 +168,7 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
         educationFacilities: updatedEducationFacilities,
       });
 
-      setFacilityPhotoSuccess(`Foto gedung jenjang ${level.toUpperCase()} berhasil diunggah ke Firebase Storage dan disimpan.`);
+      setFacilityPhotoSuccess(`Foto gedung jenjang ${level.toUpperCase()} berhasil disimpan.`);
       setTimeout(() => setFacilityPhotoSuccess(null), 5000);
     } catch (err: any) {
       console.error(`Error uploading facility photo for ${level}:`, err);
@@ -937,7 +945,7 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
                       {isUploadingThis && (
                         <div className="absolute inset-0 bg-white/85 backdrop-blur-xs flex flex-col items-center justify-center text-xs font-semibold text-[#24485A] gap-2 p-3 text-center">
                           <Loader2 className="w-5 h-5 animate-spin text-[#24485A]" />
-                          <span>Mengunggah ke Firebase Storage...</span>
+                          <span>Mengunggah foto gedung...</span>
                         </div>
                       )}
                     </div>
