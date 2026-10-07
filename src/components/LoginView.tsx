@@ -205,6 +205,10 @@ export const LoginView: React.FC = () => {
   const [studyImgError, setStudyImgError] = useState(false);
   const [brokenFacilityImages, setBrokenFacilityImages] = useState<Record<string, boolean>>({});
 
+  useEffect(() => {
+    setBrokenFacilityImages({});
+  }, [schoolIdentity?.educationFacilities]);
+
   // Public SPMB Brochure states
   const [brochures, setBrochures] = useState<SpmbBrochure[]>([DEFAULT_SPMB_BROCHURE]);
   const [selectedBrochureId, setSelectedBrochureId] = useState<string>(DEFAULT_SPMB_BROCHURE.id);
@@ -1237,7 +1241,8 @@ export const LoginView: React.FC = () => {
               const defaultForLevel = DEFAULT_EDUCATION_FACILITIES[item.key];
               const facilityData =
                 schoolIdentity?.educationFacilities?.[item.key] || defaultForLevel;
-              const photoUrl = facilityData?.imageUrl?.trim();
+              const rawPhotoUrl = facilityData?.imageUrl?.trim() || '';
+              const photoUrl = rawPhotoUrl.replace(/^\/uploads\/schoolIdentity\/education\//, '/education/');
               const isBroken = brokenFacilityImages[item.key];
               const title = facilityData?.title || item.badge;
               const description =
@@ -1255,7 +1260,6 @@ export const LoginView: React.FC = () => {
                         <img
                           src={photoUrl}
                           alt={item.altText}
-                          referrerPolicy="no-referrer"
                           onError={() =>
                             setBrokenFacilityImages((prev) => ({ ...prev, [item.key]: true }))
                           }

@@ -50,8 +50,18 @@ async function startServer() {
 
   app.use(express.json({ limit: '15mb' }));
 
-  // Serve static uploaded files (including education facility photos)
+  // Serve static uploaded & public assets (including education facility photos)
+  app.use('/education', express.static(path.join(process.cwd(), 'public', 'education'), {
+    maxAge: '1d',
+    etag: true,
+  }));
+
   app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads'), {
+    maxAge: '1d',
+    etag: true,
+  }));
+
+  app.use(express.static(path.join(process.cwd(), 'public'), {
     maxAge: '1d',
     etag: true,
   }));
@@ -128,20 +138,35 @@ async function startServer() {
       }
 
       const targetDir = path.join(process.cwd(), 'public', 'uploads', 'schoolIdentity', 'education', level);
+      const eduDir = path.join(process.cwd(), 'public', 'education', level);
       if (!fs.existsSync(targetDir)) {
         fs.mkdirSync(targetDir, { recursive: true });
+      }
+      if (!fs.existsSync(eduDir)) {
+        fs.mkdirSync(eduDir, { recursive: true });
       }
 
       const randomHash = Math.random().toString(36).substring(2, 8);
       const safeFileName = `gedung_${level}_${Date.now()}_${randomHash}.${ext}`;
       const filePath = path.join(targetDir, safeFileName);
+      const eduFilePath = path.join(eduDir, safeFileName);
 
       const cleanedBase64 = base64Data.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
       const buffer = Buffer.from(cleanedBase64, 'base64');
 
       fs.writeFileSync(filePath, buffer);
+      fs.writeFileSync(eduFilePath, buffer);
 
-      const downloadUrl = `/uploads/schoolIdentity/education/${level}/${safeFileName}`;
+      // Also copy to dist if dist exists (e.g., production build)
+      const distEduDir = path.join(process.cwd(), 'dist', 'education', level);
+      if (fs.existsSync(path.join(process.cwd(), 'dist'))) {
+        if (!fs.existsSync(distEduDir)) {
+          fs.mkdirSync(distEduDir, { recursive: true });
+        }
+        fs.writeFileSync(path.join(distEduDir, safeFileName), buffer);
+      }
+
+      const downloadUrl = `/education/${level}/${safeFileName}`;
       const storagePath = `schoolIdentity/education/${level}/${safeFileName}`;
 
       return res.json({
@@ -164,10 +189,13 @@ async function startServer() {
       const { storagePath } = req.body;
       if (storagePath && typeof storagePath === 'string' && storagePath.startsWith('schoolIdentity/education/')) {
         const safePath = path.normalize(storagePath).replace(/^(\.\.[\/\\])+/, '');
-        const targetFile = path.join(process.cwd(), 'public', 'uploads', safePath);
-        if (fs.existsSync(targetFile)) {
-          fs.unlinkSync(targetFile);
-        }
+        const targetUploads = path.join(process.cwd(), 'public', 'uploads', safePath);
+        const subRel = safePath.replace(/^schoolIdentity\/education\//, '');
+        const targetEdu = path.join(process.cwd(), 'public', 'education', subRel);
+        const targetDistEdu = path.join(process.cwd(), 'dist', 'education', subRel);
+        if (fs.existsSync(targetUploads)) fs.unlinkSync(targetUploads);
+        if (fs.existsSync(targetEdu)) fs.unlinkSync(targetEdu);
+        if (fs.existsSync(targetDistEdu)) fs.unlinkSync(targetDistEdu);
       }
       return res.json({ success: true });
     } catch {
@@ -222,8 +250,12 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
+    const isHmrDisabled = process.env.DISABLE_HMR === 'true';
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: isHmrDisabled ? false : undefined,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

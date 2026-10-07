@@ -109,6 +109,11 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
   const [facilityPhotoSuccess, setFacilityPhotoSuccess] = useState<string | null>(null);
   const [facilityPhotoError, setFacilityPhotoError] = useState<string | null>(null);
   const [confirmDeleteFacilityLevel, setConfirmDeleteFacilityLevel] = useState<'tk' | 'sd' | 'smp' | 'sma' | null>(null);
+  const [brokenFacilityImages, setBrokenFacilityImages] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setBrokenFacilityImages({});
+  }, [schoolIdentity.educationFacilities]);
 
   const tkFacilityInputRef = useRef<HTMLInputElement | null>(null);
   const sdFacilityInputRef = useRef<HTMLInputElement | null>(null);
@@ -372,6 +377,7 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
         socialMedia: formData.socialMedia.trim(),
         ppdbInfo: formData.ppdbInfo.trim(),
         facilities: formData.facilities,
+        educationFacilities: schoolIdentity.educationFacilities || DEFAULT_EDUCATION_FACILITIES,
       });
       if (pendingLogo) {
         setPendingLogo(null);
@@ -926,10 +932,13 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
 
                     {/* Preview Foto */}
                     <div className="relative w-full aspect-16/10 rounded-xl overflow-hidden bg-white border border-[#DCE5E8] flex items-center justify-center">
-                      {hasPhoto ? (
+                      {hasPhoto && !brokenFacilityImages[item.key] ? (
                         <img
-                          src={facilityData?.imageUrl}
+                          src={(facilityData?.imageUrl || '').replace(/^\/uploads\/schoolIdentity\/education\//, '/education/')}
                           alt={`Gedung ${item.label} Pesantren Islam Mutiara Insan`}
+                          onError={() =>
+                            setBrokenFacilityImages((prev) => ({ ...prev, [item.key]: true }))
+                          }
                           className="w-full h-full object-cover"
                         />
                       ) : (

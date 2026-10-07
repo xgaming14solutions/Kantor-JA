@@ -1235,10 +1235,23 @@ export async function saveSchoolIdentityDoc(data: Partial<SchoolIdentity>): Prom
       Array.isArray(data.facilities) && data.facilities.length > 0
         ? data.facilities
         : DEFAULT_PESANTREN_FACILITIES,
-    educationFacilities:
-      data.educationFacilities !== undefined
-        ? data.educationFacilities
-        : DEFAULT_EDUCATION_FACILITIES,
+    educationFacilities: (() => {
+      if (data.educationFacilities !== undefined) {
+        return data.educationFacilities;
+      }
+      try {
+        const cachedStr = safeGetItem('kantoja_school_identity');
+        if (cachedStr) {
+          const parsed = JSON.parse(cachedStr);
+          if (parsed && parsed.educationFacilities) {
+            return parsed.educationFacilities;
+          }
+        }
+      } catch {
+        // ignore
+      }
+      return DEFAULT_EDUCATION_FACILITIES;
+    })(),
     updatedAt: nowIso,
     updatedBy: data.updatedBy
   };

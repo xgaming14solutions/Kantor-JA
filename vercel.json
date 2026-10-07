@@ -34,11 +34,20 @@
           "value": "noindex, nofollow"
         }
       ]
+    },
+    {
+      "source": "/education/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
     }
   ],
   "rewrites": [
     {
-      "source": "/((?!robots\\.txt|sitemap\\.xml|og-pesantren-mutiara-insan\\.jpg|assets/|uploads/|api/).*)",
+      "source": "/((?!robots\\.txt|sitemap\\.xml|og-pesantren-mutiara-insan\\.jpg|assets/|uploads/|education/|api/).*)",
       "destination": "/index.html"
     }
   ]

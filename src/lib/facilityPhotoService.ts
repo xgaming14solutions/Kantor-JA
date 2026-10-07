@@ -182,7 +182,7 @@ export async function uploadFacilityPhotoToStorage(
   // Step 2: Optimize image
   const { blob, dataUrl } = await optimizeFacilityImage(file);
 
-  // Step 3: Attempt Firebase Storage first with a strict timeout
+  // Step 3: Attempt Firebase Storage first with a safe timeout
   if (storage) {
     try {
       const storageRef = ref(storage, storagePath);
@@ -195,22 +195,26 @@ export async function uploadFacilityPhotoToStorage(
         },
       };
 
+      let timer: any;
+      const timeoutTask = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Firebase Storage timeout')), 4500);
+      });
+
       const uploadTask = (async () => {
         const uploadResult = await uploadBytes(storageRef, blob, metadata);
         const downloadUrl = await getDownloadURL(uploadResult.ref);
         return { downloadUrl, storagePath };
       })();
 
-      // Strict timeout: If Firebase Storage doesn't resolve in 3500ms (e.g. unprovisioned bucket / retry hang), fallback
-      const timeoutTask = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Firebase Storage timeout')), 3500);
-      });
+      // Attach catch handler so background failure never triggers Unhandled Rejection
+      uploadTask.catch(() => {});
 
       const firebaseResult = await Promise.race([uploadTask, timeoutTask]);
+      clearTimeout(timer);
       return firebaseResult;
     } catch (fbErr: any) {
       console.warn(
-        `Firebase Storage upload for ${level} bypassed (${fbErr?.code || fbErr?.message}). Menggunakan penyimpanan server...`
+        `Firebase Storage upload for ${level} bypassed (${fbErr?.code || fbErr?.message}). Menggunakan penyimpanan permanen...`
       );
     }
   }
