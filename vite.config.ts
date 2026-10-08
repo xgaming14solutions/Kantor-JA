@@ -103,6 +103,89 @@ function adminApiPlugin(): Plugin {
           return;
         }
 
+        if (req.url === '/api/upload-facility-photo' && req.method === 'POST') {
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+          });
+          req.on('end', async () => {
+            try {
+              const { level, fileName, base64Data, mimeType } = JSON.parse(body);
+              if (!level || !base64Data) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: 'Data foto gedung tidak lengkap.' }));
+                return;
+              }
+              const validLevels = ['tk', 'sd', 'smp', 'sma'];
+              if (!validLevels.includes(level)) {
+                res.statusCode = 400;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: 'Jenjang pendidikan tidak valid.' }));
+                return;
+              }
+              let ext = 'jpg';
+              if (mimeType === 'image/png') ext = 'png';
+              else if (mimeType === 'image/webp') ext = 'webp';
+              else if (mimeType === 'image/jpeg') ext = 'jpg';
+              else if (fileName) {
+                const m = fileName.match(/\.(jpg|jpeg|png|webp)$/i);
+                if (m) ext = m[1].toLowerCase();
+              }
+              const targetDir = path.join(process.cwd(), 'public', 'uploads', 'schoolIdentity', 'education', level);
+              const eduDir = path.join(process.cwd(), 'public', 'education', level);
+              if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+              if (!fs.existsSync(eduDir)) fs.mkdirSync(eduDir, { recursive: true });
+              const randomHash = Math.random().toString(36).substring(2, 8);
+              const safeFileName = `gedung_${level}_${Date.now()}_${randomHash}.${ext}`;
+              const filePath = path.join(targetDir, safeFileName);
+              const eduFilePath = path.join(eduDir, safeFileName);
+              const cleanedBase64 = base64Data.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
+              const buffer = Buffer.from(cleanedBase64, 'base64');
+              fs.writeFileSync(filePath, buffer);
+              fs.writeFileSync(eduFilePath, buffer);
+              res.setHeader('Content-Type', 'application/json');
+              res.statusCode = 200;
+              res.end(JSON.stringify({
+                success: true,
+                downloadUrl: `/education/${level}/${safeFileName}`,
+                storagePath: `schoolIdentity/education/${level}/${safeFileName}`,
+              }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+          });
+          return;
+        }
+
+        if (req.url === '/api/delete-facility-photo' && req.method === 'POST') {
+          let body = '';
+          req.on('data', (chunk) => { body += chunk; });
+          req.on('end', async () => {
+            try {
+              const { storagePath } = JSON.parse(body);
+              if (storagePath && typeof storagePath === 'string' && storagePath.startsWith('schoolIdentity/education/')) {
+                const safePath = path.normalize(storagePath).replace(/^(\.\.[\/\\])+/, '');
+                const targetUploads = path.join(process.cwd(), 'public', 'uploads', safePath);
+                const subRel = safePath.replace(/^schoolIdentity\/education\//, '');
+                const targetEdu = path.join(process.cwd(), 'public', 'education', subRel);
+                if (fs.existsSync(targetUploads)) fs.unlinkSync(targetUploads);
+                if (fs.existsSync(targetEdu)) fs.unlinkSync(targetEdu);
+              }
+              res.setHeader('Content-Type', 'application/json');
+              res.statusCode = 200;
+              res.end(JSON.stringify({ success: true }));
+            } catch {
+              res.setHeader('Content-Type', 'application/json');
+              res.statusCode = 200;
+              res.end(JSON.stringify({ success: true }));
+            }
+          });
+          return;
+        }
+
         next();
       });
     },

@@ -224,6 +224,17 @@ export async function uploadFacilityPhotoToStorage(
     const serverResult = await uploadToServerStorage(level, file.name, file.type, dataUrl);
     return serverResult;
   } catch (srvErr: any) {
+    // If the server endpoint is unavailable or returns 404 (e.g. static CDN or serverless route delay),
+    // fall back gracefully to the client-optimized high-resolution dataUrl so upload NEVER fails with HTTP 404!
+    if (dataUrl && dataUrl.startsWith('data:image/')) {
+      console.info(
+        `[FacilityPhoto] Server endpoint unavailable (${srvErr?.message}). Menggunakan penyimpanan foto teroptimasi langsung ke database...`
+      );
+      return {
+        downloadUrl: dataUrl,
+        storagePath: storagePath,
+      };
+    }
     console.error(`Error saving facility photo for ${level} on server:`, srvErr);
     throw new Error(
       srvErr?.message || `Gagal menyimpan foto gedung jenjang ${level.toUpperCase()}.`
