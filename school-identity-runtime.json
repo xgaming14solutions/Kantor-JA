@@ -81,14 +81,22 @@
       "description": "Gedung kelas, asrama santri, dan sarana halaqah Al-Qur’an untuk program intensif 30 juz, kitab hadits Umdatul Ahkam, dan penguasaan bahasa Arab.",
       "imageUrl": "/education/smp/gedung_smp.jpg",
       "storagePath": "schoolIdentity/education/smp/gedung_smp.jpg",
-      "updatedAt": "2026-10-08T07:10:44.577Z"
+      "updatedAt": "2026-10-08T09:27:28.766Z"
     },
     "sma": {
       "title": "Sekolah Menengah Atas (SMA)",
       "description": "Fasilitas pendidikan lanjutan, asrama santri, laboratorium, dan pembinaan kemandirian (life skill) untuk mencetak lulusan berilmu dan berakhlak mandiri.",
       "imageUrl": "/education/sma/gedung_sma.jpg",
       "storagePath": "schoolIdentity/education/sma/gedung_sma.jpg",
-      "updatedAt": "2026-10-08T07:10:44.577Z"
-    }
-  }
+      "updatedAt": "2026-10-08T09:27:28.767Z"
+    },
+    "tkImageUrl": "/education/tk/gedung_tk.jpg",
+    "sdImageUrl": "/education/sd/gedung_sd.jpg",
+    "smpImageUrl": "/education/smp/gedung_smp.jpg",
+    "smaImageUrl": "/education/sma/gedung_sma.jpg"
+  },
+  "tkImageUrl": "/education/tk/gedung_tk.jpg",
+  "sdImageUrl": "/education/sd/gedung_sd.jpg",
+  "smpImageUrl": "/education/smp/gedung_smp.jpg",
+  "smaImageUrl": "/education/sma/gedung_sma.jpg"
 }

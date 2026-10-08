@@ -737,25 +737,55 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (!currentUser) {
         const loadedSchoolIdentity = await fetchSchoolIdentity();
         setSchoolIdentity((prev) => {
+          const mergedFacilities = {
+            ...prev.educationFacilities,
+            ...loadedSchoolIdentity.educationFacilities,
+            tk: {
+              ...(prev.educationFacilities?.tk || {}),
+              ...(loadedSchoolIdentity.educationFacilities?.tk || {}),
+              imageUrl: loadedSchoolIdentity.educationFacilities?.tk?.imageUrl || loadedSchoolIdentity.educationFacilities?.tkImageUrl || prev.educationFacilities?.tk?.imageUrl || '',
+            },
+            sd: {
+              ...(prev.educationFacilities?.sd || {}),
+              ...(loadedSchoolIdentity.educationFacilities?.sd || {}),
+              imageUrl: loadedSchoolIdentity.educationFacilities?.sd?.imageUrl || loadedSchoolIdentity.educationFacilities?.sdImageUrl || prev.educationFacilities?.sd?.imageUrl || '',
+            },
+            smp: {
+              ...(prev.educationFacilities?.smp || {}),
+              ...(loadedSchoolIdentity.educationFacilities?.smp || {}),
+              imageUrl: loadedSchoolIdentity.educationFacilities?.smp?.imageUrl || loadedSchoolIdentity.educationFacilities?.smpImageUrl || prev.educationFacilities?.smp?.imageUrl || '',
+            },
+            sma: {
+              ...(prev.educationFacilities?.sma || {}),
+              ...(loadedSchoolIdentity.educationFacilities?.sma || {}),
+              imageUrl: loadedSchoolIdentity.educationFacilities?.sma?.imageUrl || loadedSchoolIdentity.educationFacilities?.smaImageUrl || prev.educationFacilities?.sma?.imageUrl || '',
+            },
+            tkImageUrl: loadedSchoolIdentity.educationFacilities?.tkImageUrl || loadedSchoolIdentity.educationFacilities?.tk?.imageUrl || prev.educationFacilities?.tkImageUrl || '',
+            sdImageUrl: loadedSchoolIdentity.educationFacilities?.sdImageUrl || loadedSchoolIdentity.educationFacilities?.sd?.imageUrl || prev.educationFacilities?.sdImageUrl || '',
+            smpImageUrl: loadedSchoolIdentity.educationFacilities?.smpImageUrl || loadedSchoolIdentity.educationFacilities?.smp?.imageUrl || prev.educationFacilities?.smpImageUrl || '',
+            smaImageUrl: loadedSchoolIdentity.educationFacilities?.smaImageUrl || loadedSchoolIdentity.educationFacilities?.sma?.imageUrl || prev.educationFacilities?.smaImageUrl || '',
+          };
+
           if (
             lastSavedIdentityAtRef.current &&
             (!loadedSchoolIdentity.updatedAt ||
               loadedSchoolIdentity.updatedAt < lastSavedIdentityAtRef.current)
           ) {
-            return prev;
+            return { ...prev, educationFacilities: mergedFacilities };
           }
           if (
             prev.updatedAt &&
             loadedSchoolIdentity.updatedAt &&
             prev.updatedAt > loadedSchoolIdentity.updatedAt
           ) {
-            return prev;
+            return { ...prev, educationFacilities: mergedFacilities };
           }
           if (!loadedSchoolIdentity.logoUrl && !loadedSchoolIdentity.logoRemoved && prev.logoUrl && !prev.logoRemoved) {
-            return { ...loadedSchoolIdentity, logoUrl: prev.logoUrl };
+            return { ...loadedSchoolIdentity, educationFacilities: mergedFacilities, logoUrl: prev.logoUrl };
           }
-          return loadedSchoolIdentity;
+          return { ...loadedSchoolIdentity, educationFacilities: mergedFacilities };
         });
+
         return;
       }
 
@@ -998,25 +1028,55 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setExtracurricularParticipants(rawEksPartList || []);
       setExtracurricularScores(rawEksScoreList || []);
       setSchoolIdentity((prev) => {
+        const mergedFacilities = {
+          ...prev.educationFacilities,
+          ...loadedSchoolIdentity.educationFacilities,
+          tk: {
+            ...(prev.educationFacilities?.tk || {}),
+            ...(loadedSchoolIdentity.educationFacilities?.tk || {}),
+            imageUrl: loadedSchoolIdentity.educationFacilities?.tk?.imageUrl || loadedSchoolIdentity.educationFacilities?.tkImageUrl || prev.educationFacilities?.tk?.imageUrl || '',
+          },
+          sd: {
+            ...(prev.educationFacilities?.sd || {}),
+            ...(loadedSchoolIdentity.educationFacilities?.sd || {}),
+            imageUrl: loadedSchoolIdentity.educationFacilities?.sd?.imageUrl || loadedSchoolIdentity.educationFacilities?.sdImageUrl || prev.educationFacilities?.sd?.imageUrl || '',
+          },
+          smp: {
+            ...(prev.educationFacilities?.smp || {}),
+            ...(loadedSchoolIdentity.educationFacilities?.smp || {}),
+            imageUrl: loadedSchoolIdentity.educationFacilities?.smp?.imageUrl || loadedSchoolIdentity.educationFacilities?.smpImageUrl || prev.educationFacilities?.smp?.imageUrl || '',
+          },
+          sma: {
+            ...(prev.educationFacilities?.sma || {}),
+            ...(loadedSchoolIdentity.educationFacilities?.sma || {}),
+            imageUrl: loadedSchoolIdentity.educationFacilities?.sma?.imageUrl || loadedSchoolIdentity.educationFacilities?.smaImageUrl || prev.educationFacilities?.sma?.imageUrl || '',
+          },
+          tkImageUrl: loadedSchoolIdentity.educationFacilities?.tkImageUrl || loadedSchoolIdentity.educationFacilities?.tk?.imageUrl || prev.educationFacilities?.tkImageUrl || '',
+          sdImageUrl: loadedSchoolIdentity.educationFacilities?.sdImageUrl || loadedSchoolIdentity.educationFacilities?.sd?.imageUrl || prev.educationFacilities?.sdImageUrl || '',
+          smpImageUrl: loadedSchoolIdentity.educationFacilities?.smpImageUrl || loadedSchoolIdentity.educationFacilities?.smp?.imageUrl || prev.educationFacilities?.smpImageUrl || '',
+          smaImageUrl: loadedSchoolIdentity.educationFacilities?.smaImageUrl || loadedSchoolIdentity.educationFacilities?.sma?.imageUrl || prev.educationFacilities?.smaImageUrl || '',
+        };
+
         if (
           lastSavedIdentityAtRef.current &&
           (!loadedSchoolIdentity.updatedAt ||
             loadedSchoolIdentity.updatedAt < lastSavedIdentityAtRef.current)
         ) {
-          return prev;
+          return { ...prev, educationFacilities: mergedFacilities };
         }
         if (
           prev.updatedAt &&
           loadedSchoolIdentity.updatedAt &&
           prev.updatedAt > loadedSchoolIdentity.updatedAt
         ) {
-          return prev;
+          return { ...prev, educationFacilities: mergedFacilities };
         }
         if (!loadedSchoolIdentity.logoUrl && !loadedSchoolIdentity.logoRemoved && prev.logoUrl && !prev.logoRemoved) {
-          return { ...loadedSchoolIdentity, logoUrl: prev.logoUrl };
+          return { ...loadedSchoolIdentity, educationFacilities: mergedFacilities, logoUrl: prev.logoUrl };
         }
-        return loadedSchoolIdentity;
+        return { ...loadedSchoolIdentity, educationFacilities: mergedFacilities };
       });
+
       setKesantrianRecords(
         (rawKesantrianRecords || []).sort(
           (a, b) => new Date(b.date || b.createdAt || '').getTime() - new Date(a.date || a.createdAt || '').getTime()

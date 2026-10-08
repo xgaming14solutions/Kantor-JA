@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
-import { DEFAULT_PESANTREN_FACILITIES } from '../lib/dbService';
+import { DEFAULT_PESANTREN_FACILITIES, logEducationFacilitiesDiagnostic } from '../lib/dbService';
 import {
   DEFAULT_SPMB_BROCHURE,
   subscribeToBrochures,
@@ -207,6 +207,7 @@ export const LoginView: React.FC = () => {
 
   useEffect(() => {
     setBrokenFacilityImages({});
+    logEducationFacilitiesDiagnostic(schoolIdentity?.educationFacilities);
   }, [schoolIdentity?.educationFacilities]);
 
   // Public SPMB Brochure states
@@ -1242,8 +1243,15 @@ export const LoginView: React.FC = () => {
               const defaultForLevel = DEFAULT_EDUCATION_FACILITIES[item.key];
               const facilityData =
                 schoolIdentity?.educationFacilities?.[item.key] || defaultForLevel;
-              const rawPhotoUrl = facilityData?.imageUrl?.trim() || '';
-              const photoUrl = rawPhotoUrl.replace(/^\/uploads\/schoolIdentity\/education\//, '/education/');
+              const efRecord = schoolIdentity?.educationFacilities as Record<string, any> | undefined;
+              const directUrl = (efRecord?.[`${item.key}ImageUrl`] as string) || '';
+              const rawPhotoUrl = String(facilityData?.imageUrl || directUrl || '').trim();
+              const photoUrl =
+                /^https?:\/\/|^data:image\//i.test(rawPhotoUrl)
+                  ? rawPhotoUrl
+                  : rawPhotoUrl.replace(/^\/uploads\/schoolIdentity\/education\//, '/education/');
+
+
               const isBroken = brokenFacilityImages[item.key];
               const title = facilityData?.title || item.badge;
               const description =

@@ -11,7 +11,7 @@ import {
   where,
   writeBatch
 } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { auth, db, firebaseConfig } from './firebase';
 
 export enum OperationType {
   CREATE = 'create',
@@ -667,6 +667,10 @@ export const DEFAULT_EDUCATION_FACILITIES: EducationFacilitiesMap = {
       'Fasilitas pendidikan lanjutan, asrama santri, laboratorium, dan pembinaan kemandirian (life skill) untuk mencetak lulusan berilmu dan berakhlak mandiri.',
     imageUrl: '',
   },
+  tkImageUrl: '',
+  sdImageUrl: '',
+  smpImageUrl: '',
+  smaImageUrl: '',
 };
 
 export const DEFAULT_SCHOOL_IDENTITY: SchoolIdentity = {
@@ -911,26 +915,56 @@ export function normalizeSchoolIdentity(raw: any): SchoolIdentity {
       if (!ef || typeof ef !== 'object') return { ...DEFAULT_EDUCATION_FACILITIES };
       const norm = (key: 'tk' | 'sd' | 'smp' | 'sma') => {
         const item = ef[key];
+        const flatUrl = ef[`${key}ImageUrl`] || raw[`${key}ImageUrl`];
         const def = DEFAULT_EDUCATION_FACILITIES[key]!;
-        if (!item || typeof item !== 'object') return def;
+        if (!item || typeof item !== 'object') {
+          const resolvedImg = String(flatUrl || (typeof item === 'string' ? item : '') || def.imageUrl || '').trim();
+          return {
+            ...def,
+            imageUrl: resolvedImg,
+          };
+        }
+        const imgUrl = String(item.imageUrl || item.url || flatUrl || '').trim();
         return {
           title: String(item.title || def.title).trim(),
           description: String(item.description || def.description).trim(),
-          imageUrl: String(item.imageUrl || item.url || '').trim(),
+          imageUrl: imgUrl,
           storagePath: item.storagePath ? String(item.storagePath).trim() : undefined,
           updatedAt: item.updatedAt ? String(item.updatedAt) : undefined,
         };
       };
+      const tkObj = norm('tk');
+      const sdObj = norm('sd');
+      const smpObj = norm('smp');
+      const smaObj = norm('sma');
       return {
-        tk: norm('tk'),
-        sd: norm('sd'),
-        smp: norm('smp'),
-        sma: norm('sma'),
+        tk: tkObj,
+        sd: sdObj,
+        smp: smpObj,
+        sma: smaObj,
+        tkImageUrl: tkObj.imageUrl,
+        sdImageUrl: sdObj.imageUrl,
+        smpImageUrl: smpObj.imageUrl,
+        smaImageUrl: smaObj.imageUrl,
       };
     })(),
     updatedAt: raw.updatedAt ? String(raw.updatedAt) : undefined,
     updatedBy: raw.updatedBy ? String(raw.updatedBy) : undefined
   };
+}
+
+export function logEducationFacilitiesDiagnostic(ef?: EducationFacilitiesMap): void {
+  try {
+    const envStr = import.meta.env.PROD ? 'production' : 'development';
+    console.info(
+      `[EDUCATION FACILITIES]\nenvironment: ${envStr}\ntkImageUrl: ${ef?.tkImageUrl || ef?.tk?.imageUrl || '-'}\nsdImageUrl: ${ef?.sdImageUrl || ef?.sd?.imageUrl || '-'}\nsmpImageUrl: ${ef?.smpImageUrl || ef?.smp?.imageUrl || '-'}\nsmaImageUrl: ${ef?.smaImageUrl || ef?.sma?.imageUrl || '-'}`
+    );
+    console.info(
+      `[Firebase]\nprojectId: ${firebaseConfig.projectId || '-'}\nstorageBucket: ${firebaseConfig.storageBucket || '-'}`
+    );
+  } catch {
+    // ignore logging errors
+  }
 }
 
 export function getInitialSchoolIdentity(): SchoolIdentity {
@@ -1082,8 +1116,53 @@ export async function fetchSchoolIdentity(): Promise<SchoolIdentity> {
       return 0;
     });
 
+    // Authoritatively resolve educationFacilities primarily from Firestore so that
+    // stale local storage or server cache never wipes out photo URLs (TK, SD, SMP, SMA)
+    const fsEf = firestoreIdentity?.educationFacilities;
+    const srvEf = serverIdentity?.educationFacilities;
+    const cacheEf = cachedIdentity?.educationFacilities;
+
+    const resolveLevelFacility = (level: 'tk' | 'sd' | 'smp' | 'sma') => {
+      const def = DEFAULT_EDUCATION_FACILITIES[level]!;
+      const primaryItem = fsEf?.[level] || srvEf?.[level] || cacheEf?.[level] || def;
+      const fsFlatUrl = fsEf?.[`${level}ImageUrl` as keyof EducationFacilitiesMap] as string | undefined;
+      const srvFlatUrl = srvEf?.[`${level}ImageUrl` as keyof EducationFacilitiesMap] as string | undefined;
+      const cacheFlatUrl = cacheEf?.[`${level}ImageUrl` as keyof EducationFacilitiesMap] as string | undefined;
+
+      const finalUrl = String(
+        fsEf?.[level]?.imageUrl ||
+        fsFlatUrl ||
+        primaryItem?.imageUrl ||
+        srvEf?.[level]?.imageUrl ||
+        srvFlatUrl ||
+        cacheEf?.[level]?.imageUrl ||
+        cacheFlatUrl ||
+        ''
+      ).trim();
+
+      return {
+        title: String(primaryItem?.title || def.title).trim(),
+        description: String(primaryItem?.description || def.description).trim(),
+        imageUrl: finalUrl,
+        storagePath: primaryItem?.storagePath ? String(primaryItem.storagePath).trim() : undefined,
+        updatedAt: primaryItem?.updatedAt ? String(primaryItem.updatedAt) : undefined,
+      };
+    };
+
+    const authoritativeFacilities: EducationFacilitiesMap = {
+      tk: resolveLevelFacility('tk'),
+      sd: resolveLevelFacility('sd'),
+      smp: resolveLevelFacility('smp'),
+      sma: resolveLevelFacility('sma'),
+      tkImageUrl: resolveLevelFacility('tk').imageUrl,
+      sdImageUrl: resolveLevelFacility('sd').imageUrl,
+      smpImageUrl: resolveLevelFacility('smp').imageUrl,
+      smaImageUrl: resolveLevelFacility('sma').imageUrl,
+    };
+
     const winner: SchoolIdentity = {
       ...candidates[0],
+      educationFacilities: authoritativeFacilities,
       logoUrl: resolvedLogoUrl,
       logoRemoved: explicitlyRemoved,
       logoUpdatedAt:
@@ -1091,6 +1170,10 @@ export async function fetchSchoolIdentity(): Promise<SchoolIdentity> {
         candidates[0].logoUpdatedAt ||
         candidates[0].updatedAt,
     };
+
+    // Diagnostics required for production/development environment
+    logEducationFacilitiesDiagnostic(winner.educationFacilities);
+
 
     // Update local cache
     safeSetItem('kantoja_school_identity', JSON.stringify(winner));
@@ -1294,6 +1377,9 @@ export async function saveSchoolIdentityDoc(data: Partial<SchoolIdentity>): Prom
         delete firestorePayload.logoUrl;
         delete firestorePayload.logoRemoved;
         delete firestorePayload.logoUpdatedAt;
+      }
+      if (data.educationFacilities === undefined) {
+        delete firestorePayload.educationFacilities;
       }
 
       const writeIdentityTask = setDoc(docRef, firestorePayload, { merge: true }).then(() => true);

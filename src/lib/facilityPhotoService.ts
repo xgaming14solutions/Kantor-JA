@@ -197,7 +197,7 @@ export async function uploadFacilityPhotoToStorage(
 
       let timer: any;
       const timeoutTask = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error('Firebase Storage timeout')), 4500);
+        timer = setTimeout(() => reject(new Error('Firebase Storage timeout')), 25000);
       });
 
       const uploadTask = (async () => {

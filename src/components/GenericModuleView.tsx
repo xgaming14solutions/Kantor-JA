@@ -12,7 +12,7 @@ import {
 } from '../lib/mockData';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
-import { formatReportProgram, DEFAULT_PESANTREN_FACILITIES } from '../lib/dbService';
+import { formatReportProgram, DEFAULT_PESANTREN_FACILITIES, logEducationFacilitiesDiagnostic } from '../lib/dbService';
 import { PesantrenFacilityItem } from '../types';
 import {
   SchoolLogo,
@@ -113,6 +113,7 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
 
   useEffect(() => {
     setBrokenFacilityImages({});
+    logEducationFacilitiesDiagnostic(schoolIdentity.educationFacilities);
   }, [schoolIdentity.educationFacilities]);
 
   const tkFacilityInputRef = useRef<HTMLInputElement | null>(null);
@@ -168,11 +169,13 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
           storagePath: result.storagePath,
           updatedAt: new Date().toISOString(),
         },
+        [`${level}ImageUrl`]: result.downloadUrl,
       };
 
       await saveSchoolIdentity({
         educationFacilities: updatedEducationFacilities,
       });
+
 
       setBrokenFacilityImages((prev) => ({ ...prev, [level]: false }));
       setFacilityPhotoSuccess(`Foto gedung jenjang ${level.toUpperCase()} berhasil disimpan.`);
@@ -211,11 +214,13 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
           storagePath: '',
           updatedAt: new Date().toISOString(),
         },
+        [`${level}ImageUrl`]: '',
       };
 
       await saveSchoolIdentity({
         educationFacilities: updatedEducationFacilities,
       });
+
 
       setConfirmDeleteFacilityLevel(null);
       setFacilityPhotoSuccess(`Foto gedung jenjang ${level.toUpperCase()} berhasil dihapus dan dikembalikan ke placeholder.`);
@@ -379,7 +384,6 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
         socialMedia: formData.socialMedia.trim(),
         ppdbInfo: formData.ppdbInfo.trim(),
         facilities: formData.facilities,
-        educationFacilities: schoolIdentity.educationFacilities || DEFAULT_EDUCATION_FACILITIES,
       });
       if (pendingLogo) {
         setPendingLogo(null);
@@ -899,9 +903,19 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
                 const facilityData =
                   schoolIdentity.educationFacilities?.[item.key] ||
                   DEFAULT_EDUCATION_FACILITIES[item.key];
-                const hasPhoto = Boolean(facilityData?.imageUrl?.trim());
+                const efRecord = schoolIdentity.educationFacilities as Record<string, any> | undefined;
+                const directUrl = (efRecord?.[`${item.key}ImageUrl`] as string) || '';
+                const rawUrl = String(facilityData?.imageUrl || directUrl || '').trim();
+
+                const hasPhoto = Boolean(rawUrl);
                 const isUploadingThis = uploadingFacilityLevel === item.key;
                 const isConfirmingDelete = confirmDeleteFacilityLevel === item.key;
+
+                // Never modify Firebase Storage download URLs (https://firebasestorage.googleapis.com/... or https://)
+                const displayImageUrl =
+                  /^https?:\/\/|^data:image\//i.test(rawUrl)
+                    ? rawUrl
+                    : rawUrl.replace(/^\/uploads\/schoolIdentity\/education\//, '/education/');
 
                 return (
                   <div
@@ -936,14 +950,15 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
                     <div className="relative w-full aspect-16/10 rounded-xl overflow-hidden bg-white border border-[#DCE5E8] flex items-center justify-center">
                       {hasPhoto && !brokenFacilityImages[item.key] ? (
                         <img
-                          src={(facilityData?.imageUrl || '').replace(/^\/uploads\/schoolIdentity\/education\//, '/education/')}
+                          src={displayImageUrl}
                           alt={`Gedung ${item.label} Pesantren Islam Mutiara Insan`}
                           onError={() => {
-                            console.warn(`[Identitas Sekolah] Gagal memuat foto gedung jenjang ${item.label.toUpperCase()}:`, facilityData?.imageUrl);
+                            console.warn(`[Identitas Sekolah] Gagal memuat foto gedung jenjang ${item.label.toUpperCase()}:`, displayImageUrl);
                             setBrokenFacilityImages((prev) => ({ ...prev, [item.key]: true }));
                           }}
                           className="w-full h-full object-cover"
                         />
+
                       ) : (
                         <div className="flex flex-col items-center justify-center p-4 text-center text-[#71818A] space-y-1">
                           <Building2 className="w-7 h-7 text-[#5D8295]" />

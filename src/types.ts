@@ -266,6 +266,10 @@ export interface EducationFacilitiesMap {
   sd?: EducationFacilityLevel;
   smp?: EducationFacilityLevel;
   sma?: EducationFacilityLevel;
+  tkImageUrl?: string;
+  sdImageUrl?: string;
+  smpImageUrl?: string;
+  smaImageUrl?: string;
 }
 
 export interface SchoolIdentity {
