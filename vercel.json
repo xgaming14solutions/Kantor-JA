@@ -47,7 +47,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!robots\\.txt|sitemap\\.xml|og-pesantren-mutiara-insan\\.jpg|assets/|uploads/|education/|api/).*)",
+      "source": "/((?!robots\\.txt|sitemap\\.xml|assets/|uploads/|education/|api/|.*\\.(?:jpg|jpeg|png|webp|svg|ico|pdf|txt|xml)).*)",
       "destination": "/index.html"
     }
   ]

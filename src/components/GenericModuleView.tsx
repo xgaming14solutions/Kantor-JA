@@ -936,9 +936,10 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
                         <img
                           src={(facilityData?.imageUrl || '').replace(/^\/uploads\/schoolIdentity\/education\//, '/education/')}
                           alt={`Gedung ${item.label} Pesantren Islam Mutiara Insan`}
-                          onError={() =>
-                            setBrokenFacilityImages((prev) => ({ ...prev, [item.key]: true }))
-                          }
+                          onError={() => {
+                            console.warn(`[Identitas Sekolah] Gagal memuat foto gedung jenjang ${item.label.toUpperCase()}:`, facilityData?.imageUrl);
+                            setBrokenFacilityImages((prev) => ({ ...prev, [item.key]: true }));
+                          }}
                           className="w-full h-full object-cover"
                         />
                       ) : (

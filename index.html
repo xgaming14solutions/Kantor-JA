@@ -68,12 +68,30 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,600&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <script>
-      // Gracefully prevent internal dev-server HMR disconnection logs from surfacing as unhandled rejections
-      window.addEventListener('unhandledrejection', function(event) {
-        if (event && event.reason && typeof event.reason.message === 'string' && event.reason.message.includes('WebSocket closed without opened')) {
-          event.preventDefault();
+      // Gracefully handle dev environment Vite/HMR WebSocket disconnections
+      (function() {
+        function isWsHmrError(err) {
+          if (!err) return false;
+          var msg = (typeof err === 'string' ? err : (err.message || (err.reason && err.reason.message) || err.stack || '')) + '';
+          return msg.indexOf('WebSocket closed without opened') !== -1;
         }
-      });
+        window.addEventListener('unhandledrejection', function(event) {
+          if (isWsHmrError(event.reason || event)) {
+            event.preventDefault();
+            if (typeof event.stopImmediatePropagation === 'function') {
+              event.stopImmediatePropagation();
+            }
+          }
+        });
+        window.addEventListener('error', function(event) {
+          if (isWsHmrError(event.error || event.message)) {
+            event.preventDefault();
+            if (typeof event.stopImmediatePropagation === 'function') {
+              event.stopImmediatePropagation();
+            }
+          }
+        });
+      })();
     </script>
   </head>
   <body>

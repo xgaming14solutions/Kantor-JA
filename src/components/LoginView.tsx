@@ -1260,9 +1260,10 @@ export const LoginView: React.FC = () => {
                         <img
                           src={photoUrl}
                           alt={item.altText}
-                          onError={() =>
-                            setBrokenFacilityImages((prev) => ({ ...prev, [item.key]: true }))
-                          }
+                          onError={() => {
+                            console.warn(`[Profil Publik] Gagal memuat foto gedung jenjang ${item.badge}:`, photoUrl);
+                            setBrokenFacilityImages((prev) => ({ ...prev, [item.key]: true }));
+                          }}
                           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                           loading="lazy"
                         />
@@ -1488,9 +1489,8 @@ export const LoginView: React.FC = () => {
               <div className="aspect-4/3 bg-stone-100 relative overflow-hidden">
                 {!studyImgError ? (
                   <img
-                    src={studySanctuaryImg}
+                    src="/belajar_dikelas.jpg"
                     alt="Suasana ruang belajar Pesantren Islam Mutiara Insan"
-                    referrerPolicy="no-referrer"
                     onError={() => setStudyImgError(true)}
                     className="w-full h-full object-cover"
                   />
