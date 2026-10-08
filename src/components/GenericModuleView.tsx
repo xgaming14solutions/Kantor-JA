@@ -144,6 +144,7 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
 
     setFacilityPhotoError(null);
     setFacilityPhotoSuccess(null);
+    setBrokenFacilityImages((prev) => ({ ...prev, [level]: false }));
     setUploadingFacilityLevel(level);
 
     try {
@@ -173,6 +174,7 @@ export const GenericModuleView: React.FC<{ tab: string }> = ({ tab }) => {
         educationFacilities: updatedEducationFacilities,
       });
 
+      setBrokenFacilityImages((prev) => ({ ...prev, [level]: false }));
       setFacilityPhotoSuccess(`Foto gedung jenjang ${level.toUpperCase()} berhasil disimpan.`);
       setTimeout(() => setFacilityPhotoSuccess(null), 5000);
     } catch (err: any) {

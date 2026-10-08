@@ -103,7 +103,9 @@ function adminApiPlugin(): Plugin {
           return;
         }
 
-        if (req.url === '/api/upload-facility-photo' && req.method === 'POST') {
+        const reqPath = (req.url || '').split('?')[0].replace(/\/+$/, '');
+
+        if (reqPath === '/api/upload-facility-photo' && req.method === 'POST') {
           let body = '';
           req.on('data', (chunk) => {
             body += chunk;
@@ -140,10 +142,12 @@ function adminApiPlugin(): Plugin {
               const safeFileName = `gedung_${level}_${Date.now()}_${randomHash}.${ext}`;
               const filePath = path.join(targetDir, safeFileName);
               const eduFilePath = path.join(eduDir, safeFileName);
+              const canonicalEduPath = path.join(eduDir, `gedung_${level}.${ext}`);
               const cleanedBase64 = base64Data.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
               const buffer = Buffer.from(cleanedBase64, 'base64');
               fs.writeFileSync(filePath, buffer);
               fs.writeFileSync(eduFilePath, buffer);
+              fs.writeFileSync(canonicalEduPath, buffer);
               res.setHeader('Content-Type', 'application/json');
               res.statusCode = 200;
               res.end(JSON.stringify({
@@ -160,7 +164,7 @@ function adminApiPlugin(): Plugin {
           return;
         }
 
-        if (req.url === '/api/delete-facility-photo' && req.method === 'POST') {
+        if (reqPath === '/api/delete-facility-photo' && req.method === 'POST') {
           let body = '';
           req.on('data', (chunk) => { body += chunk; });
           req.on('end', async () => {

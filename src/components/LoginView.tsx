@@ -44,7 +44,6 @@ import {
 import { DEFAULT_EDUCATION_FACILITIES } from '../lib/dbService';
 import firebaseConfig from '../../firebase-applet-config.json';
 import heroPesantrenImg from '../assets/images/hero_pesantren_mutiara_1790506485327.jpg';
-import tahfizQuranImg from '../assets/images/tahfiz_quran_mushaf_1790506498260.jpg';
 import studySanctuaryImg from '../assets/images/pesantren_study_sanctuary_1790506511129.jpg';
 
 type GraduateTabKey = 'ALL' | 'TK' | 'SD' | 'SMP_SMA';
@@ -181,7 +180,7 @@ const OFFICIAL_WHATSAPP_URL =
   'https://wa.me/628121098876?text=Assalamu%27alaikum%20warahmatullahi%20wabarakatuh%20Ustadz%20Abu%20Al%20Fatih%2C%20saya%20ingin%20memperoleh%20informasi%20pendaftaran%20santri%20baru%20(SPMB%20Mutiara%20Insan%20Tahun%20Ajaran%202027-2028).';
 
 // Sumber gambar banner utama Beranda (file di folder public, misal '/seluruh_pondok.jpg' atau '/halaman_pondok.jpg')
-const HERO_BANNER_SRC = '/seluruh_pondok.jpg';
+const HERO_BANNER_SRC = '/seluruh_pondok.jpg?v=20261008';
 
 export const LoginView: React.FC = () => {
   const { login, loginWithGoogle, error, errorCode, setError } = useAuth();
@@ -201,6 +200,7 @@ export const LoginView: React.FC = () => {
 
   // Image fallback states (Zero-Broken-Image Policy)
   const [heroImgError, setHeroImgError] = useState(false);
+  const [galleryCampusImgError, setGalleryCampusImgError] = useState(false);
   const [tahfizImgError, setTahfizImgError] = useState(false);
   const [studyImgError, setStudyImgError] = useState(false);
   const [brokenFacilityImages, setBrokenFacilityImages] = useState<Record<string, boolean>>({});
@@ -760,11 +760,12 @@ export const LoginView: React.FC = () => {
               <div className="relative rounded-2xl overflow-hidden border border-emerald-800/80 bg-emerald-900 aspect-16/10 sm:aspect-16/9 lg:aspect-4/3 shadow-xl">
                 {!heroImgError ? (
                   <img
-                    src="/seluruh_pondok.jpg"
+                    src={HERO_BANNER_SRC}
                     alt="Lingkungan Pesantren Islam Mutiara Insan"
                     referrerPolicy="no-referrer"
                     onError={() => setHeroImgError(true)}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition-opacity duration-300"
+                    loading="eager"
                   />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center bg-gradient-to-br from-emerald-900 via-emerald-950 to-stone-900">
@@ -1429,15 +1430,16 @@ export const LoginView: React.FC = () => {
           {/* 3 Foto Galeri yang Sudah Ada */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* Foto 1 */}
-            <figure className="bg-white rounded-2xl border border-stone-200/90 overflow-hidden flex flex-col">
+            <figure className="bg-white rounded-2xl border border-stone-200/90 overflow-hidden flex flex-col group">
               <div className="aspect-4/3 bg-emerald-950 relative overflow-hidden">
-                {!heroImgError ? (
+                {!galleryCampusImgError ? (
                   <img
                     src="/halaman_pondok.jpg"
                     alt="Lingkungan Pesantren Islam Mutiara Insan"
                     referrerPolicy="no-referrer"
-                    onError={() => setHeroImgError(true)}
-                    className="w-full h-full object-cover"
+                    onError={() => setGalleryCampusImgError(true)}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    loading="lazy"
                   />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-emerald-950 text-white">
@@ -1457,15 +1459,16 @@ export const LoginView: React.FC = () => {
             </figure>
 
             {/* Foto 2 */}
-            <figure className="bg-white rounded-2xl border border-stone-200/90 overflow-hidden flex flex-col">
+            <figure className="bg-white rounded-2xl border border-stone-200/90 overflow-hidden flex flex-col group">
               <div className="aspect-4/3 bg-emerald-950 relative overflow-hidden">
                 {!tahfizImgError ? (
                   <img
-                    src={tahfizQuranImg}
-                    alt="Program Tahfiz Al-Qur'an Pesantren Islam Mutiara Insan"
+                    src="/halaqah_santri.jpg?v=20261008"
+                    alt="Halaqah Santri Tahfiz Al-Qur'an Pesantren Islam Mutiara Insan"
                     referrerPolicy="no-referrer"
                     onError={() => setTahfizImgError(true)}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    loading="lazy"
                   />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-emerald-950 text-white">
@@ -1485,14 +1488,15 @@ export const LoginView: React.FC = () => {
             </figure>
 
             {/* Foto 3 */}
-            <figure className="bg-white rounded-2xl border border-stone-200/90 overflow-hidden flex flex-col">
+            <figure className="bg-white rounded-2xl border border-stone-200/90 overflow-hidden flex flex-col group">
               <div className="aspect-4/3 bg-stone-100 relative overflow-hidden">
                 {!studyImgError ? (
                   <img
                     src="/belajar_dikelas.jpg"
                     alt="Suasana ruang belajar Pesantren Islam Mutiara Insan"
                     onError={() => setStudyImgError(true)}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    loading="lazy"
                   />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-stone-200 text-stone-800">

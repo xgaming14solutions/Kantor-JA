@@ -55,6 +55,12 @@ async function startServer() {
     maxAge: '1d',
     etag: true,
   }));
+  if (fs.existsSync(path.join(process.cwd(), 'dist', 'education'))) {
+    app.use('/education', express.static(path.join(process.cwd(), 'dist', 'education'), {
+      maxAge: '1d',
+      etag: true,
+    }));
+  }
 
   app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads'), {
     maxAge: '1d',
@@ -116,7 +122,7 @@ async function startServer() {
   });
 
   // Facility photo upload endpoint (saves file permanently to public/uploads/schoolIdentity/education/{level})
-  app.post('/api/upload-facility-photo', (req, res) => {
+  app.post(['/api/upload-facility-photo', '/api/upload-facility-photo/'], (req, res) => {
     try {
       const { level, fileName, base64Data, mimeType } = req.body;
       if (!level || !base64Data) {
@@ -150,12 +156,14 @@ async function startServer() {
       const safeFileName = `gedung_${level}_${Date.now()}_${randomHash}.${ext}`;
       const filePath = path.join(targetDir, safeFileName);
       const eduFilePath = path.join(eduDir, safeFileName);
+      const canonicalEduPath = path.join(eduDir, `gedung_${level}.${ext}`);
 
       const cleanedBase64 = base64Data.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
       const buffer = Buffer.from(cleanedBase64, 'base64');
 
       fs.writeFileSync(filePath, buffer);
       fs.writeFileSync(eduFilePath, buffer);
+      fs.writeFileSync(canonicalEduPath, buffer);
 
       // Also copy to dist if dist exists (e.g., production build)
       const distEduDir = path.join(process.cwd(), 'dist', 'education', level);
@@ -164,10 +172,32 @@ async function startServer() {
           fs.mkdirSync(distEduDir, { recursive: true });
         }
         fs.writeFileSync(path.join(distEduDir, safeFileName), buffer);
+        fs.writeFileSync(path.join(distEduDir, `gedung_${level}.${ext}`), buffer);
       }
 
       const downloadUrl = `/education/${level}/${safeFileName}`;
       const storagePath = `schoolIdentity/education/${level}/${safeFileName}`;
+
+      // Synchronize in runtime JSON
+      try {
+        const existing = readPersistedSchoolIdentity() || {};
+        const ef = existing.educationFacilities || {};
+        const curLevel = ef[level] || {};
+        const updatedLevel = {
+          ...curLevel,
+          imageUrl: downloadUrl,
+          storagePath: storagePath,
+          updatedAt: new Date().toISOString(),
+        };
+        writePersistedSchoolIdentity({
+          educationFacilities: {
+            ...ef,
+            [level]: updatedLevel,
+          },
+        });
+      } catch {
+        // ignore background json sync
+      }
 
       return res.json({
         success: true,
@@ -184,7 +214,7 @@ async function startServer() {
   });
 
   // Facility photo delete endpoint
-  app.post('/api/delete-facility-photo', (req, res) => {
+  app.post(['/api/delete-facility-photo', '/api/delete-facility-photo/'], (req, res) => {
     try {
       const { storagePath } = req.body;
       if (storagePath && typeof storagePath === 'string' && storagePath.startsWith('schoolIdentity/education/')) {
