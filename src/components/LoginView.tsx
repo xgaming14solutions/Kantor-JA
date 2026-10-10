@@ -193,10 +193,26 @@ export const LoginView: React.FC = () => {
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
 
   // Dropdown & UI states
-  const [loginDropdownOpen, setLoginDropdownOpen] = useState(false);
+  const [loginDropdownOpen, setLoginDropdownOpen] = useState<boolean>(() => {
+    return typeof window !== 'undefined' && window.location.pathname.replace(/^\/+|\/+$/g, '') === 'login';
+  });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showForgotPasswordInfo, setShowForgotPasswordInfo] = useState(false);
   const [activeGraduateTab, setActiveGraduateTab] = useState<GraduateTabKey>('ALL');
+
+  // Synchronize login modal state on browser back/forward (popstate)
+  useEffect(() => {
+    const handlePopState = () => {
+      const cleanPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
+      if (cleanPath === 'login') {
+        setLoginDropdownOpen(true);
+      } else if (!cleanPath) {
+        setLoginDropdownOpen(false);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Image fallback states (Zero-Broken-Image Policy)
   const [heroImgError, setHeroImgError] = useState(false);
@@ -294,6 +310,10 @@ export const LoginView: React.FC = () => {
         !loginContainerRef.current.contains(e.target as Node)
       ) {
         setLoginDropdownOpen(false);
+        const cleanPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
+        if (cleanPath === 'login') {
+          window.history.replaceState({ tab: 'root' }, '', '/');
+        }
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -340,6 +360,10 @@ export const LoginView: React.FC = () => {
     setMobileMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setLoginDropdownOpen(true);
+    const cleanPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
+    if (cleanPath !== 'login') {
+      window.history.pushState({ tab: 'login' }, '', '/login');
+    }
   };
 
   const isOperationNotAllowed =
@@ -423,7 +447,16 @@ export const LoginView: React.FC = () => {
                 id="btn-toggle-login-aksara"
                 type="button"
                 onClick={() => {
-                  setLoginDropdownOpen((prev) => !prev);
+                  setLoginDropdownOpen((prev) => {
+                    const next = !prev;
+                    const cleanPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
+                    if (next && cleanPath !== 'login') {
+                      window.history.pushState({ tab: 'login' }, '', '/login');
+                    } else if (!next && cleanPath === 'login') {
+                      window.history.pushState({ tab: 'root' }, '', '/');
+                    }
+                    return next;
+                  });
                   setMobileMenuOpen(false);
                 }}
                 aria-expanded={loginDropdownOpen}

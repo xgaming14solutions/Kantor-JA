@@ -140,6 +140,10 @@ export default function App() {
     mabitPeriods = [],
     atkItems = [],
     atkRequests = [],
+    loading: masterLoading = false,
+    students = [],
+    teachers = [],
+    classes = [],
   } = useMasterData();
 
   const [currentTab, setCurrentTab] = useState<string>(getInitialTab);
@@ -152,6 +156,7 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState<boolean>(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const isNavigatingViaHistoryRef = useRef<boolean>(false);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -175,14 +180,18 @@ export default function App() {
       // If a crawler or user accessed a private path directly while unauthenticated, mark it noindex
       const isRootPath = !rawPath;
       updateSeoRobotsAndTitle(isRootPath, PUBLIC_SEO_TITLE);
-      if (!loading && rawPath === 'login') {
-        window.history.replaceState(null, '', '/');
+      // Allow unauthenticated visitors on both / and /login. If visiting another private route, redirect to /login
+      if (!loading && rawPath && rawPath !== 'login') {
+        window.history.replaceState({ tab: 'login' }, '', '/login');
         updateSeoRobotsAndTitle(true, PUBLIC_SEO_TITLE);
       }
       return;
     }
 
     if (loading) return;
+
+    // Do not mutate history if the user is currently traversing history via Back/Forward buttons
+    if (isNavigatingViaHistoryRef.current) return;
 
     let resolvedTab = currentTab;
     if (rawPath === 'login' || !rawPath) {
@@ -192,14 +201,20 @@ export default function App() {
         setCurrentTab(targetTab);
       }
       resolvedTab = targetTab;
-      window.history.replaceState(null, '', `/${targetTab}`);
+      if (window.location.pathname !== `/${targetTab}`) {
+        window.history.replaceState({ tab: targetTab }, '', `/${targetTab}`);
+      }
     } else {
       const matchingItem = NAVIGATION_ITEMS.find((item) => item.id === rawPath);
       if (matchingItem) {
-        setCurrentTab(matchingItem.id);
+        if (currentTab !== matchingItem.id) {
+          setCurrentTab(matchingItem.id);
+        }
         resolvedTab = matchingItem.id;
       } else {
-        window.history.replaceState(null, '', `/${currentTab}`);
+        if (window.location.pathname !== `/${currentTab}`) {
+          window.history.replaceState({ tab: currentTab }, '', `/${currentTab}`);
+        }
       }
     }
 
@@ -213,32 +228,50 @@ export default function App() {
   // Handle browser back and forward button navigation smoothly without full page reload
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
+      isNavigatingViaHistoryRef.current = true;
       const stateTab = e.state?.tab;
-      if (stateTab && NAVIGATION_ITEMS.some((item) => item.id === stateTab)) {
-        setCurrentTab(stateTab);
-        return;
-      }
       const path = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
-      const matchingItem = NAVIGATION_ITEMS.find((item) => item.id === path);
-      if (matchingItem) {
-        setCurrentTab(matchingItem.id);
-      } else if (!path || path === 'dashboard' || path === 'login') {
-        setCurrentTab('dashboard');
+
+      if (currentUser) {
+        if (stateTab && NAVIGATION_ITEMS.some((item) => item.id === stateTab)) {
+          setCurrentTab(stateTab);
+        } else {
+          const matchingItem = NAVIGATION_ITEMS.find((item) => item.id === path);
+          if (matchingItem) {
+            setCurrentTab(matchingItem.id);
+          } else if (!path || path === 'dashboard' || path === 'login') {
+            setCurrentTab('dashboard');
+          }
+        }
+      } else {
+        // Unauthenticated visitor: Back/Forward navigation maintains public view cleanly
+        if (!path || path === 'login') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
       }
+
+      // Allow DOM to settle before re-enabling automatic replaceState
+      setTimeout(() => {
+        isNavigatingViaHistoryRef.current = false;
+      }, 80);
     };
+
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [currentUser]);
 
   // Update URL on currentTab change
   const handleNavigate = (tab: string) => {
+    isNavigatingViaHistoryRef.current = false;
     setCurrentTab(tab);
     setNotifOpen(false);
     setProfileOpen(false);
-    if (window.location.pathname.replace(/^\/+|\/+$/g, '') !== tab) {
+    const currentClean = window.location.pathname.replace(/^\/+|\/+$/g, '');
+    if (currentClean !== tab) {
       window.history.pushState({ tab }, '', `/${tab}`);
     }
   };
+
 
   // Compute actionable top-bar notifications from real database records
   const notifications = useMemo(() => {
@@ -331,7 +364,10 @@ export default function App() {
   }
 
   // If loading session for an authenticated user
-  if (loading) {
+  const isInitialLoading =
+    loading ||
+    (masterLoading && students.length === 0 && teachers.length === 0 && classes.length === 0);
+  if (isInitialLoading) {
     return (
       <div className="min-h-screen bg-[#F4F7F8] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">

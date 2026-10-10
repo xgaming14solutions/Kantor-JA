@@ -7,7 +7,8 @@ import {
   loginWithGooglePopup,
   fetchUserProfileByUid,
   logoutUser,
-  normalizeBrandDisplayName
+  normalizeBrandDisplayName,
+  ensureFirebaseAuthSession
 } from '../lib/authService';
 import { seedDatabaseIfEmpty, testFirestoreConnection } from '../lib/dbService';
 
@@ -95,6 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               };
               setCurrentUser(normalizedUser);
               localStorage.setItem('kantoja_currentUser', JSON.stringify(normalizedUser));
+              ensureFirebaseAuthSession(normalizedUser).catch(e => console.warn('Background session auth reconnect:', e));
             } else {
               setCurrentUser(null);
               localStorage.removeItem('kantoja_currentUser');
@@ -208,8 +210,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('kantoja_currentUser');
     localStorage.removeItem('kantoja_active_user');
     localStorage.removeItem('kantoja_session_active');
-    window.history.replaceState(null, '', '/login');
+    window.history.replaceState({ tab: 'root' }, '', '/');
   };
+
 
   return (
     <AuthContext.Provider

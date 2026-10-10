@@ -293,7 +293,7 @@ async function startServer() {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
-      if (req.path.match(/\.(jpg|jpeg|png|webp|svg|ico|pdf|txt|xml|json)$/i)) {
+      if (req.path.match(/\.(js|css|map|jpg|jpeg|png|webp|svg|ico|pdf|txt|xml|json|woff|woff2|ttf)$/i)) {
         return res.status(404).type('text/plain').send('Not Found');
       }
       res.sendFile(path.join(distPath, 'index.html'));

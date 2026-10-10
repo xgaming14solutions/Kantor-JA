@@ -67,6 +67,26 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,600&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --font-fallback: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      }
+      *, *::before, *::after {
+        box-sizing: border-box;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background-color: #FAF8F5;
+        color: #1C1917;
+        font-family: var(--font-fallback);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      @keyframes aksara-spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
     <script>
       // Gracefully handle dev environment Vite/HMR WebSocket disconnections
       (function() {
@@ -91,85 +111,46 @@
             }
           }
         });
+
+        // Auto-recover if browser history serves stale deployment bundle (chunk 404)
+        window.addEventListener('error', function(event) {
+          var target = event.target;
+          if (target && (target.tagName === 'LINK' || target.tagName === 'SCRIPT')) {
+            var src = target.src || target.href || '';
+            if (src && src.indexOf('/assets/') !== -1) {
+              var reloadKey = 'aksara_chunk_retry_' + encodeURIComponent(src);
+              if (!sessionStorage.getItem(reloadKey)) {
+                sessionStorage.setItem(reloadKey, Date.now() + '');
+                window.location.reload();
+              }
+            }
+          }
+        }, true);
       })();
     </script>
   </head>
   <body>
     <div id="root">
-      <main class="sr-only">
-        <h1>Pesantren Islam Mutiara Insan</h1>
-        <p>
-          Pesantren Islam Mutiara Insan merupakan lembaga pendidikan Islam dan pesantren tahfiz Al-Qur'an di Tulang Bawang Barat, Lampung yang berfokus pada pendidikan tahfiz, pendidikan diniyah, pembinaan akhlak, ilmu, dan kemandirian santri.
-        </p>
-        <section>
-          <h2>Profil Pesantren</h2>
-          <p>
-            Pesantren Islam Mutiara Insan menyelenggarakan pendidikan Islam terpadu pada jenjang TK, SD, SMP, dan SMA dengan fokus utama Tahfiz Al-Qur'an, pendidikan diniyah, dan pembentukan adab islami.
-          </p>
-        </section>
-        <section>
-          <h2>SPMB Mutiara Insan Tahun Ajaran 2027–2028</h2>
-          <p>
-            Pendaftaran santri baru (SPMB Mutiara Insan) Tahun Ajaran 2027–2028 untuk jenjang TK – SD – SMP – SMA. Gelombang 1: September – Oktober 2026. Free biaya pendaftaran untuk 5 orang pertama. Program yang akan datang: Program khusus calon santri baru “Trial Class”.
-          </p>
-        </section>
-        <section>
-          <h2>Target Lulusan</h2>
-          <h3>Target Lulusan TK</h3>
-          <ul>
-            <li>Hafal Juz 30</li>
-            <li>Hafal Doa &amp; Hadits Pilihan</li>
-            <li>Kosa Kata Bahasa Arab pilihan</li>
-            <li>Mampu Calistung</li>
-            <li>Memiliki Adab Islami</li>
-          </ul>
-          <h3>Target Lulusan Setara SD</h3>
-          <ul>
-            <li>Hafal 4 Juz Al-Qur'an</li>
-            <li>Hafal 50 Doa &amp; Hadits Pilihan</li>
-            <li>Mampu Percakapan Bahasa Arab Sehari-hari</li>
-            <li>Memiliki Adab Islami</li>
-          </ul>
-          <h3>Target Lulusan Setara SMP &amp; SMA</h3>
-          <ul>
-            <li>Hafal 30 Juz Al-Qur'an</li>
-            <li>Hafal Kitab Umdatul Ahkam 420 Hadits</li>
-            <li>Mampu Berbahasa Arab Lisan dan Tulisan</li>
-            <li>Menguasai Cabang Ilmu Syar'i</li>
-            <li>Hafal Beberapa Mutun</li>
-          </ul>
-        </section>
-        <section>
-          <h2>Persyaratan Pendaftaran</h2>
-          <ol>
-            <li>Mengisi Formulir Pendaftaran</li>
-            <li>Pas Foto Berwarna 3×4 sebanyak 2 lembar</li>
-            <li>Fotokopi Kartu Keluarga (KK) dan KTP Orang Tua</li>
-            <li>Fotokopi Surat Keterangan Lulus untuk jenjang SMP dan SMA</li>
-            <li>Untuk TK, genap berusia 4,5 tahun pada bulan Juli 2027</li>
-            <li>Membayar Uang Pendaftaran Rp150.000</li>
-          </ol>
-        </section>
-        <section>
-          <h2>Rincian Biaya Pendidikan</h2>
-          <p>
-            TK: Daftar Ulang Rp1.900.000, SPP Juli Rp100.000, Total Rp2.000.000. SD: Daftar Ulang Rp2.365.000, SPP Juli Rp135.000, Total Rp2.500.000. SMP: Daftar Ulang Rp5.750.000, SPP Juli Rp750.000, Total Rp6.500.000. SMA: Daftar Ulang Rp4.750.000, SPP Juli Rp750.000, Total Rp5.500.000.
-          </p>
-        </section>
-        <section>
-          <h2>Ekstrakurikuler</h2>
-          <p>
-            Futsal, Renang, dan Life Skill (Pertanian, Perikanan, Peternakan, Perkebunan).
-          </p>
-        </section>
-        <section>
-          <h2>Informasi Pendaftaran</h2>
-          <p>
-            Alamat: Jln. Tuan Rio II, Tiyuh Bandar Dewa (Samping Pos Polisi Kalim Kaliming), Kec. Tulang Bawang Tengah, Kab. Tulang Bawang Barat, Lampung. Kontak Panitia SPMB: 0812-1098-876 (Abu Al Fatih).
-          </p>
-        </section>
-      </main>
+      <div id="aksara-app-loader" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background-color:#FAF8F5;padding:1.5rem;font-family:var(--font-fallback);">
+        <div style="text-align:center;max-width:320px;">
+          <div style="width:40px;height:40px;margin:0 auto 14px;border:3px solid #E6D7BD;border-top-color:#064E3B;border-radius:50%;animation:aksara-spin 0.8s linear infinite;"></div>
+          <p style="margin:0;font-size:13px;font-weight:700;letter-spacing:0.04em;color:#064E3B;text-transform:uppercase;">Pesantren Islam Mutiara Insan</p>
+          <p style="margin:6px 0 0;font-size:11px;color:#78716C;">Memuat aplikasi...</p>
+        </div>
+      </div>
     </div>
+    <noscript>
+      <div style="font-family:var(--font-fallback);max-width:540px;margin:80px auto;padding:32px;background:#ffffff;border-radius:16px;border:1px solid #E7E5E4;box-shadow:0 10px 25px -5px rgba(0,0,0,0.05);text-align:center;color:#1C1917;">
+        <h2 style="font-size:18px;font-weight:700;color:#064E3B;margin:0 0 12px;">Pesantren Islam Mutiara Insan</h2>
+        <p style="font-size:14px;color:#57534E;line-height:1.6;margin:0 0 16px;">
+          Website dan Sistem Informasi Akademik (AKSARA) memerlukan JavaScript untuk dapat berjalan optimal. Silakan aktifkan JavaScript pada pengaturan browser Anda untuk melanjutkan.
+        </p>
+        <p style="font-size:12px;color:#78716C;margin:0;">
+          Sekretariat SPMB: 0812-1098-876 | Tulang Bawang Barat, Lampung
+        </p>
+      </div>
+    </noscript>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

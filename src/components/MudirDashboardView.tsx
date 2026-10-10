@@ -26,7 +26,8 @@ import {
   FileText,
   ClipboardCheck,
   TrendingUp,
-  Eye
+  Eye,
+  RotateCw,
 } from 'lucide-react';
 
 interface MudirDashboardViewProps {
@@ -135,6 +136,9 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
     atkItems,
     atkRequests,
     schoolIdentity,
+    loading = false,
+    dataError = null,
+    refreshAll,
   } = useMasterData();
 
   const [activeSection, setActiveSection] = useState<
@@ -507,6 +511,15 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
 
           <div className="flex flex-wrap items-center gap-2.5">
             <button
+              onClick={() => refreshAll()}
+              disabled={loading}
+              title="Segarkan data dari database Firestore"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-[#24485A] bg-[#F4F7F8] hover:bg-[#EBF1F4] border border-[#DCE5E8] transition cursor-pointer disabled:opacity-60"
+            >
+              <RotateCw className={`w-4 h-4 text-[#5D8295] ${loading ? 'animate-spin' : ''}`} />
+              <span>{loading ? 'Menyinkronkan...' : 'Segarkan Data'}</span>
+            </button>
+            <button
               onClick={() => setActiveSection('LAPORAN')}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-[#24485A] bg-[#F4F7F8] hover:bg-[#EBF1F4] border border-[#DCE5E8] transition cursor-pointer"
             >
@@ -522,6 +535,21 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
             </button>
           </div>
         </div>
+
+        {dataError && (
+          <div className="mt-4 p-3 rounded-lg bg-[#FFF8F0] border border-[#F0D5BA] text-[#8A4A1C] text-xs font-medium flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 text-[#D97706]" />
+              <span>{dataError}</span>
+            </div>
+            <button
+              onClick={() => refreshAll()}
+              className="px-2.5 py-1 bg-[#D97706] hover:bg-[#B45309] text-white font-semibold rounded text-[11px] transition shrink-0"
+            >
+              Coba Lagi
+            </button>
+          </div>
+        )}
 
         {feedbackBanner && (
           <div className="mt-4 p-3 rounded-lg bg-[#EFF7F2] border border-[#CBE4D5] text-[#35694E] text-xs font-medium flex items-center gap-2">

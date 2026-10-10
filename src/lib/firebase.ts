@@ -55,7 +55,12 @@ export const db = firestoreDb;
 
 let storageInstance: FirebaseStorage | null = null;
 try {
-  storageInstance = getStorage(app, firebaseConfig.storageBucket ? `gs://${firebaseConfig.storageBucket}` : undefined);
+  const bucketUrl = firebaseConfig.storageBucket
+    ? (firebaseConfig.storageBucket.startsWith('gs://')
+        ? firebaseConfig.storageBucket
+        : `gs://${firebaseConfig.storageBucket}`)
+    : undefined;
+  storageInstance = getStorage(app, bucketUrl);
 } catch {
   try {
     storageInstance = getStorage(app);

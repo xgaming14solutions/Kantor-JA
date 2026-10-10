@@ -414,28 +414,21 @@ function safeSetItem(key: string, value: string): void {
   }
 }
 
-const REMOVED_DUMMY_IDS = new Set([
-  'sub_aqd',
-  's_001', 's_002', 's_003', 's_004', 's_005', 's_006', 's_007',
-  't_001', 't_002', 't_003', 't_004', 't_005',
-  'c_7b',
-  'asg_001', 'asg_002', 'asg_003', 'asg_004', 'asg_005', 'asg_006', 'asg_1789956019973', 'asg_1790162665382',
-  'rep_001', 'rep_002',
-  'u_dewi', 'u_gurumapel', 'u_kepsek', 'u_walikelas',
-  'sc_001', 'sc_002', 'sc_003', 'sc_2627_001', 'sc_2627_002', 'sc_2627_003', 'sc_2627_004', 'sc_2627_005', 'sc_2627_006',
-  'sc_1790092794810', 'sc_1790096236955',
-  'att_001', 'att_002', 'att_003', 'att_004', 'att_005', 'att_2627_001', 'att_2627_002', 'att_2627_003'
-]);
+import { ensureFirebaseAuthSession } from './authService';
 
-const REMOVED_DUMMY_STUDENT_IDS = new Set([
-  's_001', 's_002', 's_003', 's_004', 's_005', 's_006', 's_007'
-]);
+let lastFirestoreError: string | null = null;
+let lastFirestoreErrorCollection: string | null = null;
 
-function isRemovedDummyRecord(item: any): boolean {
-  if (!item || typeof item !== 'object') return false;
-  if (item.id && REMOVED_DUMMY_IDS.has(String(item.id))) return true;
-  if (item.studentId && REMOVED_DUMMY_STUDENT_IDS.has(String(item.studentId))) return true;
-  return false;
+export function getLastFirestoreError(): { collection: string; message: string } | null {
+  if (lastFirestoreError && lastFirestoreErrorCollection) {
+    return { collection: lastFirestoreErrorCollection, message: lastFirestoreError };
+  }
+  return null;
+}
+
+export function clearLastFirestoreError(): void {
+  lastFirestoreError = null;
+  lastFirestoreErrorCollection = null;
 }
 
 export async function fetchCollection<T extends { id: string }>(
@@ -449,29 +442,37 @@ export async function fetchCollection<T extends { id: string }>(
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
-        localItems = parsed.filter(item => !isRemovedDummyRecord(item));
+        localItems = parsed;
       }
     }
   } catch (err) {
     console.warn('LocalStorage read error:', err);
   }
 
-  // Fetch genuine Firestore collection (users collection allows public read; others require Firebase Auth)
+  // Ensure Firebase Auth session is active if user is logged in
+  if (!auth.currentUser) {
+    try {
+      await ensureFirebaseAuthSession();
+    } catch {
+      // ignore
+    }
+  }
+
+  // Fetch genuine Firestore collection
   let firestoreItems: T[] | null = null;
   let firestoreReadSucceeded = false;
-  if (auth.currentUser || collectionName === 'users') {
-    try {
-      const snap = await getDocs(collection(db, collectionName));
-      firestoreReadSucceeded = true;
-      firestoreItems = snap.docs
-        .map(d => ({ id: d.id, ...d.data() } as unknown as T))
-        .filter(item => !isRemovedDummyRecord(item));
-    } catch (e) {
-      console.warn(
-        `Firestore read fallback for ${collectionName}:`,
-        formatFirestoreError(e, OperationType.LIST, collectionName)
-      );
-    }
+  try {
+    const snap = await getDocs(collection(db, collectionName));
+    firestoreReadSucceeded = true;
+    firestoreItems = snap.docs.map(d => ({ id: d.id, ...d.data() } as unknown as T));
+  } catch (e: any) {
+    const formatted = formatFirestoreError(e, OperationType.LIST, collectionName);
+    lastFirestoreError = formatted.error;
+    lastFirestoreErrorCollection = collectionName;
+    console.warn(
+      `Firestore read fallback for ${collectionName}:`,
+      formatted
+    );
   }
 
   let items: T[] = [];
@@ -480,7 +481,7 @@ export async function fetchCollection<T extends { id: string }>(
   } else if (localItems.length > 0) {
     items = localItems;
   } else {
-    items = fallbackData.filter(item => !isRemovedDummyRecord(item));
+    items = fallbackData;
   }
 
   // Collection-specific normalization

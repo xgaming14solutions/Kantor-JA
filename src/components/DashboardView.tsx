@@ -24,6 +24,8 @@ import {
   BarChart3,
   Clock,
   Activity,
+  RotateCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { calculateAtkStockStatus } from '../types';
 import { getEffectiveTeacherId, getActiveTeacherAssignments } from '../lib/dbService';
@@ -53,6 +55,9 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
     atkRequests = [],
     academicCalendarEvents = [],
     allowTeacherViewAtkStock,
+    loading = false,
+    dataError = null,
+    refreshAll,
   } = useMasterData();
 
   const todayFormatted = useMemo(() => {
@@ -97,6 +102,7 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
   const activeClasses = activeClassesList.length;
   const activeSubjectsList = subjects.filter((s) => s.isActive !== false);
   const activeSubjects = activeSubjectsList.length;
+  const totalSubjects = subjects.length;
   const activeAssignments = teacherAssignments.filter((a) => a.status !== 'Nonaktif');
 
   const formatAcademicYear = (ay: typeof activeAcademicYear): string => {
@@ -703,6 +709,15 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
 
           <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
             <button
+              onClick={() => refreshAll()}
+              disabled={loading}
+              title="Segarkan data dari database Firestore"
+              className="px-3.5 py-2 text-xs font-semibold text-[#24343D] bg-[#F4F7F8] hover:bg-[#EBF0F2] border border-[#DCE5E8] rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+            >
+              <RotateCw className={`w-3.5 h-3.5 text-[#5D8295] ${loading ? 'animate-spin' : ''}`} />
+              <span>{loading ? 'Menyinkronkan...' : 'Segarkan Data'}</span>
+            </button>
+            <button
               onClick={() => onNavigate('academic-calendar')}
               className="px-3.5 py-2 text-xs font-semibold text-[#24343D] bg-[#F4F7F8] hover:bg-[#EBF0F2] border border-[#DCE5E8] rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer"
             >
@@ -719,6 +734,26 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
           </div>
         </div>
 
+        {/* Diagnostic notification if Firestore connection error occurred */}
+        {dataError && (
+          <div className="bg-[#FFF8F0] border border-[#F0D5BA] rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-[#8A4A1C]">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-[#D97706] shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-[#8A4A1C]">Pemberitahuan Sinkronisasi Database Firestore</p>
+                <p className="text-[#A45920] mt-0.5">{dataError}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => refreshAll()}
+              className="px-3 py-1.5 bg-[#D97706] hover:bg-[#B45309] text-white font-semibold rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+              Coba Lagi
+            </button>
+          </div>
+        )}
+
         {/* =====================================================
             STATISTIK UTAMA (4 Kartu Kecil — Putih & Konsisten)
            ===================================================== */}
@@ -731,12 +766,26 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
               <span className="text-xs font-medium text-[#71818A]">Total Siswa/Santri</span>
               <GraduationCap className="w-4 h-4 text-[#5D8295]" />
             </div>
-            <div className="text-2xl sm:text-[28px] font-bold text-[#24343D] font-mono tabular-nums mt-2 leading-none">
-              {activeStudents}
-            </div>
-            <div className="text-[11px] text-[#71818A] mt-2">
-              Santri aktif dari {totalStudents} terdaftar
-            </div>
+            {loading ? (
+              <div className="space-y-2 mt-2">
+                <div className="h-7 w-16 bg-[#E8EEF0] animate-pulse rounded" />
+                <div className="h-3 w-28 bg-[#E8EEF0] animate-pulse rounded" />
+              </div>
+            ) : dataError && totalStudents === 0 ? (
+              <>
+                <div className="text-2xl sm:text-[28px] font-bold text-[#A45920] font-mono tabular-nums mt-2 leading-none">—</div>
+                <div className="text-[11px] text-[#A45920] mt-2">Gagal membaca data santri</div>
+              </>
+            ) : (
+              <>
+                <div className="text-2xl sm:text-[28px] font-bold text-[#24343D] font-mono tabular-nums mt-2 leading-none">
+                  {activeStudents}
+                </div>
+                <div className="text-[11px] text-[#71818A] mt-2">
+                  Santri aktif dari {totalStudents} terdaftar
+                </div>
+              </>
+            )}
           </button>
 
           <button
@@ -747,12 +796,26 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
               <span className="text-xs font-medium text-[#71818A]">Total Guru</span>
               <Users className="w-4 h-4 text-[#5D8295]" />
             </div>
-            <div className="text-2xl sm:text-[28px] font-bold text-[#24343D] font-mono tabular-nums mt-2 leading-none">
-              {activeTeachers}
-            </div>
-            <div className="text-[11px] text-[#71818A] mt-2">
-              Pendidik aktif ({totalTeachers} terdaftar)
-            </div>
+            {loading ? (
+              <div className="space-y-2 mt-2">
+                <div className="h-7 w-16 bg-[#E8EEF0] animate-pulse rounded" />
+                <div className="h-3 w-28 bg-[#E8EEF0] animate-pulse rounded" />
+              </div>
+            ) : dataError && totalTeachers === 0 ? (
+              <>
+                <div className="text-2xl sm:text-[28px] font-bold text-[#A45920] font-mono tabular-nums mt-2 leading-none">—</div>
+                <div className="text-[11px] text-[#A45920] mt-2">Gagal membaca data guru</div>
+              </>
+            ) : (
+              <>
+                <div className="text-2xl sm:text-[28px] font-bold text-[#24343D] font-mono tabular-nums mt-2 leading-none">
+                  {activeTeachers}
+                </div>
+                <div className="text-[11px] text-[#71818A] mt-2">
+                  Pendidik aktif ({totalTeachers} terdaftar)
+                </div>
+              </>
+            )}
           </button>
 
           <button
@@ -763,12 +826,26 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
               <span className="text-xs font-medium text-[#71818A]">Total Kelas</span>
               <DoorOpen className="w-4 h-4 text-[#5D8295]" />
             </div>
-            <div className="text-2xl sm:text-[28px] font-bold text-[#24343D] font-mono tabular-nums mt-2 leading-none">
-              {activeClasses}
-            </div>
-            <div className="text-[11px] text-[#71818A] mt-2">
-              Rombongan belajar aktif
-            </div>
+            {loading ? (
+              <div className="space-y-2 mt-2">
+                <div className="h-7 w-16 bg-[#E8EEF0] animate-pulse rounded" />
+                <div className="h-3 w-28 bg-[#E8EEF0] animate-pulse rounded" />
+              </div>
+            ) : dataError && totalClasses === 0 ? (
+              <>
+                <div className="text-2xl sm:text-[28px] font-bold text-[#A45920] font-mono tabular-nums mt-2 leading-none">—</div>
+                <div className="text-[11px] text-[#A45920] mt-2">Gagal membaca data kelas</div>
+              </>
+            ) : (
+              <>
+                <div className="text-2xl sm:text-[28px] font-bold text-[#24343D] font-mono tabular-nums mt-2 leading-none">
+                  {activeClasses}
+                </div>
+                <div className="text-[11px] text-[#71818A] mt-2">
+                  Rombongan belajar aktif
+                </div>
+              </>
+            )}
           </button>
 
           <button
@@ -779,12 +856,26 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
               <span className="text-xs font-medium text-[#71818A]">Total Mata Pelajaran</span>
               <BookOpen className="w-4 h-4 text-[#5D8295]" />
             </div>
-            <div className="text-2xl sm:text-[28px] font-bold text-[#24343D] font-mono tabular-nums mt-2 leading-none">
-              {activeSubjects}
-            </div>
-            <div className="text-[11px] text-[#71818A] mt-2">
-              Mata pelajaran kurikulum aktif
-            </div>
+            {loading ? (
+              <div className="space-y-2 mt-2">
+                <div className="h-7 w-16 bg-[#E8EEF0] animate-pulse rounded" />
+                <div className="h-3 w-28 bg-[#E8EEF0] animate-pulse rounded" />
+              </div>
+            ) : dataError && totalSubjects === 0 ? (
+              <>
+                <div className="text-2xl sm:text-[28px] font-bold text-[#A45920] font-mono tabular-nums mt-2 leading-none">—</div>
+                <div className="text-[11px] text-[#A45920] mt-2">Gagal membaca data mapel</div>
+              </>
+            ) : (
+              <>
+                <div className="text-2xl sm:text-[28px] font-bold text-[#24343D] font-mono tabular-nums mt-2 leading-none">
+                  {activeSubjects}
+                </div>
+                <div className="text-[11px] text-[#71818A] mt-2">
+                  Mata pelajaran kurikulum aktif
+                </div>
+              </>
+            )}
           </button>
         </div>
 

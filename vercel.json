@@ -1,6 +1,15 @@
 {
   "headers": [
     {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
       "source": "/robots.txt",
       "headers": [
         {
@@ -27,11 +36,33 @@
       ]
     },
     {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/(dashboard|login|students|teachers|classes|subjects|assignments|my-classes|scores|attendance|report-cards|print-report|academic-calendar|kesantrian-.*|atk-.*|users|settings|academic-settings|academic-years|admin|pengguna|siswa|guru|penilaian|absensi|rapor|kesantrian|atk|pengaturan)(.*)",
       "headers": [
         {
           "key": "X-Robots-Tag",
           "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
         }
       ]
     },
@@ -47,8 +78,9 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!robots\\.txt|sitemap\\.xml|assets/|uploads/|education/|api/|.*\\.(?:jpg|jpeg|png|webp|svg|ico|pdf|txt|xml)).*)",
+      "source": "/((?!robots\\.txt|sitemap\\.xml|_redirects|assets/|uploads/|education/|api/|.*\\.(?:js|css|json|woff|woff2|ttf|jpg|jpeg|png|webp|svg|ico|pdf|txt|xml)).*)",
       "destination": "/index.html"
     }
   ]
 }
+

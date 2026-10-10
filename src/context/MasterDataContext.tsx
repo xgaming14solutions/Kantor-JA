@@ -50,8 +50,11 @@ import {
   recoverLocalLogoBackup,
   isValidPersistedLogoUrl,
   fetchAtkConfig,
-  saveAtkConfig
+  saveAtkConfig,
+  getLastFirestoreError,
+  clearLastFirestoreError
 } from '../lib/dbService';
+import { ensureFirebaseAuthSession } from '../lib/authService';
 import { useAuth } from './AuthContext';
 import { createDefaultAcademicSetting } from '../lib/academicCalculation';
 import {
@@ -271,147 +274,9 @@ export const INITIAL_ATK_ITEMS: AtkItem[] = [
   },
 ];
 
-export const INITIAL_ATK_TRANSACTIONS: AtkTransaction[] = [
-  {
-    id: 'atk_trx_001',
-    type: 'MASUK',
-    itemId: 'atk_item_001',
-    itemCode: 'ATK-001',
-    itemName: 'Kertas HVS A4 75gr',
-    category: 'Kertas',
-    unit: 'rim',
-    jumlah: 10,
-    tanggal: '2026-09-10',
-    waktu: '08:30',
-    stokSebelum: 0,
-    stokSesudah: 10,
-    sumberBarang: 'Pembelian Toko ATK Mulia',
-    hargaSatuan: 52000,
-    nomorNota: 'INV/ATK/2026/091',
-    keterangan: 'Pengadaan rutin awal bulan',
-    petugasId: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
-    petugasNama: 'Administrator AKSARA',
-    petugasRole: 'ADMIN',
-    createdAt: '2026-09-10T08:30:00.000Z',
-  },
-  {
-    id: 'atk_trx_002',
-    type: 'KELUAR',
-    itemId: 'atk_item_001',
-    itemCode: 'ATK-001',
-    itemName: 'Kertas HVS A4 75gr',
-    category: 'Kertas',
-    unit: 'rim',
-    jumlah: 5,
-    tanggal: '2026-09-18',
-    waktu: '10:15',
-    stokSebelum: 10,
-    stokSesudah: 5,
-    penerimaNama: 'Panitia Evaluasi & Kurikulum',
-    keperluan: 'Pencetakan soal latihan dan modul pembelajaran',
-    keterangan: 'Diserahkan untuk penggandaan soal kelas VII - XII',
-    petugasId: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
-    petugasNama: 'Administrator AKSARA',
-    petugasRole: 'ADMIN',
-    createdAt: '2026-09-18T10:15:00.000Z',
-  },
-  {
-    id: 'atk_trx_003',
-    type: 'KELUAR',
-    itemId: 'atk_item_003',
-    itemCode: 'ATK-003',
-    itemName: 'Spidol Board Hitam',
-    category: 'Perlengkapan Guru',
-    unit: 'pcs',
-    jumlah: 2,
-    tanggal: '2026-09-22',
-    waktu: '09:00',
-    stokSebelum: 20,
-    stokSesudah: 18,
-    penerimaNama: 'Ustadz Ahmad Fauzi',
-    keperluan: 'Mengajar di Kelas',
-    requestId: 'atk_req_003',
-    keterangan: 'Penyerahan permintaan ATK guru',
-    petugasId: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
-    petugasNama: 'Administrator AKSARA',
-    petugasRole: 'ADMIN',
-    createdAt: '2026-09-22T09:00:00.000Z',
-  },
-];
+export const INITIAL_ATK_TRANSACTIONS: AtkTransaction[] = [];
 
-export const INITIAL_ATK_REQUESTS: AtkRequest[] = [
-  {
-    id: 'atk_req_001',
-    itemId: 'atk_item_003',
-    itemCode: 'ATK-003',
-    itemName: 'Spidol Board Hitam',
-    category: 'Perlengkapan Guru',
-    unit: 'pcs',
-    jumlahDiminta: 2,
-    keperluan: 'Mengajar',
-    catatan: 'Spidol di kelas VIII sudah habis tintanya',
-    pemohonId: 'teacher_dwi',
-    pemohonNama: 'Dwi Lestari',
-    pemohonRole: 'GURU_MAPEL',
-    tanggal: '2026-09-26',
-    waktu: '08:15',
-    status: 'Menunggu',
-    createdAt: '2026-09-26T08:15:00.000Z',
-    updatedAt: '2026-09-26T08:15:00.000Z',
-  },
-  {
-    id: 'atk_req_002',
-    itemId: 'atk_item_001',
-    itemCode: 'ATK-001',
-    itemName: 'Kertas HVS A4 75gr',
-    category: 'Kertas',
-    unit: 'rim',
-    jumlahDiminta: 2,
-    jumlahDisetujui: 2,
-    keperluan: 'Ujian / Evaluasi Harian',
-    catatan: 'Untuk cetak lembar soal ulangan harian Matematika & IPA',
-    pemohonId: 'teacher_budi',
-    pemohonNama: 'Budi Santoso',
-    pemohonRole: 'WALI_KELAS',
-    tanggal: '2026-09-25',
-    waktu: '11:20',
-    status: 'Disetujui',
-    catatanAdmin: 'Disetujui, silakan ambil di Ruang TU',
-    diprosesOlehId: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
-    diprosesOlehNama: 'Administrator AKSARA',
-    tanggalDiproses: '2026-09-25T13:00:00.000Z',
-    createdAt: '2026-09-25T11:20:00.000Z',
-    updatedAt: '2026-09-25T13:00:00.000Z',
-  },
-  {
-    id: 'atk_req_003',
-    itemId: 'atk_item_003',
-    itemCode: 'ATK-003',
-    itemName: 'Spidol Board Hitam',
-    category: 'Perlengkapan Guru',
-    unit: 'pcs',
-    jumlahDiminta: 2,
-    jumlahDisetujui: 2,
-    keperluan: 'Mengajar',
-    catatan: 'Kebutuhan mengajar pekan ini',
-    pemohonId: 'teacher_fauzi',
-    pemohonNama: 'Ustadz Ahmad Fauzi',
-    pemohonRole: 'GURU_MAPEL',
-    tanggal: '2026-09-22',
-    waktu: '08:00',
-    status: 'Sudah Diberikan',
-    catatanAdmin: 'Sudah diserahkan langsung di Ruang TU',
-    diprosesOlehId: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
-    diprosesOlehNama: 'Administrator AKSARA',
-    tanggalDiproses: '2026-09-22T08:45:00.000Z',
-    diserahkanOlehId: 'bw4vhDGo40hZy6ekCs4xTGqpgwg1',
-    diserahkanOlehNama: 'Administrator AKSARA',
-    tanggalDiserahkan: '2026-09-22T09:00:00.000Z',
-    transactionId: 'atk_trx_003',
-    createdAt: '2026-09-22T08:00:00.000Z',
-    updatedAt: '2026-09-22T09:00:00.000Z',
-  },
-];
+export const INITIAL_ATK_REQUESTS: AtkRequest[] = [];
 
 export const INITIAL_ACADEMIC_CALENDAR_EVENTS: AcademicCalendarEvent[] = [
   {
@@ -570,7 +435,6 @@ interface MasterDataContextType {
   atkRequests: AtkRequest[];
   academicCalendarEvents: AcademicCalendarEvent[];
   allowTeacherViewAtkStock: boolean;
-  loading: boolean;
   saveAcademicYear: (data: AcademicYear) => Promise<void>;
   setActiveAcademicYear: (id: string) => Promise<void>;
   saveTeacher: (data: Teacher) => Promise<void>;
@@ -681,6 +545,8 @@ interface MasterDataContextType {
   cancelAtkRequest: (requestId: string) => Promise<void>;
   saveAcademicCalendarEvent: (data: AcademicCalendarEvent) => Promise<void>;
   deleteAcademicCalendarEvent: (id: string) => Promise<void>;
+  loading: boolean;
+  dataError: string | null;
   refreshAll: () => Promise<void>;
 }
 
@@ -688,6 +554,7 @@ const MasterDataContext = createContext<MasterDataContextType | undefined>(undef
 
 export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser, role } = useAuth();
+  const [dataError, setDataError] = useState<string | null>(null);
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>(INITIAL_ACADEMIC_YEARS);
   const [teachers, setTeachers] = useState<Teacher[]>(INITIAL_TEACHERS);
   const [classes, setClasses] = useState<SchoolClass[]>(INITIAL_CLASSES);
@@ -786,7 +653,19 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           return { ...loadedSchoolIdentity, educationFacilities: mergedFacilities };
         });
 
+        setLoading(false);
         return;
+      }
+
+      setLoading(true);
+      setDataError(null);
+      clearLastFirestoreError();
+
+      // Ensure Firebase Auth session is fully active before reading secured Firestore collections
+      try {
+        await ensureFirebaseAuthSession(currentUser);
+      } catch (authErr) {
+        console.warn('ensureFirebaseAuthSession check prior to collection fetch:', authErr);
       }
 
       // First attempt to seed if completely empty
@@ -1158,8 +1037,15 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               new Date(a.createdAt || `${a.tanggal}T${a.waktu || '00:00'}`).getTime()
           )
       );
-    } catch (e) {
+      const lastErr = getLastFirestoreError();
+      if (lastErr) {
+        setDataError(`Gagal membaca koleksi ${lastErr.collection}: ${lastErr.message}`);
+      } else {
+        setDataError(null);
+      }
+    } catch (e: any) {
       console.warn('Error loading master data:', e);
+      setDataError(e?.message || 'Terjadi kesalahan saat menghubungkan ke database Firestore.');
     } finally {
       setLoading(false);
     }
@@ -2857,6 +2743,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         academicCalendarEvents,
         allowTeacherViewAtkStock,
         loading,
+        dataError,
         saveAcademicYear,
         setActiveAcademicYear,
         saveTeacher,
