@@ -8,7 +8,9 @@ import {
   fetchUserProfileByUid,
   logoutUser,
   normalizeBrandDisplayName,
-  ensureFirebaseAuthSession
+  ensureFirebaseAuthSession,
+  isExplicitlyLoggedOut,
+  setExplicitlyLoggedOut
 } from '../lib/authService';
 import { seedDatabaseIfEmpty, testFirestoreConnection } from '../lib/dbService';
 
@@ -44,6 +46,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!isMounted) return;
 
+      const isLoggedOut =
+        isExplicitlyLoggedOut() ||
+        (typeof localStorage !== 'undefined' && localStorage.getItem('kantoja_session_active') !== 'true');
+
+      // If user is explicitly logged out or has no active session, ensure auth remains fully signed out
+      if (isLoggedOut) {
+        if (firebaseUser) {
+          try {
+            await fbSignOut(auth);
+          } catch {
+            // ignore
+          }
+        }
+        setCurrentUser(null);
+        if (isMounted) setLoading(false);
+        return;
+      }
+
       if (firebaseUser) {
         try {
           const profile = await fetchUserProfileByUid(firebaseUser.uid, firebaseUser.email);
@@ -52,6 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setError('Akun Anda tidak aktif. Silakan hubungi Administrator.');
               setErrorCode('auth/account-inactive');
               setCurrentUser(null);
+              setExplicitlyLoggedOut(true);
               localStorage.removeItem('kantoja_currentUser');
               localStorage.removeItem('kantoja_session_active');
               await fbSignOut(auth);
@@ -70,6 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Authenticated in Firebase Auth, but no matching profile in Firestore
             setError('Profil pengguna tidak ditemukan dalam database Firestore.');
             setCurrentUser(null);
+            setExplicitlyLoggedOut(true);
             localStorage.removeItem('kantoja_currentUser');
             localStorage.removeItem('kantoja_session_active');
             await fbSignOut(auth);
@@ -77,11 +99,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (e) {
           console.error('Error loading user profile on auth state change:', e);
           setCurrentUser(null);
+          setError('Gagal membaca profil pengguna dari Firestore.');
         }
       } else {
         // Check if there is an active local session (e.g. demo/bootstrap account when Email/Password provider is off)
         try {
-          const isSessionActive = localStorage.getItem('kantoja_session_active') === 'true';
+          const isSessionActive = !isExplicitlyLoggedOut() && localStorage.getItem('kantoja_session_active') === 'true';
           const savedUserStr = localStorage.getItem('kantoja_currentUser');
           if (isSessionActive && savedUserStr) {
             const parsedUser = JSON.parse(savedUserStr) as UserProfile;
@@ -105,6 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } else {
             setCurrentUser(null);
             localStorage.removeItem('kantoja_currentUser');
+            localStorage.removeItem('kantoja_session_active');
           }
         } catch {
           setCurrentUser(null);
@@ -147,6 +171,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ): Promise<{ success: boolean; error?: string; errorCode?: string }> => {
     setError(null);
     setErrorCode(null);
+    setExplicitlyLoggedOut(false);
 
     const result = await loginWithUsernameOrEmail(identifier, pass);
     if (result.success && result.user) {
@@ -169,6 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithGoogle = async (): Promise<{ success: boolean; error?: string; errorCode?: string }> => {
     setError(null);
     setErrorCode(null);
+    setExplicitlyLoggedOut(false);
 
     const result = await loginWithGooglePopup();
     if (result.success && result.user) {
@@ -198,19 +224,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   /**
    * Logout user: signs out of Firebase, clears session, redirects to /login
    */
-  const logout = async () => {
-    try {
-      await logoutUser();
-    } catch (e) {
-      console.warn('Logout error:', e);
-    }
-    setCurrentUser(null);
+  const logout = async (): Promise<void> => {
     setError(null);
     setErrorCode(null);
-    localStorage.removeItem('kantoja_currentUser');
-    localStorage.removeItem('kantoja_active_user');
-    localStorage.removeItem('kantoja_session_active');
-    window.history.replaceState({ tab: 'root' }, '', '/');
+    try {
+      setExplicitlyLoggedOut(true);
+      setCurrentUser(null);
+      try {
+        localStorage.removeItem('kantoja_currentUser');
+        localStorage.removeItem('kantoja_active_user');
+        localStorage.removeItem('kantoja_session_active');
+        localStorage.removeItem('kantoja_token');
+      } catch {
+        // ignore
+      }
+      await logoutUser();
+    } catch (e: any) {
+      console.error('Logout error:', e);
+      setError('Gagal keluar dari akun: ' + (e?.message || 'Terjadi gangguan saat memproses logout Firebase.'));
+    } finally {
+      setCurrentUser(null);
+      setLoading(false);
+      window.history.replaceState({ tab: 'login' }, '', '/login');
+    }
   };
 
 

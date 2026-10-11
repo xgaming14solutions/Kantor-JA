@@ -198,8 +198,15 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
 }
 
 export async function saveUserProfile(profile: UserProfile): Promise<void> {
+  if (!auth.currentUser) {
+    try {
+      await ensureFirebaseAuthSession(profile);
+    } catch {
+      // ignore
+    }
+  }
   try {
-    await setDoc(doc(db, 'users', profile.id), profile, { merge: true });
+    await setDoc(doc(db, 'users', profile.id), sanitizeDataForFirestore(profile), { merge: true });
   } catch (e) {
     console.warn('Error saving user profile to Firestore:', e);
   }
@@ -414,7 +421,7 @@ function safeSetItem(key: string, value: string): void {
   }
 }
 
-import { ensureFirebaseAuthSession } from './authService';
+import { ensureFirebaseAuthSession, isExplicitlyLoggedOut } from './authService';
 
 let lastFirestoreError: string | null = null;
 let lastFirestoreErrorCollection: string | null = null;
@@ -449,8 +456,13 @@ export async function fetchCollection<T extends { id: string }>(
     console.warn('LocalStorage read error:', err);
   }
 
-  // Ensure Firebase Auth session is active if user is logged in
-  if (!auth.currentUser) {
+  // Ensure Firebase Auth session is active only if session is officially logged in
+  if (
+    !auth.currentUser &&
+    !isExplicitlyLoggedOut() &&
+    typeof localStorage !== 'undefined' &&
+    localStorage.getItem('kantoja_session_active') === 'true'
+  ) {
     try {
       await ensureFirebaseAuthSession();
     } catch {
@@ -515,7 +527,16 @@ export async function saveDocument<T extends { id: string }>(
 ): Promise<void> {
   const sanitized = sanitizeDataForFirestore(data as any);
 
-  // 1. Write to Firestore with merge: true when authenticated in Firebase Auth
+  // 1. Ensure Firebase Auth session is active so security rules permit writes
+  if (!auth.currentUser) {
+    try {
+      await ensureFirebaseAuthSession();
+    } catch {
+      // ignore
+    }
+  }
+
+  // Write to Firestore with merge: true when authenticated in Firebase Auth
   if (auth.currentUser) {
     try {
       await setDoc(doc(db, collectionName, sanitized.id), sanitized, { merge: true });
@@ -545,14 +566,24 @@ export async function saveDocument<T extends { id: string }>(
 
 // Delete document from Firestore & Local Storage
 export async function deleteDocument(collectionName: string, id: string): Promise<void> {
+  if (!auth.currentUser) {
+    try {
+      await ensureFirebaseAuthSession();
+    } catch {
+      // ignore
+    }
+  }
+
   if (auth.currentUser) {
     try {
       await deleteDoc(doc(db, collectionName, id));
     } catch (e) {
-      console.warn(
-        `Firestore delete fallback for ${collectionName}/${id}:`,
-        formatFirestoreError(e, OperationType.DELETE, `${collectionName}/${id}`)
+      const errInfo = formatFirestoreError(e, OperationType.DELETE, `${collectionName}/${id}`);
+      console.error(
+        `Firestore delete error for ${collectionName}/${id}:`,
+        errInfo
       );
+      throw new Error(`Gagal menghapus data dari database Firestore: ${errInfo.error}`);
     }
   }
 
@@ -579,6 +610,14 @@ export async function setActiveAcademicYearDoc(
       isActive: normalized.id === activeYearId
     };
   });
+
+  if (!auth.currentUser) {
+    try {
+      await ensureFirebaseAuthSession();
+    } catch {
+      // ignore
+    }
+  }
 
   if (auth.currentUser) {
     try {
@@ -1238,6 +1277,13 @@ export async function fetchAtkConfig(): Promise<{ allowTeacherViewAtkStock: bool
   if (saved !== null) {
     localVal = saved === 'true';
   }
+  if (!auth.currentUser) {
+    try {
+      await ensureFirebaseAuthSession();
+    } catch {
+      // ignore
+    }
+  }
   if (auth.currentUser) {
     try {
       const snap = await getDoc(doc(db, 'academicSettings', 'atk_config'));
@@ -1256,6 +1302,13 @@ export async function fetchAtkConfig(): Promise<{ allowTeacherViewAtkStock: bool
 
 export async function saveAtkConfig(allowTeacherViewAtkStock: boolean, updatedBy?: string): Promise<void> {
   safeSetItem('kantoja_allow_teacher_view_atk_stock', String(allowTeacherViewAtkStock));
+  if (!auth.currentUser) {
+    try {
+      await ensureFirebaseAuthSession();
+    } catch {
+      // ignore
+    }
+  }
   if (auth.currentUser) {
     try {
       await setDoc(

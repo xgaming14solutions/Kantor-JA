@@ -82,6 +82,31 @@ export function profileHasFirebaseAuth(user: UserProfile): boolean {
   return isRealFirebaseAuthUid(user.uid) || isRealFirebaseAuthUid(user.userId) || isRealFirebaseAuthUid(user.id);
 }
 
+export function isExplicitlyLoggedOut(): boolean {
+  try {
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('aksara_explicit_logout') === 'true') {
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
+export function setExplicitlyLoggedOut(val: boolean): void {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      if (val) {
+        sessionStorage.setItem('aksara_explicit_logout', 'true');
+      } else {
+        sessionStorage.removeItem('aksara_explicit_logout');
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
 let sessionAuthPromise: Promise<boolean> | null = null;
 
 /**
@@ -90,6 +115,20 @@ let sessionAuthPromise: Promise<boolean> | null = null;
  * Uses a singleton promise to eliminate race conditions from concurrent callers.
  */
 export async function ensureFirebaseAuthSession(user?: UserProfile | null): Promise<boolean> {
+  // Never connect or create sessions if user has explicitly logged out
+  if (isExplicitlyLoggedOut()) {
+    return false;
+  }
+
+  const isSessionActive =
+    typeof localStorage !== 'undefined' &&
+    localStorage.getItem('kantoja_session_active') === 'true';
+
+  // If no user is passed and there is no active session in storage, never auto-connect
+  if (!user && !isSessionActive) {
+    return false;
+  }
+
   if (auth.currentUser) {
     return true;
   }
@@ -99,8 +138,11 @@ export async function ensureFirebaseAuthSession(user?: UserProfile | null): Prom
 
   sessionAuthPromise = (async () => {
     try {
+      if (isExplicitlyLoggedOut()) return false;
+
       const targetUser: UserProfile | null = user || (() => {
         try {
+          if (!isSessionActive) return null;
           const saved = localStorage.getItem('kantoja_currentUser');
           return saved ? JSON.parse(saved) : null;
         } catch {
@@ -108,9 +150,11 @@ export async function ensureFirebaseAuthSession(user?: UserProfile | null): Prom
         }
       })();
 
-      if (!targetUser) return false;
+      if (!targetUser || targetUser.isActive === false) return false;
 
-      const rawId = targetUser.id || targetUser.userId || targetUser.uid || targetUser.username || 'admin';
+      const rawId = targetUser.id || targetUser.userId || targetUser.uid || targetUser.username;
+      if (!rawId) return false;
+
       const cleanId = String(rawId).toLowerCase().replace(/[^a-z0-9_]/g, '_');
       const sessionEmail = `session_${cleanId}@aksara.sch.id`;
       const sessionPw = `AksaraAuth2026!_${cleanId}`;
@@ -226,8 +270,16 @@ export async function findUserByIdentifier(identifier: string): Promise<UserProf
  * Fetch user profile from Firestore by Firebase Auth UID
  */
 export async function fetchUserProfileByUid(uid: string, email?: string | null): Promise<UserProfile | null> {
-  // Support background session auth account
+  // Support background session auth account only if session is officially authenticated
   if (email && (email.startsWith('session_') || email.includes('_session_') || email.endsWith('@aksara.sch.id'))) {
+    if (
+      isExplicitlyLoggedOut() ||
+      typeof localStorage === 'undefined' ||
+      localStorage.getItem('kantoja_session_active') !== 'true'
+    ) {
+      return null;
+    }
+
     try {
       const savedUserStr = localStorage.getItem('kantoja_currentUser');
       if (savedUserStr) {
@@ -259,6 +311,8 @@ export async function fetchUserProfileByUid(uid: string, email?: string | null):
     if (demoMatch) {
       return normalizeUserBranding({ ...demoMatch, role: normalizeUserRole(demoMatch.role, demoMatch) });
     }
+
+    return null;
   }
 
   try {
@@ -447,6 +501,7 @@ export async function loginWithGooglePopup(): Promise<AuthLoginResult> {
       };
     }
 
+    setExplicitlyLoggedOut(false);
     localStorage.setItem('kantoja_currentUser', JSON.stringify(profile));
     localStorage.setItem('kantoja_session_active', 'true');
     return { success: true, user: profile };
@@ -544,6 +599,7 @@ export async function loginWithUsernameOrEmail(
     }
 
     // Save session in localStorage
+    setExplicitlyLoggedOut(false);
     localStorage.setItem('kantoja_currentUser', JSON.stringify(profile));
     localStorage.setItem('kantoja_session_active', 'true');
     return { success: true, user: profile };
@@ -581,6 +637,7 @@ export async function loginWithUsernameOrEmail(
           role: normalizeUserRole(matchedUserDoc.role, matchedUserDoc),
           isActive: true,
         });
+        setExplicitlyLoggedOut(false);
         localStorage.setItem('kantoja_currentUser', JSON.stringify(normalizedProfile));
         localStorage.setItem('kantoja_session_active', 'true');
         await ensureFirebaseAuthSession(normalizedProfile);
@@ -637,14 +694,27 @@ export async function loginWithUsernameOrEmail(
  * Log out user from Firebase Auth and clear local session
  */
 export async function logoutUser(): Promise<void> {
+  // 1. Mark explicit logout flag immediately so all listeners and tasks discard auth
+  setExplicitlyLoggedOut(true);
+  sessionAuthPromise = null;
+
+  // 2. Clear all local storage session items immediately
+  try {
+    localStorage.removeItem('kantoja_currentUser');
+    localStorage.removeItem('kantoja_active_user');
+    localStorage.removeItem('kantoja_session_active');
+    localStorage.removeItem('kantoja_token');
+  } catch (err) {
+    console.warn('Error clearing localStorage on logout:', err);
+  }
+
+  // 3. Perform and await genuine Firebase Auth sign out
   try {
     await fbSignOut(auth);
   } catch (e) {
-    console.warn('Sign out error:', e);
+    console.warn('Sign out error from Firebase Auth:', e);
+    throw e;
   }
-  localStorage.removeItem('kantoja_currentUser');
-  localStorage.removeItem('kantoja_active_user');
-  localStorage.removeItem('kantoja_session_active');
 }
 
 /**

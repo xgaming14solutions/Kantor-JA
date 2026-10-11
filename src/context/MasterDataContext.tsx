@@ -503,6 +503,7 @@ interface MasterDataContextType {
   deleteAtkCategory: (id: string) => Promise<{ action: 'deleted' | 'deactivated'; message: string }>;
   saveAtkItem: (data: AtkItem, isNewItem?: boolean) => Promise<void>;
   toggleAtkItemStatus: (id: string) => Promise<void>;
+  deleteAtkItem: (id: string) => Promise<{ success: boolean; message: string; blocked?: boolean }>;
   recordAtkIncoming: (input: {
     itemId: string;
     jumlah: number;
@@ -987,23 +988,40 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           : INITIAL_ATK_CATEGORIES;
       setAtkCategories(resolvedAtkCategories);
 
-      const resolvedAtkItems =
-        rawAtkItems && rawAtkItems.length > 0
-          ? rawAtkItems.map((item) => ({
-              ...item,
-              stokSaatIni: Math.max(0, Number(item.stokSaatIni) || 0),
-              stokMinimum: Math.max(0, Number(item.stokMinimum) || 0),
-              isActive: item.isActive !== false,
-            }))
-          : INITIAL_ATK_ITEMS;
-      setAtkItems(resolvedAtkItems);
+      const atkInitialized =
+        (typeof localStorage !== 'undefined' && localStorage.getItem('kantoja_atk_items_initialized') === 'true') ||
+        (Boolean(rawAtkItems) && (rawAtkItems?.length ?? 0) > 0);
 
-      // Auto-seed initial ATK items to Firestore if none persisted yet so all roles share consistent data
-      if (!rawAtkItems || rawAtkItems.length === 0) {
+      if (!atkInitialized) {
+        try {
+          localStorage.setItem('kantoja_atk_items_initialized', 'true');
+        } catch {
+          // ignore
+        }
         INITIAL_ATK_ITEMS.forEach((item) => {
           saveDocument('atkItems', item).catch(() => {});
         });
+      } else {
+        try {
+          localStorage.setItem('kantoja_atk_items_initialized', 'true');
+        } catch {
+          // ignore
+        }
       }
+
+      const resolvedAtkItems = (
+        rawAtkItems && rawAtkItems.length > 0
+          ? rawAtkItems
+          : atkInitialized
+          ? (rawAtkItems || [])
+          : INITIAL_ATK_ITEMS
+      ).map((item) => ({
+        ...item,
+        stokSaatIni: Math.max(0, Number(item.stokSaatIni) || 0),
+        stokMinimum: Math.max(0, Number(item.stokMinimum) || 0),
+        isActive: item.isActive !== false,
+      }));
+      setAtkItems(resolvedAtkItems);
 
       setAtkTransactions(
         (rawAtkTransactions && rawAtkTransactions.length > 0
@@ -2279,6 +2297,52 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     await saveDocument('atkItems', updated);
   };
 
+  const deleteAtkItem = async (
+    id: string
+  ): Promise<{ success: boolean; message: string; blocked?: boolean }> => {
+    if (!isAtkAdminRole(role)) {
+      throw new Error('Akses Ditolak: Hanya Administrator atau Kepala Sekolah yang berwenang menghapus master barang ATK.');
+    }
+    const item = atkItems.find((i) => i.id === id);
+    if (!item) {
+      return { success: false, message: 'Barang tidak ditemukan dalam database.' };
+    }
+
+    // Periksa relasi transaksi masuk/keluar dan permohonan ATK
+    const relatedTrx = atkTransactions.filter(
+      (t) => t.itemId === id || (item.code && t.itemCode === item.code)
+    );
+    const relatedReq = atkRequests.filter(
+      (r) => r.itemId === id || (item.code && r.itemCode === item.code)
+    );
+
+    if (relatedTrx.length > 0 || relatedReq.length > 0) {
+      const reasons: string[] = [];
+      if (relatedTrx.length > 0) {
+        reasons.push(`${relatedTrx.length} riwayat transaksi barang`);
+      }
+      if (relatedReq.length > 0) {
+        reasons.push(`${relatedReq.length} riwayat permintaan ATK`);
+      }
+      return {
+        success: false,
+        blocked: true,
+        message: `Penghapusan diblokir: Barang "${item.name}" (${item.code}) memiliki relasi aktif (${reasons.join(', ')}). Untuk menjaga integritas pembukuan dan audit persediaan, barang ini tidak dapat dihapus permanen. Anda dapat menonaktifkan barang ini agar tidak muncul lagi.`,
+      };
+    }
+
+    // Hapus dokumen permanen dari Cloud Firestore dan cache lokal
+    await deleteDocument('atkItems', id);
+
+    // Perbarui state frontend setelah operasi Firestore berhasil
+    setAtkItems((prev) => prev.filter((i) => i.id !== id));
+
+    return {
+      success: true,
+      message: `Barang "${item.name}" (${item.code}) berhasil dihapus secara permanen dari database.`,
+    };
+  };
+
   const recordAtkIncoming = async (input: {
     itemId: string;
     jumlah: number;
@@ -2786,6 +2850,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         deleteAtkCategory,
         saveAtkItem,
         toggleAtkItemStatus,
+        deleteAtkItem,
         recordAtkIncoming,
         recordAtkOutgoing,
         createAtkRequest,

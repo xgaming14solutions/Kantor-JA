@@ -640,7 +640,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             id="btn-logout"
             title={isCollapsed ? 'Keluar dari AKSARA' : undefined}
-            onClick={logout}
+            onClick={async () => {
+              try {
+                await logout();
+              } catch (err) {
+                console.error('Logout error:', err);
+              }
+            }}
             className={`w-full flex items-center ${
               isCollapsed ? 'justify-center px-2' : 'gap-2.5 px-3'
             } py-2 text-xs font-medium text-[#E8C5C5] hover:text-white hover:bg-[#C96A6A]/25 rounded-lg transition cursor-pointer`}

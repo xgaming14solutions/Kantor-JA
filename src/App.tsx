@@ -177,6 +177,9 @@ export default function App() {
     const rawPath = window.location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0];
 
     if (!currentUser) {
+      if (currentTab !== 'dashboard') {
+        setCurrentTab('dashboard');
+      }
       // If a crawler or user accessed a private path directly while unauthenticated, mark it noindex
       const isRootPath = !rawPath;
       updateSeoRobotsAndTitle(isRootPath, PUBLIC_SEO_TITLE);
@@ -195,9 +198,8 @@ export default function App() {
 
     let resolvedTab = currentTab;
     if (rawPath === 'login' || !rawPath) {
-      const targetTab =
-        role === 'ADMIN' || role === 'MUDIR' || role === 'mudir' ? 'dashboard' : currentTab;
-      if (targetTab !== currentTab) {
+      const targetTab = 'dashboard';
+      if (currentTab !== targetTab) {
         setCurrentTab(targetTab);
       }
       resolvedTab = targetTab;
@@ -689,10 +691,13 @@ export default function App() {
 
                   <div className="border-t border-[#DCE5E8] pt-1 mt-1">
                     <button
-                      onClick={() => {
-                        window.history.replaceState(null, '', '/');
-                        updateSeoRobotsAndTitle(true, PUBLIC_SEO_TITLE);
-                        logout();
+                      onClick={async () => {
+                        setProfileOpen(false);
+                        try {
+                          await logout();
+                        } catch (err) {
+                          console.error('Logout error:', err);
+                        }
                       }}
                       className="w-full text-left px-4 py-2 text-[#C96A6A] hover:bg-[#FBF1F1] font-semibold flex items-center gap-2 cursor-pointer"
                     >

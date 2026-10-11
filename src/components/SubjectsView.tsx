@@ -17,7 +17,8 @@ import {
   Layers,
   Trash2,
   AlertTriangle,
-  Users
+  Users,
+  Loader2
 } from 'lucide-react';
 
 interface SubjectsViewProps {
@@ -25,7 +26,15 @@ interface SubjectsViewProps {
 }
 
 export const SubjectsView: React.FC<SubjectsViewProps> = ({ userRole }) => {
-  const { subjects, saveSubject, toggleSubjectStatus, deleteSubject } = useMasterData();
+  const {
+    subjects,
+    saveSubject,
+    toggleSubjectStatus,
+    deleteSubject,
+    loading,
+    dataError,
+    refreshAll,
+  } = useMasterData();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<'ALL' | 'subject' | 'extracurricular'>('ALL');

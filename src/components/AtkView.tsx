@@ -31,6 +31,10 @@ import {
   Eye,
   EyeOff,
   SlidersHorizontal,
+  Trash2,
+  AlertCircle,
+  ShieldAlert,
+  Loader2,
 } from 'lucide-react';
 
 interface AtkViewProps {
@@ -118,6 +122,7 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
     deleteAtkCategory,
     saveAtkItem,
     toggleAtkItemStatus,
+    deleteAtkItem,
     recordAtkIncoming,
     recordAtkOutgoing,
     createAtkRequest,
@@ -286,6 +291,70 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
   const [categoryModalOpen, setCategoryModalOpen] = useState<boolean>(false);
   const [newCatName, setNewCatName] = useState<string>('');
   const [newCatDesc, setNewCatDesc] = useState<string>('');
+
+  // Delete Item Confirmation Modal State
+  const [deleteItemTarget, setDeleteItemTarget] = useState<AtkItem | null>(null);
+  const [isDeletingItem, setIsDeletingItem] = useState<boolean>(false);
+
+  // Compute relation dependencies to protect transaction and request records
+  const deleteItemRelations = useMemo(() => {
+    if (!deleteItemTarget) {
+      return { transactions: [], requests: [], hasRelations: false };
+    }
+    const trx = atkTransactions.filter(
+      (t) =>
+        t.itemId === deleteItemTarget.id ||
+        (deleteItemTarget.code && t.itemCode === deleteItemTarget.code)
+    );
+    const req = atkRequests.filter(
+      (r) =>
+        r.itemId === deleteItemTarget.id ||
+        (deleteItemTarget.code && r.itemCode === deleteItemTarget.code)
+    );
+    return {
+      transactions: trx,
+      requests: req,
+      hasRelations: trx.length > 0 || req.length > 0,
+    };
+  }, [deleteItemTarget, atkTransactions, atkRequests]);
+
+  const openDeleteItemModal = (item: AtkItem) => {
+    setDeleteItemTarget(item);
+  };
+
+  const closeDeleteItemModal = () => {
+    if (isDeletingItem) return;
+    setDeleteItemTarget(null);
+  };
+
+  const handleConfirmDeleteItem = async () => {
+    if (!deleteItemTarget) return;
+    if (deleteItemRelations.hasRelations) {
+      showBanner(
+        'error',
+        `Penghapusan diblokir: Barang "${deleteItemTarget.name}" memiliki riwayat transaksi/permintaan.`
+      );
+      return;
+    }
+
+    setIsDeletingItem(true);
+    try {
+      const res = await deleteAtkItem(deleteItemTarget.id);
+      if (res.success) {
+        showBanner('success', res.message);
+        setDeleteItemTarget(null);
+      } else {
+        showBanner('error', res.message);
+      }
+    } catch (err: any) {
+      showBanner(
+        'error',
+        err?.message || 'Terjadi kesalahan saat menghapus barang dari database.'
+      );
+    } finally {
+      setIsDeletingItem(false);
+    }
+  };
 
   // ==========================================================================
   // STATE FOR BARANG MASUK (📥 BARANG MASUK)
@@ -1281,6 +1350,14 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
                                 >
                                   {item.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}
                                 </button>
+                                <button
+                                  onClick={() => openDeleteItemModal(item)}
+                                  title="Hapus Barang Permanen"
+                                  className="px-2.5 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/70 rounded-lg transition inline-flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Trash2 className="w-3 h-3 text-rose-500" />
+                                  <span>Hapus</span>
+                                </button>
                               </div>
                             ) : (
                               <button
@@ -2079,6 +2156,198 @@ export const AtkView: React.FC<AtkViewProps> = ({ tab, onNavigate }) => {
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* MODAL KONFIRMASI HAPUS BARANG PERMANEN */}
+      {/* ==================================================================== */}
+      {deleteItemTarget && isAdminOrHeadmaster && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto text-left">
+            {/* Header Dialog */}
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    deleteItemRelations.hasRelations
+                      ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                      : 'bg-rose-50 text-rose-600 border border-rose-200'
+                  }`}
+                >
+                  {deleteItemRelations.hasRelations ? (
+                    <ShieldAlert className="w-5 h-5 text-amber-600" />
+                  ) : (
+                    <Trash2 className="w-5 h-5 text-rose-600" />
+                  )}
+                </div>
+                <div>
+                  <h4 className="text-sm sm:text-base font-bold text-slate-900">
+                    {deleteItemRelations.hasRelations
+                      ? 'Pemeriksaan Relasi & Penghapusan Barang'
+                      : 'Konfirmasi Hapus Barang Permanen'}
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Master Data ATK &bull; Cloud Firestore
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeDeleteItemModal}
+                disabled={isDeletingItem}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Informasi Detail Barang Yang Dipilih */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2 text-xs">
+              <div className="flex items-center justify-between text-slate-500 text-[11px]">
+                <span>Kode Barang:</span>
+                <span className="font-mono font-bold text-slate-800">{deleteItemTarget.code}</span>
+              </div>
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-slate-500 text-[11px]">Nama Barang:</span>
+                <span className="font-bold text-slate-900 text-right">{deleteItemTarget.name}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 text-[11px] text-slate-600">
+                <div>
+                  <span className="text-slate-400">Kategori:</span>{' '}
+                  <span className="font-medium text-slate-700">{deleteItemTarget.category}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400">Lokasi:</span>{' '}
+                  <span className="font-medium text-slate-700">{deleteItemTarget.lokasiPenyimpanan}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400">Stok Saat Ini:</span>{' '}
+                  <span className="font-mono font-bold text-slate-800">
+                    {deleteItemTarget.stokSaatIni} {deleteItemTarget.unit}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400">Stok Minimum:</span>{' '}
+                  <span className="font-mono text-slate-600">
+                    {deleteItemTarget.stokMinimum} {deleteItemTarget.unit}
+                  </span>
+                </div>
+              </div>
+              {deleteItemTarget.keterangan && (
+                <div className="pt-1 text-[11px] text-slate-500 border-t border-slate-200/60 italic">
+                  &ldquo;{deleteItemTarget.keterangan}&rdquo;
+                </div>
+              )}
+            </div>
+
+            {/* KONDISI 1: ADA RELASI TRANSAKSI / PERMINTAAN -> BLOKIR PENGHAPUSAN */}
+            {deleteItemRelations.hasRelations ? (
+              <div className="space-y-3">
+                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-2">
+                  <div className="flex items-center gap-2 font-bold text-amber-800">
+                    <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Penghapusan Diblokir: Barang Memiliki Riwayat Terkait</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-amber-800/90">
+                    Barang ini terhubung dengan riwayat pembukuan persediaan:
+                  </p>
+                  <ul className="text-[11px] list-disc list-inside space-y-1 font-medium text-amber-950 pl-1">
+                    {deleteItemRelations.transactions.length > 0 && (
+                      <li>
+                        <strong>{deleteItemRelations.transactions.length}</strong> catatan transaksi
+                        barang masuk/keluar.
+                      </li>
+                    )}
+                    {deleteItemRelations.requests.length > 0 && (
+                      <li>
+                        <strong>{deleteItemRelations.requests.length}</strong> catatan permohonan ATK
+                        dari guru/staf.
+                      </li>
+                    )}
+                  </ul>
+                  <p className="text-[11px] leading-relaxed text-amber-800/90 pt-1 border-t border-amber-200/60">
+                    Untuk menjaga keaslian audit, pembukuan, dan laporan yang merujuk pada kode barang ini, barang tidak boleh dihapus permanen. Sebagai gantinya, Anda dapat menonaktifkan status barang agar tidak dapat dipilih lagi dalam transaksi baru.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={closeDeleteItemModal}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                  {deleteItemTarget.isActive !== false && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await toggleAtkItemStatus(deleteItemTarget.id);
+                        showBanner(
+                          'success',
+                          `Barang "${deleteItemTarget.name}" berhasil dinonaktifkan.`
+                        );
+                        closeDeleteItemModal();
+                      }}
+                      className="px-4 py-2 text-xs font-semibold text-amber-800 bg-amber-100 hover:bg-amber-200 rounded-xl transition cursor-pointer"
+                    >
+                      Nonaktifkan Barang Ini
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* KONDISI 2: TIDAK ADA RELASI -> IZINKAN HAPUS PERMANEN */
+              <div className="space-y-3">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-semibold">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>
+                    Pemeriksaan Relasi: Bersih (0 riwayat transaksi masuk/keluar &amp; 0 permohonan ATK).
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-1.5">
+                  <div className="flex items-center gap-1.5 font-bold text-rose-700">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>Perhatian: Penghapusan Bersifat Permanen</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-rose-800/90">
+                    Apakah Anda yakin ingin menghapus barang <strong>&ldquo;{deleteItemTarget.name}&rdquo;</strong>? Dokumen ini akan dihapus permanen dari koleksi <code>atkItems</code> di Cloud Firestore dan tidak dapat dikembalikan.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={closeDeleteItemModal}
+                    disabled={isDeletingItem}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer disabled:opacity-50"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmDeleteItem}
+                    disabled={isDeletingItem}
+                    className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60 shadow-xs"
+                  >
+                    {isDeletingItem ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Menghapus dari Database...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Hapus Permanen</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
