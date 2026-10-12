@@ -85,6 +85,9 @@ const AcademicCalendarView = lazy(() =>
 const SpmbBrochuresAdminView = lazy(() =>
   import('./components/SpmbBrochuresAdminView').then((m) => ({ default: m.SpmbBrochuresAdminView }))
 );
+const LessonSchedulesView = lazy(() =>
+  import('./components/LessonSchedulesView').then((m) => ({ default: m.LessonSchedulesView }))
+);
 
 const PUBLIC_SEO_TITLE = "Pesantren Islam Mutiara Insan | Pendidikan Tahfiz Al-Qur'an";
 const PUBLIC_CANONICAL_URL = 'https://mutiarainsantbb.vercel.app/';
@@ -489,6 +492,8 @@ export default function App() {
         );
       case 'my-classes':
         return <MyClassesView />;
+      case 'lesson-schedules':
+        return <LessonSchedulesView userRole={role} />;
       default:
         return <GenericModuleView tab={currentTab} />;
     }

@@ -783,8 +783,75 @@ export function canManageBrochures(role?: UserRole | string | null): boolean {
   return r === 'ADMIN' || r === 'MUDIR' || r === 'KEPALA_SEKOLAH';
 }
 
+export type CurriculumGroup = 'PAKET_B' | 'PAKET_C';
 
+export interface CurriculumGroupInfo {
+  code: CurriculumGroup;
+  name: string;
+  grades: number[];
+  gradeLabels: string;
+  description: string;
+}
 
+export const CURRICULUM_GROUPS: Record<CurriculumGroup, CurriculumGroupInfo> = {
+  PAKET_B: {
+    code: 'PAKET_B',
+    name: 'Paket B — Kelas 7, 8, dan 9',
+    grades: [7, 8, 9],
+    gradeLabels: 'Kelas 7, 8, 9 (VII, VIII, IX)',
+    description: 'Kelompok Kurikulum Setara SMP/MTs (Kelas 7, 8, dan 9)',
+  },
+  PAKET_C: {
+    code: 'PAKET_C',
+    name: 'Paket C — Kelas 10, 11, dan 12',
+    grades: [10, 11, 12],
+    gradeLabels: 'Kelas 10, 11, 12 (X, XI, XII)',
+    description: 'Kelompok Kurikulum Setara SMA/MA (Kelas 10, 11, dan 12)',
+  },
+};
 
+export type ScheduleDay =
+  | 'Senin'
+  | 'Selasa'
+  | 'Rabu'
+  | 'Kamis'
+  | 'Jumat'
+  | 'Sabtu';
 
+export const SCHEDULE_DAYS: ScheduleDay[] = [
+  'Senin',
+  'Selasa',
+  'Rabu',
+  'Kamis',
+  'Jumat',
+  'Sabtu',
+];
 
+export interface LessonSchedule {
+  id: string; // e.g. "sched_17123456789"
+  curriculumGroup: CurriculumGroup; // 'PAKET_B' | 'PAKET_C'
+  day: ScheduleDay;
+  startTime: string; // "HH:mm", e.g. "07:30"
+  endTime: string; // "HH:mm", e.g. "09:00"
+  subjectId: string; // Relasi ke Subject.id asli
+  subjectName?: string; // Cache tampilan mata pelajaran
+  subjectCode?: string; // Cache kode mata pelajaran
+  teacherId: string; // Relasi ke Teacher.id asli
+  teacherName?: string; // Cache tampilan nama guru
+  academicYearId?: string; // Relasi ke AcademicYear.id (opsional/default tahun ajaran aktif)
+  semester?: 'Ganjil' | 'Genap';
+  notes?: string; // Keterangan opsional
+  createdBy?: string;
+  createdByName?: string;
+  createdByRole?: string;
+  createdAt: string;
+  updatedBy?: string;
+  updatedByName?: string;
+  updatedByRole?: string;
+  updatedAt: string;
+}
+
+export function canManageLessonSchedule(role?: UserRole | string | null): boolean {
+  const r = String(role || '').trim().toUpperCase();
+  return r === 'ADMIN' || r === 'MUDIR' || r === 'KEPALA_SEKOLAH';
+}

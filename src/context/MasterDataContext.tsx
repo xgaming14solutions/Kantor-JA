@@ -31,7 +31,11 @@ import {
   AtkRequest,
   isAtkAdminRole,
   AcademicCalendarEvent,
-  canManageAcademicCalendar
+  canManageAcademicCalendar,
+  LessonSchedule,
+  canManageLessonSchedule,
+  CurriculumGroup,
+  ScheduleDay
 } from '../types';
 import {
   fetchCollection,
@@ -434,6 +438,7 @@ interface MasterDataContextType {
   atkTransactions: AtkTransaction[];
   atkRequests: AtkRequest[];
   academicCalendarEvents: AcademicCalendarEvent[];
+  lessonSchedules: LessonSchedule[];
   allowTeacherViewAtkStock: boolean;
   saveAcademicYear: (data: AcademicYear) => Promise<void>;
   setActiveAcademicYear: (id: string) => Promise<void>;
@@ -546,6 +551,8 @@ interface MasterDataContextType {
   cancelAtkRequest: (requestId: string) => Promise<void>;
   saveAcademicCalendarEvent: (data: AcademicCalendarEvent) => Promise<void>;
   deleteAcademicCalendarEvent: (id: string) => Promise<void>;
+  saveLessonSchedule: (data: LessonSchedule) => Promise<void>;
+  deleteLessonSchedule: (id: string) => Promise<void>;
   loading: boolean;
   dataError: string | null;
   refreshAll: () => Promise<void>;
@@ -588,6 +595,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [academicCalendarEvents, setAcademicCalendarEvents] = useState<AcademicCalendarEvent[]>(
     INITIAL_ACADEMIC_CALENDAR_EVENTS
   );
+  const [lessonSchedules, setLessonSchedules] = useState<LessonSchedule[]>([]);
   const [allowTeacherViewAtkStock, setAllowTeacherViewAtkStockState] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('kantoja_allow_teacher_view_atk_stock');
@@ -698,7 +706,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         rawAtkRequests,
         loadedAtkConfig,
         rawStudentReportNotes,
-        rawAcademicCalendar
+        rawAcademicCalendar,
+        rawLessonSchedules
       ] = await Promise.all([
         fetchCollection<AcademicYear>('academicYears', INITIAL_ACADEMIC_YEARS),
         fetchCollection<Teacher>('teachers', INITIAL_TEACHERS),
@@ -728,7 +737,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         fetchCollection<AtkRequest>('atkRequests', INITIAL_ATK_REQUESTS),
         fetchAtkConfig(),
         fetchCollection<StudentReportNote>('studentReportNotes', []),
-        fetchCollection<AcademicCalendarEvent>('academicCalendar', INITIAL_ACADEMIC_CALENDAR_EVENTS)
+        fetchCollection<AcademicCalendarEvent>('academicCalendar', INITIAL_ACADEMIC_CALENDAR_EVENTS),
+        fetchCollection<LessonSchedule>('lessonSchedules', [])
       ]);
 
       // Normalize all academic years to guarantee valid structure
@@ -904,6 +914,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           }))
           .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''))
       );
+      setLessonSchedules(rawLessonSchedules || []);
       setAttendance(rawAttList);
       setExtracurricularParticipants(rawEksPartList || []);
       setExtracurricularScores(rawEksScoreList || []);
@@ -2776,6 +2787,41 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     await deleteDocument('academicCalendar', id);
   };
 
+  const saveLessonSchedule = async (data: LessonSchedule): Promise<void> => {
+    if (!canManageLessonSchedule(role)) {
+      throw new Error('Akses Ditolak: Anda tidak memiliki izin untuk mengelola Jadwal Pelajaran.');
+    }
+
+    const cleanSchedule: LessonSchedule = {
+      ...data,
+      id: data.id || `sched_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+      updatedAt: new Date().toISOString(),
+      createdAt: data.createdAt || new Date().toISOString(),
+      createdBy: data.createdBy || currentUser?.uid || currentUser?.id || 'admin'
+    };
+
+    setLessonSchedules((prev) => {
+      const idx = prev.findIndex((s) => s.id === cleanSchedule.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = cleanSchedule;
+        return next;
+      }
+      return [...prev, cleanSchedule];
+    });
+
+    await saveDocument('lessonSchedules', cleanSchedule);
+  };
+
+  const deleteLessonSchedule = async (id: string): Promise<void> => {
+    if (!canManageLessonSchedule(role)) {
+      throw new Error('Akses Ditolak: Anda tidak memiliki izin untuk menghapus Jadwal Pelajaran.');
+    }
+
+    setLessonSchedules((prev) => prev.filter((s) => s.id !== id));
+    await deleteDocument('lessonSchedules', id);
+  };
+
   return (
     <MasterDataContext.Provider
       value={{
@@ -2805,6 +2851,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         atkTransactions,
         atkRequests,
         academicCalendarEvents,
+        lessonSchedules,
         allowTeacherViewAtkStock,
         loading,
         dataError,
@@ -2860,6 +2907,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         cancelAtkRequest,
         saveAcademicCalendarEvent,
         deleteAcademicCalendarEvent,
+        saveLessonSchedule,
+        deleteLessonSchedule,
         refreshAll
       }}
     >

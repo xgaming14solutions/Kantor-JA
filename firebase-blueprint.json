@@ -484,6 +484,43 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "brochureId", "pageIndex", "dataUrl"]
+    },
+    "LessonSchedule": {
+      "title": "LessonSchedule",
+      "description": "Jadwal pelajaran mingguan per kelompok kurikulum (Paket B untuk Kelas 7, 8, 9 dan Paket C untuk Kelas 10, 11, 12)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "curriculumGroup": {
+          "type": "string",
+          "enum": ["PAKET_B", "PAKET_C"],
+          "description": "Kelompok kurikulum: PAKET_B untuk Kelas 7, 8, 9 dan PAKET_C untuk Kelas 10, 11, 12"
+        },
+        "day": {
+          "type": "string",
+          "enum": ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"],
+          "description": "Hari pembelajaran mingguan (Senin sampai Sabtu)"
+        },
+        "startTime": { "type": "string", "description": "Jam mulai pelajaran (format HH:mm, contoh 07:30)" },
+        "endTime": { "type": "string", "description": "Jam selesai pelajaran (format HH:mm, contoh 09:00)" },
+        "subjectId": { "type": "string", "description": "Relasi ke Subject.id yang aktif di database" },
+        "subjectName": { "type": "string", "description": "Nama mata pelajaran" },
+        "subjectCode": { "type": "string", "description": "Kode mata pelajaran" },
+        "teacherId": { "type": "string", "description": "Relasi ke Teacher.id guru pengampu aktif di database" },
+        "teacherName": { "type": "string", "description": "Nama guru pengampu" },
+        "academicYearId": { "type": "string", "description": "Relasi ke AcademicYear.id" },
+        "semester": { "type": "string", "enum": ["Ganjil", "Genap"] },
+        "notes": { "type": "string", "description": "Keterangan opsional jadwal pelajaran" },
+        "createdBy": { "type": "string" },
+        "createdByName": { "type": "string" },
+        "createdByRole": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedBy": { "type": "string" },
+        "updatedByName": { "type": "string" },
+        "updatedByRole": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "curriculumGroup", "day", "startTime", "endTime", "subjectId", "teacherId", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -582,6 +619,10 @@
     "/brochurePages/{pageId}": {
       "schema": "BrochurePage",
       "description": "Penyimpanan halaman gambar brosur beresolusi tinggi"
+    },
+    "/lessonSchedules/{scheduleId}": {
+      "schema": "LessonSchedule",
+      "description": "Koleksi jadwal pelajaran mingguan per kelompok kurikulum Paket B dan Paket C"
     }
   }
 }

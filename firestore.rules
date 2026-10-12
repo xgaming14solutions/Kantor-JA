@@ -199,6 +199,12 @@ service cloud.firestore {
       allow write: if true;
     }
 
+    // Operational Data: Lesson Schedules (Jadwal Pelajaran Paket B & Paket C)
+    match /lessonSchedules/{scheduleId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
     // Catch-all: Deny all unmatched paths
     match /{document=**} {
       allow read, write: if false;

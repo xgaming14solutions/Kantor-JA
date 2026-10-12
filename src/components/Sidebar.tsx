@@ -33,6 +33,7 @@ import {
   History,
   BarChart3,
   FileImage,
+  Clock,
 } from 'lucide-react';
 
 export type MenuGroup =
@@ -127,6 +128,13 @@ export const NAVIGATION_ITEMS: MenuItem[] = [
     label: 'Kelas & Mapel Saya',
     icon: BookOpen,
     allowedRoles: ['GURU_MAPEL', 'WALI_KELAS'],
+    group: 'AKADEMIK',
+  },
+  {
+    id: 'lesson-schedules',
+    label: 'Jadwal Pelajaran',
+    icon: Clock,
+    allowedRoles: ['ADMIN', 'MUDIR', 'mudir', 'KEPALA_SEKOLAH', 'WALI_KELAS', 'GURU_MAPEL'],
     group: 'AKADEMIK',
   },
   {

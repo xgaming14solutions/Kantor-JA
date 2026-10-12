@@ -447,6 +447,11 @@ export const ScoresView: React.FC = () => {
 
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
+  const [actionNoticeError, setActionNoticeError] = useState<string | null>(null);
+  const [actionNoticeSuccess, setActionNoticeSuccess] = useState<string | null>(null);
+  const [scoreToDelete, setScoreToDelete] = useState<Score | null>(null);
+  const [isDeleteScoreModalOpen, setIsDeleteScoreModalOpen] = useState<boolean>(false);
+  const [deleteScoreError, setDeleteScoreError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Open Input Modal (with optional preselected student & assessment component)
@@ -455,7 +460,8 @@ export const ScoresView: React.FC = () => {
     setFormSuccess(null);
 
     if (isTeacher && !canEditScores) {
-      alert('Akses Ditolak (403 Forbidden): Anda tidak memiliki wewenang penugasan mengajar aktif untuk kelas dan mata pelajaran ini.');
+      setActionNoticeError('Akses Ditolak (403 Forbidden): Anda tidak memiliki wewenang penugasan mengajar aktif untuk kelas dan mata pelajaran ini.');
+      setTimeout(() => setActionNoticeError(null), 5000);
       return;
     }
 
@@ -931,8 +937,15 @@ export const ScoresView: React.FC = () => {
   }, [students, detailStudentId, role, isAuthorized, selectedClassId]);
 
   // Secure Score Deletion Handler
-  const handleDeleteScore = async (scoreToDelete: Score) => {
-    if (!window.confirm('Apakah Anda yakin ingin menghapus data nilai ini?')) return;
+  const handleDeleteScore = (score: Score) => {
+    setScoreToDelete(score);
+    setDeleteScoreError(null);
+    setIsDeleteScoreModalOpen(true);
+  };
+
+  const handleConfirmDeleteScore = async () => {
+    if (!scoreToDelete) return;
+    setDeleteScoreError(null);
     try {
       if (isTeacher) {
         const authCheck = assertTeacherScoreAccess(
@@ -943,15 +956,19 @@ export const ScoresView: React.FC = () => {
           activeAcademicYear
         );
         if (!authCheck.allowed) {
-          alert(authCheck.reason || 'Akses Ditolak: Anda tidak diizinkan menghapus nilai ini.');
+          setDeleteScoreError(authCheck.reason || 'Akses Ditolak: Anda tidak diizinkan menghapus nilai ini.');
           return;
         }
       }
       await deleteScore(scoreToDelete.id);
       await refreshAll();
+      setIsDeleteScoreModalOpen(false);
+      setScoreToDelete(null);
+      setActionNoticeSuccess('Data nilai berhasil dihapus dari sistem.');
+      setTimeout(() => setActionNoticeSuccess(null), 4000);
     } catch (err: any) {
       console.error('Delete score error:', err);
-      alert(err.message || 'Gagal menghapus nilai.');
+      setDeleteScoreError(err.message || 'Gagal menghapus nilai.');
     }
   };
 
@@ -1013,6 +1030,37 @@ export const ScoresView: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Action Notification Banners */}
+      {actionNoticeSuccess && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm rounded-xl flex items-center justify-between gap-2 shadow-xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <span className="font-medium">{actionNoticeSuccess}</span>
+          </div>
+          <button
+            onClick={() => setActionNoticeSuccess(null)}
+            className="p-1 text-slate-400 hover:text-slate-600"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {actionNoticeError && (
+        <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm rounded-xl flex items-center justify-between gap-2 shadow-xs">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            <span className="font-medium">{actionNoticeError}</span>
+          </div>
+          <button
+            onClick={() => setActionNoticeError(null)}
+            className="p-1 text-slate-400 hover:text-slate-600"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Role & Assignment Info Banner for Teachers */}
       {isTeacher && (
@@ -2204,6 +2252,75 @@ export const ScoresView: React.FC = () => {
                   Tutup
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Score Deletion Confirmation Modal */}
+      {isDeleteScoreModalOpen && scoreToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-fade-in">
+            <div className="flex items-start gap-3.5">
+              <div className="p-2.5 bg-rose-100 text-rose-700 rounded-xl flex-shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-900">
+                  Konfirmasi Hapus Nilai
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Apakah Anda yakin ingin menghapus catatan nilai ini dari sistem?
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl text-xs space-y-1 border border-slate-200">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Siswa:</span>
+                <span className="font-semibold text-slate-800">
+                  {students.find((s) => s.id === scoreToDelete.studentId)?.name || 'Siswa'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Mata Pelajaran:</span>
+                <span className="font-semibold text-slate-800">
+                  {subjects.find((sub) => sub.id === scoreToDelete.subjectId)?.name || 'Mata Pelajaran'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Komponen & Nilai:</span>
+                <span className="font-bold text-rose-600">
+                  {scoreToDelete.type} — {scoreToDelete.value}
+                </span>
+              </div>
+            </div>
+
+            {deleteScoreError && (
+              <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{deleteScoreError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeleteScoreModalOpen(false);
+                  setScoreToDelete(null);
+                  setDeleteScoreError(null);
+                }}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteScore}
+                className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition shadow-xs"
+              >
+                Ya, Hapus Nilai
+              </button>
             </div>
           </div>
         </div>
