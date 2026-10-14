@@ -1,5 +1,5 @@
 import React from 'react';
-import { UserRole } from '../types';
+import { UserRole, UserProfile, getUserRoles, hasAnyRole } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { SchoolLogo } from './SchoolLogo';
@@ -436,7 +436,17 @@ export const NAVIGATION_ITEMS: MenuItem[] = [
   },
 ];
 
-export function formatRoleLabel(role?: UserRole | string | null, kesantrianSubRole?: string): string {
+export function formatRoleLabel(role?: UserRole | string | null, kesantrianSubRole?: string, user?: Partial<UserProfile> | null): string {
+  if (user) {
+    const roles = getUserRoles(user);
+    if (roles.length > 1) {
+      return roles.map((r) => formatSingleRoleLabel(r, kesantrianSubRole)).join(' • ');
+    }
+  }
+  return formatSingleRoleLabel(role, kesantrianSubRole);
+}
+
+function formatSingleRoleLabel(role?: UserRole | string | null, kesantrianSubRole?: string): string {
   switch (role) {
     case 'ADMIN':
       return 'Administrator';
@@ -448,7 +458,7 @@ export function formatRoleLabel(role?: UserRole | string | null, kesantrianSubRo
     case 'WALI_KELAS':
       return 'Wali Kelas';
     case 'GURU_MAPEL':
-      return 'Guru Mata Pelajaran';
+      return 'Guru Mapel';
     case 'KEPALA_KESANTRIAN':
     case 'kepala_kesantrian':
       return 'Kepala Kesantrian';
@@ -482,22 +492,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { currentUser, role, logout } = useAuth();
   const { activeAcademicYear, schoolIdentity } = useMasterData();
 
-  if (!role) return null;
+  if (!currentUser && !role) return null;
 
-  const isKesantrianOnlyRole =
-    role === 'KEPALA_KESANTRIAN' ||
-    role === 'MUSYRIF_KESANTRIAN' ||
-    role === 'kepala_kesantrian' ||
-    role === 'musyrif_kesantrian' ||
-    role === 'PETUGAS_KESANTRIAN';
+  // Multi-role extraction
+  const userRolesList = currentUser ? getUserRoles(currentUser) : role ? [role] : [];
 
-  // Filter navigation items strictly based on RBAC
+  const isPureKesantrianOnly =
+    userRolesList.every(
+      (r) =>
+        r === 'KEPALA_KESANTRIAN' ||
+        r === 'MUSYRIF_KESANTRIAN' ||
+        r === 'PETUGAS_KESANTRIAN' ||
+        r === 'kepala_kesantrian' ||
+        r === 'musyrif_kesantrian'
+    );
+
+  // Filter navigation items based on combined permissions from ALL assigned roles
   const visibleItems = NAVIGATION_ITEMS.filter((item) => {
-    if (isKesantrianOnlyRole && item.id === 'kesantrian-dashboard') return false;
-    return item.allowedRoles.includes(role);
+    if (isPureKesantrianOnly && item.id === 'kesantrian-dashboard') return false;
+    return hasAnyRole(currentUser || role, item.allowedRoles);
   });
 
-  const roleText = formatRoleLabel(role, currentUser?.kesantrianRole);
+  const roleText = formatRoleLabel(role, currentUser?.kesantrianRole, currentUser);
 
   const orderedGroups: MenuGroup[] = [
     'MAIN',
@@ -605,7 +621,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   const Icon = item.icon;
                   const isActive = currentTab === item.id;
                   const displayLabel =
-                    item.id === 'dashboard' && isKesantrianOnlyRole
+                    item.id === 'dashboard' && isPureKesantrianOnly
                       ? 'Dashboard Kesantrian'
                       : item.label;
 

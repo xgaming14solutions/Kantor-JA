@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Score, ExtracurricularScore } from '../types';
+import { Score, ExtracurricularScore, hasRole, hasAnyRole } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
 import {
@@ -11,7 +11,13 @@ import {
 import {
   calculateStudentScore,
   createDefaultAcademicSetting,
-  matchesScoreType
+  matchesScoreType,
+  normalizeScoreType,
+  isExactScoreTypeMatch,
+  formatFinalScore,
+  TUGAS_COLUMNS,
+  UH_COLUMNS,
+  ALL_ASSESSMENT_COLUMNS
 } from '../lib/academicCalculation';
 import {
   Plus,
@@ -33,7 +39,11 @@ import {
   Calculator,
   Edit2,
   Sparkles,
-  Users
+  Users,
+  ChevronDown,
+  ChevronUp,
+  LayoutGrid,
+  Info
 } from 'lucide-react';
 
 const DEFAULT_EKSKUL_KETERANGAN: Record<string, string> = {
@@ -67,6 +77,12 @@ export const ScoresView: React.FC = () => {
   // Assessment Type Selector: 'subject' (Mata Pelajaran) | 'extracurricular' (Ekstrakurikuler)
   const [assessmentType, setAssessmentType] = useState<'subject' | 'extracurricular'>('subject');
 
+  // Toggle view for 10 Tugas & 5 UH (default true: show all individual columns)
+  const [showAllColumns, setShowAllColumns] = useState<boolean>(true);
+
+  // Mobile expandable card student ID
+  const [mobileExpandedStudentId, setMobileExpandedStudentId] = useState<string | null>(null);
+
   // Active Academic Setting dynamically fetched from Firestore
   const currentAcademicSetting = useMemo(() => {
     if (!activeAcademicYear) {
@@ -75,13 +91,12 @@ export const ScoresView: React.FC = () => {
     return getAcademicSetting(activeAcademicYear.id, activeAcademicYear.semester);
   }, [activeAcademicYear, getAcademicSetting, academicSettings]);
 
-  // Enabled assessment components for active academic period
-  const enabledComponents = useMemo(() => {
-    return currentAcademicSetting.components.filter((c) => c.enabled);
-  }, [currentAcademicSetting]);
-
-  // Is current logged-in user a teacher (GURU_MAPEL or WALI_KELAS)
-  const isTeacher = role === 'GURU_MAPEL' || role === 'WALI_KELAS';
+  // Multi-role definitions
+  const isTeacher = hasAnyRole(currentUser || role, ['GURU_MAPEL', 'WALI_KELAS']);
+  const isAdmin = hasRole(currentUser || role, 'ADMIN');
+  const isHeadOrMudir = hasAnyRole(currentUser || role, ['KEPALA_SEKOLAH', 'MUDIR']);
+  const isWaliKelas = hasRole(currentUser || role, 'WALI_KELAS');
+  const isGuruMapel = hasRole(currentUser || role, 'GURU_MAPEL');
 
   // 1. Resolve Effective Teacher ID: user/guru -> teacherId
   const effectiveTeacherId = useMemo(() => {
@@ -92,7 +107,7 @@ export const ScoresView: React.FC = () => {
     return teachers.find((t) => t.id === effectiveTeacherId) || null;
   }, [teachers, effectiveTeacherId]);
 
-  // 2. Filter Active Teacher Assignments for teachers: teacherId -> teacherAssignments -> classId + subjectId + academicYearId
+  // 2. Filter Active Teacher Assignments for teachers
   const activeTeacherAssignments = useMemo(() => {
     if (!isTeacher) return [];
     return getActiveTeacherAssignments(teacherAssignments, effectiveTeacherId, activeAcademicYear);
@@ -101,18 +116,17 @@ export const ScoresView: React.FC = () => {
   // Selected Class State
   const [selectedClassId, setSelectedClassId] = useState<string>('');
 
-  // 3. Filter Available Subjects strictly from TeacherAssignments for GURU_MAPEL, and prioritize assigned for WALI_KELAS
+  // 3. Filter Available Subjects strictly from TeacherAssignments for GURU_MAPEL, and prioritize for WALI_KELAS
   const availableSubjects = useMemo(() => {
-    // Only active standard academic subjects enter academic score management
     const academicSubjects = subjects.filter(
       (s) => (s.type || 'subject') === 'subject' && s.isActive !== false
     );
 
-    if (role === 'GURU_MAPEL') {
+    if (!isAdmin && !isWaliKelas && isGuruMapel) {
       const assignedSubjectIds = new Set(activeTeacherAssignments.map((a) => a.subjectId));
       return academicSubjects.filter((s) => assignedSubjectIds.has(s.id));
     }
-    if (role === 'WALI_KELAS') {
+    if (isWaliKelas) {
       const assignedSubjectIds = new Set(
         activeTeacherAssignments
           .filter((a) => !selectedClassId || a.classId === selectedClassId)
@@ -123,7 +137,7 @@ export const ScoresView: React.FC = () => {
       return [...assigned, ...others];
     }
     return academicSubjects;
-  }, [role, activeTeacherAssignments, selectedClassId, subjects]);
+  }, [isAdmin, isWaliKelas, isGuruMapel, activeTeacherAssignments, selectedClassId, subjects]);
 
   // Selected Subject State
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
@@ -139,7 +153,7 @@ export const ScoresView: React.FC = () => {
     }
   }, [availableSubjects, selectedSubjectId]);
 
-  // 3B. Filter Available Extracurriculars from master subjects (type === 'extracurricular')
+  // 3B. Filter Available Extracurriculars
   const availableExtracurriculars = useMemo(() => {
     return subjects.filter((s) => s.type === 'extracurricular' && s.isActive !== false);
   }, [subjects]);
@@ -148,7 +162,7 @@ export const ScoresView: React.FC = () => {
 
   useEffect(() => {
     if (availableExtracurriculars.length > 0) {
-      if (!availableExtracurriculars.some((e) => e.id === selectedExtracurricularId)) {
+      if (!availableExtracurriculars.some((s) => s.id === selectedExtracurricularId)) {
         setSelectedExtracurricularId(availableExtracurriculars[0].id);
       }
     } else {
@@ -156,34 +170,25 @@ export const ScoresView: React.FC = () => {
     }
   }, [availableExtracurriculars, selectedExtracurricularId]);
 
-  // 4. Filter Available Classes strictly from TeacherAssignments for teachers (or active classes for extracurricular)
+  // Available classes based on teacher assignments
   const availableClasses = useMemo(() => {
-    if (role === 'GURU_MAPEL') {
-      const assignedClassIds = new Set(
-        activeTeacherAssignments
-          .filter((a) => assessmentType === 'extracurricular' || !selectedSubjectId || a.subjectId === selectedSubjectId)
-          .map((a) => a.classId)
-      );
-      const matched = classes.filter((c) => c.isActive !== false && assignedClassIds.has(c.id));
-      return matched.length > 0
-        ? matched
-        : assessmentType === 'extracurricular'
-        ? classes.filter((c) => c.isActive !== false)
-        : [];
+    if (!isAdmin && !isWaliKelas && isGuruMapel) {
+      const assignedClassIds = new Set(activeTeacherAssignments.map((a) => a.classId));
+      return classes.filter((c) => c.isActive !== false && assignedClassIds.has(c.id));
     }
-    if (role === 'WALI_KELAS') {
-      const taughtClassIds = new Set(activeTeacherAssignments.map((a) => a.classId));
+    if (isWaliKelas) {
+      const assignedClassIds = new Set(activeTeacherAssignments.map((a) => a.classId));
       const relevant = classes.filter(
         (c) =>
           c.isActive !== false &&
-          (taughtClassIds.has(c.id) ||
+          (assignedClassIds.has(c.id) ||
             c.homeroomTeacherId === effectiveTeacherId ||
             c.teacherId === effectiveTeacherId)
       );
       return relevant.length > 0 ? relevant : classes.filter((c) => c.isActive !== false);
     }
     return classes.filter((c) => c.isActive !== false);
-  }, [role, activeTeacherAssignments, selectedSubjectId, classes, effectiveTeacherId, assessmentType]);
+  }, [isAdmin, isWaliKelas, isGuruMapel, activeTeacherAssignments, classes, effectiveTeacherId]);
 
   // Auto-sync selectedClassId
   useEffect(() => {
@@ -196,250 +201,340 @@ export const ScoresView: React.FC = () => {
     }
   }, [availableClasses, selectedClassId]);
 
-  // Current selected subject, extracurricular & class objects
-  const currentSubject = subjects.find((s) => s.id === selectedSubjectId) || null;
-  const currentExtracurricular = availableExtracurriculars.find((e) => e.id === selectedExtracurricularId) || null;
-  const currentClass = classes.find((c) => c.id === selectedClassId) || null;
+  const currentClass = useMemo(() => {
+    return classes.find((c) => c.id === selectedClassId) || null;
+  }, [classes, selectedClassId]);
 
-  // Strict Authorization Barrier:
-  // - ADMIN has full oversight and can edit any score
-  // - KEPALA_SEKOLAH has read-only oversight
-  // - GURU_MAPEL & WALI_KELAS can edit IF AND ONLY IF they have an active teacherAssignment for:
-  //   effectiveTeacherId + selectedClassId + selectedSubjectId + activeAcademicYear
-  const canEditScores = useMemo(() => {
-    if (role === 'ADMIN') return true;
-    if (role === 'KEPALA_SEKOLAH' || role === 'MUDIR' || role === 'mudir') return false;
-    if (!isTeacher || !effectiveTeacherId || !activeAcademicYear) return false;
-    if (!selectedClassId || !selectedSubjectId) return false;
-    return validateTeacherAssignmentAuth(
-      teacherAssignments,
-      effectiveTeacherId,
-      selectedClassId,
-      selectedSubjectId,
-      activeAcademicYear.id,
-      activeAcademicYear.semester
-    );
-  }, [role, isTeacher, effectiveTeacherId, activeAcademicYear, selectedClassId, selectedSubjectId, teacherAssignments]);
+  const currentSubject = useMemo(() => {
+    return subjects.find((s) => s.id === selectedSubjectId) || null;
+  }, [subjects, selectedSubjectId]);
 
-  const isAuthorized = canEditScores;
+  const currentExtracurricular = useMemo(() => {
+    return subjects.find((s) => s.id === selectedExtracurricularId) || null;
+  }, [subjects, selectedExtracurricularId]);
 
-  // Filter students belonging to this class (BLOCKED and returns empty array if unauthorized GURU_MAPEL)
+  // Filter students in selected class
   const classStudents = useMemo(() => {
     if (!selectedClassId) return [];
-    if (role === 'GURU_MAPEL' && !canEditScores) return [];
     return students.filter(
       (s) =>
         s.classId === selectedClassId &&
         s.status === 'Aktif' &&
         (s as any).isActive !== false
     );
-  }, [students, selectedClassId, role, canEditScores]);
+  }, [students, selectedClassId]);
 
-  // Authorization for Extracurricular Scores
-  const canEditExtracurricularScores = useMemo(() => {
-    if (role === 'ADMIN') return true;
-    if (role === 'KEPALA_SEKOLAH' || role === 'MUDIR' || role === 'mudir') return false;
-    if (role === 'WALI_KELAS' || role === 'GURU_MAPEL') return true;
+  // Extracurricular participants
+  const extracurricularStudents = useMemo(() => {
+    if (!selectedExtracurricularId || !selectedClassId) return [];
+    const participantStudentIds = new Set(
+      extracurricularParticipants
+        .filter((p) => p.extracurricularId === selectedExtracurricularId)
+        .map((p) => p.studentId)
+    );
+    return classStudents.filter((s) => participantStudentIds.has(s.id));
+  }, [classStudents, extracurricularParticipants, selectedExtracurricularId, selectedClassId]);
+
+  // Authorization check for current class and subject
+  const isAuthorized = useMemo(() => {
+    if (isAdmin || isHeadOrMudir) return true;
+    if (!isTeacher) return true;
+    if (!selectedClassId || !selectedSubjectId || !activeAcademicYear) return false;
+    return validateTeacherAssignmentAuth(
+      teacherAssignments,
+      effectiveTeacherId!,
+      selectedClassId,
+      selectedSubjectId,
+      activeAcademicYear.id,
+      activeAcademicYear.semester
+    );
+  }, [
+    isAdmin,
+    isHeadOrMudir,
+    isTeacher,
+    effectiveTeacherId,
+    teacherAssignments,
+    selectedClassId,
+    selectedSubjectId,
+    activeAcademicYear
+  ]);
+
+  const canEditScores = useMemo(() => {
+    if (isAdmin) return true;
+    if (isTeacher) return isAuthorized;
     return false;
-  }, [role]);
+  }, [isAdmin, isTeacher, isAuthorized]);
 
-  // Strictly filter ONLY students registered as participants of selectedExtracurricularId in selectedClassId
-  const extracurricularParticipantStudentIds = useMemo(() => {
-    if (!selectedClassId || !selectedExtracurricularId) return new Set<string>();
-    const matched = extracurricularParticipants.filter((p) => {
-      if (p.extracurricularId !== selectedExtracurricularId) return false;
-      if (p.classId !== selectedClassId) return false;
-      if (p.status === 'inactive') return false;
+  const canEditExtracurricularScores = useMemo(() => {
+    return isAdmin || isTeacher;
+  }, [isAdmin, isTeacher]);
+
+  const effectiveCurrentKkm = useMemo(() => {
+    if (!currentSubject) return 75;
+    return currentAcademicSetting.subjectKkmOverrides?.[currentSubject.id] ?? currentSubject.kkm ?? 75;
+  }, [currentAcademicSetting, currentSubject]);
+
+  // =========================================================================
+  // MODAL 1: FULL STUDENT SCORE MODAL (10 Tugas + 5 UH + STS + SAS at once)
+  // =========================================================================
+  const [studentScoreModalOpen, setStudentScoreModalOpen] = useState<boolean>(false);
+  const [studentScoreModalStudent, setStudentScoreModalStudent] = useState<any | null>(null);
+  const [studentFormTugas, setStudentFormTugas] = useState<string[]>(Array(10).fill(''));
+  const [studentFormUh, setStudentFormUh] = useState<string[]>(Array(5).fill(''));
+  const [studentFormSts, setStudentFormSts] = useState<string>('');
+  const [studentFormSas, setStudentFormSas] = useState<string>('');
+  const [studentFormDate, setStudentFormDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [studentFormNotes, setStudentFormNotes] = useState<string>('');
+  const [studentFormSaving, setStudentFormSaving] = useState<boolean>(false);
+  const [studentFormError, setStudentFormError] = useState<string | null>(null);
+  const [studentFormSuccess, setStudentFormSuccess] = useState<string | null>(null);
+
+  // Open Full Student Score Form
+  const handleOpenStudentScoreModal = (student: any) => {
+    setStudentScoreModalStudent(student);
+    setStudentFormError(null);
+    setStudentFormSuccess(null);
+
+    // Retrieve current student scores for selected subject, class, academicYear, semester
+    const existingScores = scores.filter((s) => {
+      if (s.studentId !== student.id) return false;
+      if (selectedClassId && s.classId && s.classId.toLowerCase() !== selectedClassId.toLowerCase()) return false;
+      if (selectedSubjectId && s.subjectId && s.subjectId.toLowerCase() !== selectedSubjectId.toLowerCase()) return false;
       if (activeAcademicYear) {
-        const yearMatches =
-          !p.academicYearId ||
-          p.academicYearId === activeAcademicYear.id ||
-          p.academicYearId === activeAcademicYear.name;
-        if (!yearMatches) return false;
-        if (p.semester && activeAcademicYear.semester && p.semester !== activeAcademicYear.semester) {
-          return false;
-        }
+        const sYear = (s.academicYearId || '').toLowerCase();
+        const activeId = activeAcademicYear.id.toLowerCase();
+        const activeName = activeAcademicYear.name.toLowerCase();
+        if (sYear && sYear !== activeId && sYear !== activeName) return false;
+        if (s.semester && s.semester !== activeAcademicYear.semester) return false;
       }
       return true;
     });
-    return new Set(matched.map((p) => p.studentId));
-  }, [extracurricularParticipants, selectedClassId, selectedExtracurricularId, activeAcademicYear]);
 
-  const extracurricularStudents = useMemo(() => {
-    if (!selectedClassId || !selectedExtracurricularId) return [];
-    return students
-      .filter(
-        (s) =>
-          s.classId === selectedClassId &&
-          s.status === 'Aktif' &&
-          (s as any).isActive !== false &&
-          extracurricularParticipantStudentIds.has(s.id)
-      )
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [students, selectedClassId, selectedExtracurricularId, extracurricularParticipantStudentIds]);
-
-  const getStudentExtracurricularScore = (studentId: string): ExtracurricularScore | null => {
-    if (!selectedExtracurricularId) return null;
-    return (
-      extracurricularScores.find((sc) => {
-        if (sc.studentId !== studentId) return false;
-        if (sc.extracurricularId !== selectedExtracurricularId) return false;
-        if (selectedClassId && sc.classId && sc.classId !== selectedClassId) return false;
-        if (activeAcademicYear) {
-          const yearMatches =
-            !sc.academicYearId ||
-            sc.academicYearId === activeAcademicYear.id ||
-            sc.academicYearId === activeAcademicYear.name;
-          if (!yearMatches) return false;
-          if (sc.semester && activeAcademicYear.semester && sc.semester !== activeAcademicYear.semester) {
-            return false;
-          }
+    // Extract 10 Tugas
+    const initialTugas: string[] = TUGAS_COLUMNS.map((col) => {
+      const found = existingScores.find((s) => isExactScoreTypeMatch(s.type, col));
+      if (found && found.value !== undefined && found.value !== null) {
+        return String(found.value);
+      }
+      if (col === 'Tugas 1') {
+        const legacy = existingScores.find(
+          (s) => String(s.type).trim().toUpperCase() === 'TUGAS' || String(s.type).trim().toUpperCase() === 'PR'
+        );
+        if (legacy && legacy.value !== undefined && legacy.value !== null) {
+          return String(legacy.value);
         }
-        return true;
-      }) || null
-    );
+      }
+      return '';
+    });
+
+    // Extract 5 UH
+    const initialUh: string[] = UH_COLUMNS.map((col) => {
+      const found = existingScores.find((s) => isExactScoreTypeMatch(s.type, col));
+      if (found && found.value !== undefined && found.value !== null) {
+        return String(found.value);
+      }
+      if (col === 'UH 1') {
+        const legacy = existingScores.find(
+          (s) =>
+            String(s.type).trim().toUpperCase() === 'UH' ||
+            String(s.type).trim().toUpperCase() === 'PH' ||
+            String(s.type).trim().toUpperCase() === 'ULANGAN HARIAN'
+        );
+        if (legacy && legacy.value !== undefined && legacy.value !== null) {
+          return String(legacy.value);
+        }
+      }
+      return '';
+    });
+
+    // Extract STS & SAS
+    const stsFound = existingScores.find((s) => normalizeScoreType(s.type) === 'STS');
+    const sasFound = existingScores.find((s) => normalizeScoreType(s.type) === 'SAS');
+
+    setStudentFormTugas(initialTugas);
+    setStudentFormUh(initialUh);
+    setStudentFormSts(stsFound && stsFound.value !== undefined && stsFound.value !== null ? String(stsFound.value) : '');
+    setStudentFormSas(sasFound && sasFound.value !== undefined && sasFound.value !== null ? String(sasFound.value) : '');
+    setStudentFormDate(stsFound?.date || sasFound?.date || existingScores[0]?.date || new Date().toISOString().split('T')[0]);
+    setStudentFormNotes(stsFound?.notes || sasFound?.notes || existingScores[0]?.notes || '');
+
+    setStudentScoreModalOpen(true);
   };
 
-  // Extracurricular Input/Edit Modal & Rincian Modal States
-  const [isEksInputModalOpen, setIsEksInputModalOpen] = useState<boolean>(false);
-  const [eksDetailStudentId, setEksDetailStudentId] = useState<string | null>(null);
-  const [eksFormData, setEksFormData] = useState<{
-    studentId: string;
-    nilai: string;
-    keterangan: string;
-  }>({
-    studentId: '',
-    nilai: 'A',
-    keterangan: 'Sangat Baik'
-  });
-  const [eksFormError, setEksFormError] = useState<string | null>(null);
-  const [eksFormSuccess, setEksFormSuccess] = useState<string | null>(null);
-  const [isEksSubmitting, setIsEksSubmitting] = useState<boolean>(false);
+  // Live calculation within Full Student Score Modal
+  const liveCalc = useMemo(() => {
+    const filledTugas = studentFormTugas
+      .map((v) => (v.trim() === '' ? null : parseFloat(v.replace(',', '.'))))
+      .filter((v): v is number => v !== null && !isNaN(v));
+    const tugasCount = filledTugas.length;
+    const tugasAvg =
+      tugasCount > 0 ? Math.round((filledTugas.reduce((a, b) => a + b, 0) / tugasCount) * 10) / 10 : null;
 
-  const handleOpenEksInputModal = (targetStudentId?: string) => {
-    setEksFormError(null);
-    setEksFormSuccess(null);
+    const filledUh = studentFormUh
+      .map((v) => (v.trim() === '' ? null : parseFloat(v.replace(',', '.'))))
+      .filter((v): v is number => v !== null && !isNaN(v));
+    const uhCount = filledUh.length;
+    const uhAvg =
+      uhCount > 0 ? Math.round((filledUh.reduce((a, b) => a + b, 0) / uhCount) * 10) / 10 : null;
 
-    if (!canEditExtracurricularScores) {
-      return;
+    const stsVal =
+      studentFormSts.trim() === '' || isNaN(parseFloat(studentFormSts.replace(',', '.')))
+        ? null
+        : parseFloat(studentFormSts.replace(',', '.'));
+    const sasVal =
+      studentFormSas.trim() === '' || isNaN(parseFloat(studentFormSas.replace(',', '.')))
+        ? null
+        : parseFloat(studentFormSas.replace(',', '.'));
+
+    const isComplete = tugasAvg !== null && uhAvg !== null && stsVal !== null && sasVal !== null;
+    let finalScore: number | null = null;
+    if (isComplete) {
+      const raw = (tugasAvg * 0.15) + (uhAvg * 0.20) + (stsVal * 0.25) + (sasVal * 0.40);
+      finalScore = Math.round(raw * 10) / 10;
     }
 
-    const studentToSelect = targetStudentId || extracurricularStudents[0]?.id || '';
-    const existing = studentToSelect ? getStudentExtracurricularScore(studentToSelect) : null;
+    const isPassing = finalScore !== null ? finalScore >= effectiveCurrentKkm : null;
 
-    setEksFormData({
-      studentId: studentToSelect,
-      nilai: existing?.nilai || 'A',
-      keterangan: existing ? (existing.keterangan || '') : 'Sangat Baik'
-    });
-    setIsEksInputModalOpen(true);
-  };
+    const missing: string[] = [];
+    if (tugasAvg === null) missing.push('Tugas');
+    if (uhAvg === null) missing.push('UH');
+    if (stsVal === null) missing.push('STS');
+    if (sasVal === null) missing.push('SAS');
 
-  const handleEksStudentChangeInModal = (newStudentId: string) => {
-    const existing = newStudentId ? getStudentExtracurricularScore(newStudentId) : null;
-    setEksFormData({
-      studentId: newStudentId,
-      nilai: existing?.nilai || 'A',
-      keterangan: existing ? (existing.keterangan || '') : 'Sangat Baik'
-    });
-  };
+    return {
+      tugasCount,
+      tugasAvg,
+      uhCount,
+      uhAvg,
+      stsVal,
+      sasVal,
+      isComplete,
+      finalScore,
+      isPassing,
+      missing
+    };
+  }, [studentFormTugas, studentFormUh, studentFormSts, studentFormSas, effectiveCurrentKkm]);
 
-  const handleEksGradeChangeInModal = (newNilai: string) => {
-    setEksFormData((prev) => {
-      const currentKet = prev.keterangan.trim();
-      const isDefaultKet =
-        currentKet === '' ||
-        Object.values(DEFAULT_EKSKUL_KETERANGAN).includes(currentKet);
-      return {
-        ...prev,
-        nilai: newNilai,
-        keterangan: isDefaultKet ? (DEFAULT_EKSKUL_KETERANGAN[newNilai] || '') : prev.keterangan
-      };
-    });
-  };
-
-  const handleSaveEksScore = async (e: React.FormEvent) => {
+  // Handle Save All Student Scores
+  const handleSaveStudentAllScores = async (e: React.FormEvent) => {
     e.preventDefault();
-    setEksFormError(null);
-    setEksFormSuccess(null);
+    setStudentFormError(null);
+    setStudentFormSuccess(null);
 
-    if (!activeAcademicYear) {
-      setEksFormError('Tahun ajaran aktif belum ditentukan.');
-      return;
-    }
-    if (!selectedClassId || !selectedExtracurricularId || !eksFormData.studentId) {
-      setEksFormError('Pilih Kelas, Ekstrakurikuler, dan Siswa peserta terlebih dahulu.');
-      return;
-    }
-    if (!['A', 'B', 'C', 'D'].includes(eksFormData.nilai)) {
-      setEksFormError('Pilih nilai ekstrakurikuler yang valid (A, B, C, atau D).');
+    if (!studentScoreModalStudent || !selectedClassId || !selectedSubjectId || !activeAcademicYear) {
+      setStudentFormError('Data siswa, kelas, atau mapel tidak valid.');
       return;
     }
 
-    setIsEksSubmitting(true);
+    // Teacher authorization check
+    if (isTeacher) {
+      const authCheck = assertTeacherScoreAccess(
+        currentUser || role,
+        effectiveTeacherId,
+        teacherAssignments,
+        {
+          teacherId: effectiveTeacherId || undefined,
+          classId: selectedClassId,
+          subjectId: selectedSubjectId,
+          academicYearId: activeAcademicYear.id,
+          semester: activeAcademicYear.semester
+        },
+        activeAcademicYear
+      );
+      if (!authCheck.allowed) {
+        setStudentFormError(authCheck.reason || 'Akses Ditolak: Anda tidak memiliki penugasan mengajar aktif.');
+        return;
+      }
+    }
+
+    // Validate numeric range 0 - 100 for any filled fields
+    const allEntries: { type: string; rawVal: string }[] = [
+      ...studentFormTugas.map((val, idx) => ({ type: `Tugas ${idx + 1}`, rawVal: val })),
+      ...studentFormUh.map((val, idx) => ({ type: `UH ${idx + 1}`, rawVal: val })),
+      { type: 'STS', rawVal: studentFormSts },
+      { type: 'SAS', rawVal: studentFormSas }
+    ];
+
+    for (const item of allEntries) {
+      if (item.rawVal.trim() !== '') {
+        const num = parseFloat(item.rawVal.replace(',', '.'));
+        if (isNaN(num) || num < 0 || num > 100) {
+          setStudentFormError(`Nilai ${item.type} tidak valid. Masukkan angka antara 0 sampai 100.`);
+          return;
+        }
+      }
+    }
+
+    setStudentFormSaving(true);
     try {
-      const existing = getStudentExtracurricularScore(eksFormData.studentId);
-      await saveExtracurricularScore({
-        id: existing?.id,
-        studentId: eksFormData.studentId,
-        extracurricularId: selectedExtracurricularId,
-        classId: selectedClassId,
-        academicYearId: activeAcademicYear.id,
-        semester: activeAcademicYear.semester,
-        nilai: eksFormData.nilai,
-        keterangan: eksFormData.keterangan.trim(),
-        teacherId: effectiveTeacherId || currentUser?.teacherId || 't_001'
-      });
+      const targetDate = studentFormDate || new Date().toISOString().split('T')[0];
+      const resolvedTeacherId =
+        (isTeacher ? effectiveTeacherId : null) ||
+        effectiveTeacherId ||
+        currentUser?.teacherId ||
+        't_003';
 
-      setEksFormSuccess(
-        existing
-          ? `Nilai ekstrakurikuler berhasil diperbarui menjadi ${eksFormData.nilai}.`
-          : `Nilai ekstrakurikuler (${eksFormData.nilai}) berhasil disimpan ke database.`
+      // Find all existing scores for this student, class, subject, period
+      const existingScores = scores.filter(
+        (s) =>
+          s.studentId === studentScoreModalStudent.id &&
+          s.classId === selectedClassId &&
+          s.subjectId === selectedSubjectId &&
+          (s.academicYearId === activeAcademicYear.id || s.academicYearId === activeAcademicYear.name) &&
+          (!s.semester || s.semester === activeAcademicYear.semester)
       );
 
+      // Save each filled column; delete any cleared column
+      for (const item of allEntries) {
+        const existing = existingScores.find((s) => isExactScoreTypeMatch(s.type, item.type));
+        if (item.rawVal.trim() !== '') {
+          const numVal = Math.round(parseFloat(item.rawVal.replace(',', '.')) * 10) / 10;
+          const cleanType = item.type.toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const deterministicId = `sc_${activeAcademicYear.id}_${activeAcademicYear.semester}_${selectedClassId}_${selectedSubjectId}_${studentScoreModalStudent.id}_${cleanType}`;
+
+          const scoreObj: Score = {
+            id: existing ? existing.id : deterministicId,
+            studentId: studentScoreModalStudent.id,
+            teacherId: resolvedTeacherId,
+            classId: selectedClassId,
+            subjectId: selectedSubjectId,
+            academicYearId: activeAcademicYear.id,
+            semester: activeAcademicYear.semester,
+            type: item.type,
+            value: numVal,
+            date: targetDate,
+            notes: studentFormNotes.trim()
+          };
+          await saveScore(scoreObj);
+        } else if (existing) {
+          // If teacher intentionally emptied the input, remove that specific score record
+          await deleteScore(existing.id);
+        }
+      }
+
+      await refreshAll();
+      setStudentFormSuccess('Seluruh nilai siswa berhasil disimpan ke sistem.');
       setTimeout(() => {
-        setIsEksInputModalOpen(false);
-        setEksFormSuccess(null);
-      }, 800);
+        setStudentScoreModalOpen(false);
+        setStudentFormSuccess(null);
+      }, 900);
     } catch (err: any) {
-      console.error('Error saving extracurricular score:', err);
-      setEksFormError(err?.message || 'Gagal menyimpan nilai ekstrakurikuler.');
+      console.error('Error saving student scores:', err);
+      setStudentFormError(err.message || 'Gagal menyimpan nilai.');
     } finally {
-      setIsEksSubmitting(false);
+      setStudentFormSaving(false);
     }
   };
 
-  const selectedStudentForEksDetail = useMemo(() => {
-    if (!eksDetailStudentId) return null;
-    return students.find((s) => s.id === eksDetailStudentId) || null;
-  }, [students, eksDetailStudentId]);
-
-  // 5. Modal State for "+ Input Nilai Baru"
+  // =========================================================================
+  // MODAL 2: SINGLE COMPONENT QUICK INPUT MODAL
+  // =========================================================================
   const [isInputModalOpen, setIsInputModalOpen] = useState<boolean>(false);
-  const [detailStudentId, setDetailStudentId] = useState<string | null>(null);
-
-  // Effective KKM for current subject (respecting per-period overrides from Headmaster)
-  const effectiveCurrentKkm = useMemo(() => {
-    if (!currentSubject) return 75;
-    return (
-      currentAcademicSetting.subjectKkmOverrides?.[currentSubject.id] ?? currentSubject.kkm ?? 75
-    );
-  }, [currentSubject, currentAcademicSetting]);
-
-  // Form State
-  const [formData, setFormData] = useState<{
-    classId: string;
-    subjectId: string;
-    studentId: string;
-    type: string;
-    value: string;
-    notes: string;
-    date: string;
-  }>({
+  const [formData, setFormData] = useState({
     classId: '',
     subjectId: '',
     studentId: '',
-    type: 'UH',
+    type: 'Tugas 1',
     value: '',
     notes: '',
     date: new Date().toISOString().split('T')[0]
@@ -454,7 +549,7 @@ export const ScoresView: React.FC = () => {
   const [deleteScoreError, setDeleteScoreError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // Open Input Modal (with optional preselected student & assessment component)
+  // Open Quick Input Modal
   const handleOpenInputModal = (targetStudentId?: string, targetType?: string) => {
     setFormError(null);
     setFormSuccess(null);
@@ -477,7 +572,7 @@ export const ScoresView: React.FC = () => {
               s.status === 'Aktif' &&
               (s as any).isActive !== false
           )?.id || '');
-    const defaultType = targetType || enabledComponents[0]?.code || 'UH';
+    const defaultType = targetType || 'Tugas 1';
 
     const existing = scores.find(
       (s) =>
@@ -486,7 +581,7 @@ export const ScoresView: React.FC = () => {
         s.classId === initialClassId &&
         (s.academicYearId === activeAcademicYear?.id || s.academicYearId === activeAcademicYear?.name) &&
         (!s.semester || s.semester === activeAcademicYear?.semester) &&
-        (s.type === defaultType || matchesScoreType(s.type, defaultType))
+        (s.type === defaultType || isExactScoreTypeMatch(s.type, defaultType))
     );
 
     setFormData({
@@ -502,7 +597,6 @@ export const ScoresView: React.FC = () => {
     setIsInputModalOpen(true);
   };
 
-  // Detect whether an existing score entry exists for current modal selections
   const existingScoreInModal = useMemo(() => {
     if (!formData.studentId || !formData.subjectId || !formData.classId || !formData.type || !activeAcademicYear) {
       return null;
@@ -515,14 +609,13 @@ export const ScoresView: React.FC = () => {
           s.classId === formData.classId &&
           (s.academicYearId === activeAcademicYear.id || s.academicYearId === activeAcademicYear.name) &&
           (!s.semester || s.semester === activeAcademicYear.semester) &&
-          (s.type === formData.type || matchesScoreType(s.type, formData.type))
+          (s.type === formData.type || isExactScoreTypeMatch(s.type, formData.type))
       ) || null
     );
   }, [formData.studentId, formData.subjectId, formData.classId, formData.type, activeAcademicYear, scores]);
 
-  // Modal classes strictly filtered by role and selected subject in modal
   const modalAvailableClasses = useMemo(() => {
-    if (role === 'GURU_MAPEL') {
+    if (!isAdmin && !isWaliKelas && isGuruMapel) {
       const assignedClassIds = new Set(
         activeTeacherAssignments
           .filter((a) => !formData.subjectId || a.subjectId === formData.subjectId)
@@ -530,7 +623,7 @@ export const ScoresView: React.FC = () => {
       );
       return classes.filter((c) => c.isActive !== false && assignedClassIds.has(c.id));
     }
-    if (role === 'WALI_KELAS') {
+    if (isWaliKelas) {
       const assignedClassIds = new Set(
         activeTeacherAssignments
           .filter((a) => !formData.subjectId || a.subjectId === formData.subjectId)
@@ -546,16 +639,14 @@ export const ScoresView: React.FC = () => {
       return relevant.length > 0 ? relevant : classes.filter((c) => c.isActive !== false);
     }
     return classes.filter((c) => c.isActive !== false);
-  }, [role, activeTeacherAssignments, formData.subjectId, classes, effectiveTeacherId]);
+  }, [isAdmin, isWaliKelas, isGuruMapel, activeTeacherAssignments, formData.subjectId, classes, effectiveTeacherId]);
 
-  // Ensure formData.classId remains valid when subject changes
   useEffect(() => {
     if (modalAvailableClasses.length > 0 && !modalAvailableClasses.some((c) => c.id === formData.classId)) {
       setFormData((prev) => ({ ...prev, classId: modalAvailableClasses[0].id }));
     }
   }, [modalAvailableClasses, formData.classId]);
 
-  // Update modal students when class in modal changes
   const modalClassStudents = useMemo(() => {
     if (!formData.classId) return [];
     return students.filter(
@@ -566,14 +657,13 @@ export const ScoresView: React.FC = () => {
     );
   }, [students, formData.classId]);
 
-  // Ensure formData.studentId is valid when class changes
   useEffect(() => {
     if (modalClassStudents.length > 0 && !modalClassStudents.some((s) => s.id === formData.studentId)) {
       setFormData((prev) => ({ ...prev, studentId: modalClassStudents[0].id }));
     }
   }, [modalClassStudents, formData.studentId]);
 
-  // Handle Form Submission with Security Validation & Non-destructive Upsert
+  // Handle Quick Form Submission
   const handleSaveScore = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
@@ -589,16 +679,15 @@ export const ScoresView: React.FC = () => {
       return;
     }
 
-    const numericValue = parseFloat(formData.value);
+    const numericValue = parseFloat(formData.value.replace(',', '.'));
     if (isNaN(numericValue) || numericValue < 0 || numericValue > 100) {
       setFormError('Nilai harus berupa angka valid antara 0 sampai 100.');
       return;
     }
 
-    // SECURITY VALIDATION: Verify that the logged-in teacher has an active assignment for this class, subject, year, and semester
     if (isTeacher) {
       const authCheck = assertTeacherScoreAccess(
-        role,
+        currentUser || role,
         effectiveTeacherId,
         teacherAssignments,
         {
@@ -616,7 +705,6 @@ export const ScoresView: React.FC = () => {
         return;
       }
 
-      // Verify selected student belongs to formData.classId
       const targetStudent = students.find((s) => s.id === formData.studentId);
       if (!targetStudent || targetStudent.classId !== formData.classId) {
         setFormError('Akses Ditolak: Siswa yang dipilih tidak terdaftar pada kelas penugasan Anda.');
@@ -628,9 +716,6 @@ export const ScoresView: React.FC = () => {
     try {
       const targetDate = formData.date || new Date().toISOString().split('T')[0];
 
-      // DEDUPLICATION & COMPONENT MATCHING:
-      // Match by studentId, subjectId, classId, academicYear, semester, and assessment component type.
-      // Date is NOT a barrier to updating the score component so editing an existing grade works seamlessly.
       const existingScore = scores.find(
         (s) =>
           s.studentId === formData.studentId &&
@@ -638,29 +723,9 @@ export const ScoresView: React.FC = () => {
           s.classId === formData.classId &&
           (s.academicYearId === activeAcademicYear.id || s.academicYearId === activeAcademicYear.name) &&
           (!s.semester || s.semester === activeAcademicYear.semester) &&
-          (s.type === formData.type || matchesScoreType(s.type, formData.type))
+          (s.type === formData.type || isExactScoreTypeMatch(s.type, formData.type))
       );
 
-      // Verify teacher ownership if updating an existing score
-      if (existingScore && isTeacher) {
-        if (existingScore.teacherId && existingScore.teacherId !== effectiveTeacherId) {
-          const isStillAssigned = validateTeacherAssignmentAuth(
-            teacherAssignments,
-            effectiveTeacherId!,
-            formData.classId,
-            formData.subjectId,
-            activeAcademicYear.id,
-            activeAcademicYear.semester
-          );
-          if (!isStillAssigned) {
-            setFormError('Akses Ditolak (403 Forbidden): Anda tidak diizinkan mengubah nilai yang dimasukkan oleh guru lain.');
-            setIsSubmitting(false);
-            return;
-          }
-        }
-      }
-
-      // Deterministic ID if creating new score to ensure complete idempotency
       const cleanStudentId = formData.studentId.trim();
       const cleanSubjectId = formData.subjectId.trim();
       const cleanType = formData.type.toLowerCase().replace(/[^a-z0-9]/g, '_');
@@ -671,7 +736,7 @@ export const ScoresView: React.FC = () => {
         existingScore?.teacherId ||
         effectiveTeacherId ||
         currentUser?.teacherId ||
-        't_001';
+        't_003';
 
       const scoreToSave: Score = {
         id: existingScore ? existingScore.id : deterministicId,
@@ -687,10 +752,7 @@ export const ScoresView: React.FC = () => {
         date: targetDate
       };
 
-      // 1. Await genuine database persistence
       await saveScore(scoreToSave);
-
-      // 2. Resynchronize database collections to guarantee consistent source of truth
       await refreshAll();
 
       setFormSuccess(
@@ -699,7 +761,6 @@ export const ScoresView: React.FC = () => {
           : `Nilai ${formData.type} siswa berhasil disimpan ke database.`
       );
 
-      // Reset form value & notes
       setFormData((prev) => ({
         ...prev,
         value: '',
@@ -718,8 +779,11 @@ export const ScoresView: React.FC = () => {
     }
   };
 
-  // State for Score Input/Edit directly in Rincian Modal
-  const [detailInputType, setDetailInputType] = useState<string>('Tugas');
+  // =========================================================================
+  // MODAL 3: RINCIAN NILAI SISWA (Detail Breakdown & Inline Edit)
+  // =========================================================================
+  const [detailStudentId, setDetailStudentId] = useState<string | null>(null);
+  const [detailInputType, setDetailInputType] = useState<string>('Tugas 1');
   const [detailInputValue, setDetailInputValue] = useState<string>('');
   const [detailInputDate, setDetailInputDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [detailInputNotes, setDetailInputNotes] = useState<string>('');
@@ -727,7 +791,6 @@ export const ScoresView: React.FC = () => {
   const [detailFormSuccess, setDetailFormSuccess] = useState<string | null>(null);
   const [isDetailSubmitting, setIsDetailSubmitting] = useState<boolean>(false);
 
-  // Sync Rincian input form when student or component changes
   useEffect(() => {
     if (!detailStudentId || !selectedSubjectId || !selectedClassId || !activeAcademicYear) {
       setDetailInputValue('');
@@ -742,7 +805,7 @@ export const ScoresView: React.FC = () => {
         s.classId === selectedClassId &&
         (s.academicYearId === activeAcademicYear.id || s.academicYearId === activeAcademicYear.name) &&
         (!s.semester || s.semester === activeAcademicYear.semester) &&
-        (s.type === detailInputType || matchesScoreType(s.type, detailInputType))
+        (s.type === detailInputType || isExactScoreTypeMatch(s.type, detailInputType))
     );
 
     if (existing) {
@@ -773,7 +836,7 @@ export const ScoresView: React.FC = () => {
       return;
     }
 
-    const numericValue = parseFloat(detailInputValue);
+    const numericValue = parseFloat(detailInputValue.replace(',', '.'));
     if (isNaN(numericValue) || numericValue < 0 || numericValue > 100) {
       setDetailFormError('Nilai harus berupa angka valid antara 0 sampai 100.');
       return;
@@ -790,7 +853,7 @@ export const ScoresView: React.FC = () => {
           s.classId === selectedClassId &&
           (s.academicYearId === activeAcademicYear.id || s.academicYearId === activeAcademicYear.name) &&
           (!s.semester || s.semester === activeAcademicYear.semester) &&
-          (s.type === detailInputType || matchesScoreType(s.type, detailInputType))
+          (s.type === detailInputType || isExactScoreTypeMatch(s.type, detailInputType))
       );
 
       const cleanStudentId = selectedStudentForDetail.id.trim();
@@ -803,7 +866,7 @@ export const ScoresView: React.FC = () => {
         existingScore?.teacherId ||
         effectiveTeacherId ||
         currentUser?.teacherId ||
-        't_001';
+        't_003';
 
       const scoreToSave: Score = {
         id: existingScore ? existingScore.id : deterministicId,
@@ -822,22 +885,135 @@ export const ScoresView: React.FC = () => {
       await saveScore(scoreToSave);
       await refreshAll();
 
-      setDetailFormSuccess(
-        existingScore
-          ? `Nilai ${detailInputType} (${scoreToSave.value}) berhasil diperbarui di database.`
-          : `Nilai ${detailInputType} (${scoreToSave.value}) berhasil disimpan ke database.`
-      );
+      setDetailFormSuccess(`Nilai ${detailInputType} berhasil disimpan.`);
+      setTimeout(() => setDetailFormSuccess(null), 3000);
     } catch (err: any) {
-      console.error('Error saving score in detail modal:', err);
-      setDetailFormError(err.message || 'Gagal menyimpan nilai. Silakan coba lagi.');
+      console.error('Error saving detail score:', err);
+      setDetailFormError(err.message || 'Gagal menyimpan nilai.');
     } finally {
       setIsDetailSubmitting(false);
     }
   };
 
-  // Helper to compute summary scores for a student using dynamic academic settings
+  // =========================================================================
+  // MODAL 4 & 5: EKSTRAKURIKULER
+  // =========================================================================
+  const [isEksInputModalOpen, setIsEksInputModalOpen] = useState<boolean>(false);
+  const [eksDetailStudentId, setEksDetailStudentId] = useState<string | null>(null);
+  const [eksFormData, setEksFormData] = useState({
+    studentId: '',
+    nilai: 'A',
+    keterangan: 'Sangat Baik'
+  });
+  const [eksFormError, setEksFormError] = useState<string | null>(null);
+  const [eksFormSuccess, setEksFormSuccess] = useState<string | null>(null);
+  const [isEksSubmitting, setIsEksSubmitting] = useState<boolean>(false);
+
+  const getStudentExtracurricularScore = (studentId: string): ExtracurricularScore | null => {
+    if (!selectedExtracurricularId || !selectedClassId || !activeAcademicYear) return null;
+    return (
+      extracurricularScores.find(
+        (s) =>
+          s.studentId === studentId &&
+          s.extracurricularId === selectedExtracurricularId &&
+          s.classId === selectedClassId &&
+          (s.academicYearId === activeAcademicYear.id || s.academicYearId === activeAcademicYear.name) &&
+          (!s.semester || s.semester === activeAcademicYear.semester)
+      ) || null
+    );
+  };
+
+  const handleOpenEksInputModal = (targetStudentId?: string) => {
+    setEksFormError(null);
+    setEksFormSuccess(null);
+
+    const studentToSelect = targetStudentId || extracurricularStudents[0]?.id || '';
+    const existing = studentToSelect ? getStudentExtracurricularScore(studentToSelect) : null;
+
+    setEksFormData({
+      studentId: studentToSelect,
+      nilai: existing?.nilai || 'A',
+      keterangan: existing?.keterangan || DEFAULT_EKSKUL_KETERANGAN['A']
+    });
+
+    setIsEksInputModalOpen(true);
+  };
+
+  const handleEksStudentChangeInModal = (studentId: string) => {
+    const existing = getStudentExtracurricularScore(studentId);
+    setEksFormData({
+      studentId,
+      nilai: existing?.nilai || 'A',
+      keterangan: existing?.keterangan || DEFAULT_EKSKUL_KETERANGAN['A']
+    });
+  };
+
+  const handleEksGradeChangeInModal = (grade: string) => {
+    setEksFormData((prev) => ({
+      ...prev,
+      nilai: grade,
+      keterangan: DEFAULT_EKSKUL_KETERANGAN[grade] || prev.keterangan
+    }));
+  };
+
+  const handleSaveEksScore = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEksFormError(null);
+    setEksFormSuccess(null);
+
+    if (!activeAcademicYear || !selectedClassId || !selectedExtracurricularId) {
+      setEksFormError('Tahun ajaran, kelas, atau kegiatan ekstrakurikuler tidak valid.');
+      return;
+    }
+
+    if (!eksFormData.studentId) {
+      setEksFormError('Pilih siswa peserta ekstrakurikuler terlebih dahulu.');
+      return;
+    }
+
+    setIsEksSubmitting(true);
+    try {
+      const existing = getStudentExtracurricularScore(eksFormData.studentId);
+      const deterministicId = `eks_${activeAcademicYear.id}_${activeAcademicYear.semester}_${selectedClassId}_${selectedExtracurricularId}_${eksFormData.studentId}`;
+
+      const dataToSave: ExtracurricularScore = {
+        id: existing ? existing.id : deterministicId,
+        studentId: eksFormData.studentId,
+        extracurricularId: selectedExtracurricularId,
+        classId: selectedClassId,
+        academicYearId: activeAcademicYear.id,
+        semester: activeAcademicYear.semester,
+        nilai: eksFormData.nilai as any,
+        keterangan: eksFormData.keterangan.trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await saveExtracurricularScore(dataToSave);
+      await refreshAll();
+
+      setEksFormSuccess(existing ? 'Nilai ekstrakurikuler berhasil diperbarui.' : 'Nilai ekstrakurikuler berhasil disimpan.');
+      setTimeout(() => {
+        setIsEksInputModalOpen(false);
+        setEksFormSuccess(null);
+      }, 900);
+    } catch (err: any) {
+      console.error('Error saving ekskul score:', err);
+      setEksFormError(err.message || 'Gagal menyimpan nilai ekstrakurikuler.');
+    } finally {
+      setIsEksSubmitting(false);
+    }
+  };
+
+  const selectedStudentForEksDetail = useMemo(() => {
+    if (!eksDetailStudentId) return null;
+    return students.find((s) => s.id === eksDetailStudentId) || null;
+  }, [students, eksDetailStudentId]);
+
+  // =========================================================================
+  // SCORE CALCULATION ENGINE PER STUDENT
+  // =========================================================================
   const getStudentScoreSummary = (studentId: string) => {
-    if (role === 'GURU_MAPEL' && !isAuthorized) {
+    if (isTeacher && !isAuthorized && !isAdmin && !isWaliKelas) {
       return {
         tugas: null,
         uh: null,
@@ -850,25 +1026,36 @@ export const ScoresView: React.FC = () => {
         statusLabel: 'Ditolak',
         effectiveKkm: effectiveCurrentKkm,
         totalEntries: 0,
-        scoresList: []
+        scoresList: [],
+        tugasList: Array(10).fill(null),
+        tugasFilledCount: 0,
+        tugasAverage: null,
+        uhList: Array(5).fill(null),
+        uhFilledCount: 0,
+        uhAverage: null,
+        stsScore: null,
+        sasScore: null,
+        tugasWeight: 15,
+        uhWeight: 20,
+        stsWeight: 25,
+        sasWeight: 40,
+        isComplete: false,
+        completenessStatus: 'Belum Lengkap' as const,
+        missingComponents: ['Akses Ditolak']
       };
     }
 
     const studentScores = scores.filter((s) => {
-      // 1. Student Match
       if (s.studentId !== studentId) return false;
 
-      // 2. Class Match (flexible case/trim)
       if (selectedClassId && s.classId) {
         if (s.classId.trim().toLowerCase() !== selectedClassId.trim().toLowerCase()) return false;
       }
 
-      // 3. Subject Match (flexible case/trim)
       if (selectedSubjectId && s.subjectId) {
         if (s.subjectId.trim().toLowerCase() !== selectedSubjectId.trim().toLowerCase()) return false;
       }
 
-      // 4. Academic Year Match (handling ID or Name or numeric year e.g. 2026/2027)
       if (activeAcademicYear) {
         const sYear = (s.academicYearId || '').trim().toLowerCase();
         const activeId = activeAcademicYear.id.trim().toLowerCase();
@@ -884,7 +1071,6 @@ export const ScoresView: React.FC = () => {
 
         if (!yearMatches) return false;
 
-        // 5. Semester Match
         if (s.semester && activeAcademicYear.semester) {
           const sSem = s.semester.trim().toLowerCase();
           const aSem = activeAcademicYear.semester.trim().toLowerCase();
@@ -919,7 +1105,22 @@ export const ScoresView: React.FC = () => {
       statusLabel: calculated.statusLabel,
       effectiveKkm: calculated.effectiveKkm,
       totalEntries: calculated.totalEntries,
-      scoresList: calculated.scoresList
+      scoresList: calculated.scoresList,
+      tugasList: calculated.tugasList,
+      tugasFilledCount: calculated.tugasFilledCount,
+      tugasAverage: calculated.tugasAverage,
+      uhList: calculated.uhList,
+      uhFilledCount: calculated.uhFilledCount,
+      uhAverage: calculated.uhAverage,
+      stsScore: calculated.stsScore,
+      sasScore: calculated.sasScore,
+      tugasWeight: calculated.tugasWeight,
+      uhWeight: calculated.uhWeight,
+      stsWeight: calculated.stsWeight,
+      sasWeight: calculated.sasWeight,
+      isComplete: calculated.isComplete,
+      completenessStatus: calculated.completenessStatus,
+      missingComponents: calculated.missingComponents
     };
   };
 
@@ -927,8 +1128,7 @@ export const ScoresView: React.FC = () => {
     if (!detailStudentId) return null;
     const st = students.find((s) => s.id === detailStudentId) || null;
     if (!st) return null;
-    // Strict security check: Student must belong to currently viewed class and teacher must be authorized
-    if (role === 'GURU_MAPEL') {
+    if (!isAdmin && !isWaliKelas && isGuruMapel) {
       if (!isAuthorized || st.classId !== selectedClassId) {
         return null;
       }
@@ -949,7 +1149,7 @@ export const ScoresView: React.FC = () => {
     try {
       if (isTeacher) {
         const authCheck = assertTeacherScoreAccess(
-          role,
+          currentUser || role,
           effectiveTeacherId,
           teacherAssignments,
           scoreToDelete,
@@ -982,11 +1182,11 @@ export const ScoresView: React.FC = () => {
             Nilai Siswa
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Pengelolaan buku nilai berdasarkan relasi ID: studentId, teacherId, classId, subjectId, academicYearId
+            Buku nilai: 10 Tugas (15%) • 5 UH (20%) • STS (25%) • SAS (40%). Kolom kosong tidak dianggap 0.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
             <CalendarDays className="w-3.5 h-3.5 text-slate-500" />
             <span>Tahun Ajaran:</span>
@@ -996,10 +1196,16 @@ export const ScoresView: React.FC = () => {
           </div>
 
           {assessmentType === 'subject' ? (
-            (canEditScores || role === 'ADMIN') && (
+            (canEditScores || isAdmin) && (
               <button
                 id="btn-input-nilai-baru"
-                onClick={() => handleOpenInputModal()}
+                onClick={() => {
+                  if (classStudents.length > 0) {
+                    handleOpenStudentScoreModal(classStudents[0]);
+                  } else {
+                    handleOpenInputModal();
+                  }
+                }}
                 disabled={isTeacher && (availableSubjects.length === 0 || !canEditScores)}
                 className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white transition shadow-xs cursor-pointer ${
                   isTeacher && (availableSubjects.length === 0 || !canEditScores)
@@ -1008,7 +1214,7 @@ export const ScoresView: React.FC = () => {
                 }`}
               >
                 <Plus className="w-4 h-4" />
-                + Input Nilai Baru
+                + Input Nilai Siswa
               </button>
             )
           ) : (
@@ -1040,7 +1246,7 @@ export const ScoresView: React.FC = () => {
           </div>
           <button
             onClick={() => setActionNoticeSuccess(null)}
-            className="p-1 text-slate-400 hover:text-slate-600"
+            className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -1050,84 +1256,29 @@ export const ScoresView: React.FC = () => {
       {actionNoticeError && (
         <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm rounded-xl flex items-center justify-between gap-2 shadow-xs">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
             <span className="font-medium">{actionNoticeError}</span>
           </div>
           <button
             onClick={() => setActionNoticeError(null)}
-            className="p-1 text-slate-400 hover:text-slate-600"
+            className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* Role & Assignment Info Banner for Teachers */}
-      {isTeacher && (
-        <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-          <div className="flex items-start md:items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-indigo-100 text-indigo-700 shrink-0">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
-            <div>
-              <p className="font-semibold text-slate-800 flex items-center gap-2">
-                <span>
-                  Akses Guru: <strong className="text-indigo-950">{teacherProfile?.name || currentUser?.displayName || currentUser?.name || 'Agi Nugraha'}</strong>
-                </span>
-                <span className="text-[11px] font-mono text-indigo-600">({effectiveTeacherId || 'N/A'})</span>
-                {role === 'WALI_KELAS' && (
-                  <span className="px-2 py-0.5 rounded-md text-[10px] bg-purple-100 text-purple-700 font-semibold border border-purple-200">
-                    Wali Kelas
-                  </span>
-                )}
-                {role === 'GURU_MAPEL' && (
-                  <span className="px-2 py-0.5 rounded-md text-[10px] bg-indigo-100 text-indigo-700 font-semibold border border-indigo-200">
-                    Guru Mapel
-                  </span>
-                )}
-              </p>
-              <p className="text-slate-600 text-[11px] mt-1">
-                {activeTeacherAssignments.length > 0 ? (
-                  <>
-                    Penugasan Aktif:{' '}
-                    {activeTeacherAssignments.map((a, idx) => {
-                      const sub = subjects.find((s) => s.id === a.subjectId);
-                      const cls = classes.find((c) => c.id === a.classId);
-                      return (
-                        <span key={a.id} className="font-medium text-slate-800">
-                          {idx > 0 && ', '}
-                          {sub?.name || a.subjectId} ({cls ? `Kelas ${cls.name}` : a.classId})
-                          {a.totalHoursPerWeek ? ` - ${a.totalHoursPerWeek} Jam/Minggu` : ''}
-                        </span>
-                      );
-                    })}
-                  </>
-                ) : (
-                  <span className="text-amber-700 font-medium">
-                    Tidak ditemukan penugasan mengajar aktif untuk semester ini.
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-100/80 text-indigo-800 font-medium text-[11px] self-start md:self-auto">
-            <span>Otorisasi Penugasan: teacherAssignments</span>
-          </div>
-        </div>
-      )}
-
-      {/* Selector Filters */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap gap-4 items-center">
+      {/* Top Filter and Assessment Settings Bar */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-wrap items-center gap-3">
         <div>
           <label className="block text-[11px] font-semibold text-slate-500 mb-1">
-            PILIH KELAS
+            KELAS
           </label>
           <select
             id="select-filter-class"
             value={selectedClassId}
             onChange={(e) => setSelectedClassId(e.target.value)}
-            disabled={availableClasses.length <= 1 && isTeacher}
+            disabled={availableClasses.length <= 1 && isTeacher && !isAdmin && !isWaliKelas}
             className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-600 disabled:opacity-80"
           >
             {availableClasses.length === 0 ? (
@@ -1152,7 +1303,7 @@ export const ScoresView: React.FC = () => {
             onChange={(e) => setAssessmentType(e.target.value as 'subject' | 'extracurricular')}
             className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer"
           >
-            <option value="subject">Mata Pelajaran</option>
+            <option value="subject">Mata Pelajaran (Akademik)</option>
             <option value="extracurricular">Ekstrakurikuler</option>
           </select>
         </div>
@@ -1208,15 +1359,27 @@ export const ScoresView: React.FC = () => {
         )}
 
         {assessmentType === 'subject' && currentSubject && (
-          <div className="ml-auto flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-            <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
-            <span>KKM Mapel:</span>
-            <strong className="text-slate-900 font-bold">{effectiveCurrentKkm}</strong>
-            {currentAcademicSetting.subjectKkmOverrides?.[currentSubject.id] !== undefined && (
-              <span className="text-[10px] text-amber-700 font-semibold bg-amber-100 px-1.5 py-0.5 rounded">
-                Kustom
-              </span>
-            )}
+          <div className="ml-auto flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-1.5 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+              <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+              <span>KKM Mapel:</span>
+              <strong className="text-slate-900 font-bold">{effectiveCurrentKkm}</strong>
+            </div>
+
+            {/* Toggle View Switcher: 10 Tugas & 5 UH vs Ringkas */}
+            <button
+              type="button"
+              onClick={() => setShowAllColumns(!showAllColumns)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition inline-flex items-center gap-1.5 cursor-pointer ${
+                showAllColumns
+                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+              }`}
+              title="Ganti tampilan antara semua 10 kolom tugas & 5 UH atau mode ringkas"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>{showAllColumns ? 'Tampil 10 Tugas & 5 UH' : 'Tampilan Ringkas'}</span>
+            </button>
           </div>
         )}
 
@@ -1228,6 +1391,39 @@ export const ScoresView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Formula & Rule Guidance Banner */}
+      {assessmentType === 'subject' && (
+        <div className="bg-gradient-to-r from-indigo-50/70 via-slate-50 to-indigo-50/40 p-3 rounded-2xl border border-indigo-100 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-700">
+          <div className="flex items-center gap-2">
+            <Calculator className="w-4 h-4 text-indigo-600 shrink-0" />
+            <div>
+              <span className="font-semibold text-slate-900">Formula Penilaian Berbobot:</span>{' '}
+              <span className="font-mono text-[11px] text-indigo-900">
+                Nilai Akhir = (Rata Tugas × 15%) + (Rata UH × 20%) + (STS × 25%) + (SAS × 40%)
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] text-slate-500">
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+              Tugas 1–10 (15%)
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              UH 1–5 (20%)
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+              STS (25%)
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+              SAS (40%)
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Relational Scores Table (Academic vs Extracurricular) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
@@ -1243,7 +1439,7 @@ export const ScoresView: React.FC = () => {
                 Belum Ada Peserta {currentExtracurricular?.name || 'Ekstrakurikuler'} di Kelas {currentClass?.name || ''}
               </p>
               <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                Hanya siswa yang terdaftar sebagai peserta {currentExtracurricular?.name || 'ekstrakurikuler ini'} yang ditampilkan. Silakan pilih peserta terlebih dahulu melalui menu <strong>Mata Pelajaran &rarr; Ekstrakurikuler &rarr; Peserta</strong>.
+                Hanya siswa yang terdaftar sebagai peserta yang ditampilkan. Silakan pilih peserta terlebih dahulu melalui menu <strong>Mata Pelajaran &rarr; Ekstrakurikuler &rarr; Peserta</strong>.
               </p>
             </div>
           ) : (
@@ -1330,7 +1526,7 @@ export const ScoresView: React.FC = () => {
               </table>
             </div>
           )
-        ) : role === 'GURU_MAPEL' && !canEditScores ? (
+        ) : !isAdmin && !isWaliKelas && isGuruMapel && !canEditScores ? (
           <div className="p-10 text-center bg-rose-50/60 border border-rose-200/80 m-4 rounded-xl">
             <ShieldAlert className="w-12 h-12 text-rose-600 mx-auto mb-3" />
             <h4 className="text-base font-bold text-rose-900">AKSES DITOLAK (403 FORBIDDEN)</h4>
@@ -1355,165 +1551,750 @@ export const ScoresView: React.FC = () => {
             Tidak ada data siswa aktif pada kelas ini.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-600">
-              <thead className="bg-slate-50 text-slate-700 uppercase font-semibold text-[11px] border-b border-slate-200">
-                <tr>
-                  <th className="py-3 px-4">NIS</th>
-                  <th className="py-3 px-4">Nama Siswa</th>
-                  {enabledComponents.map((comp) => (
-                    <th key={comp.code} className="py-3 px-4 text-center">
-                      <span>{comp.name}</span>
-                      {currentAcademicSetting.calculationMethod === 'WEIGHTED' && comp.weight > 0 && (
-                        <span className="block text-[9px] font-normal text-slate-400 lowercase">
-                          ({comp.weight}%)
-                        </span>
-                      )}
-                    </th>
-                  ))}
-                  <th className="py-3 px-4 text-center">
-                    {currentAcademicSetting.calculationMethod === 'WEIGHTED' ? 'Nilai Akhir' : 'Rata-Rata'}
-                  </th>
-                  <th className="py-3 px-4">Status Ketuntasan</th>
-                  <th className="py-3 px-4 text-center">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {classStudents.map((st) => {
-                  const summary = getStudentScoreSummary(st.id);
+          <div>
+            {/* Desktop Table: Responsive horizontal scroll with 10 Tugas & 5 UH */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600">
+                <thead className="bg-slate-50 text-slate-700 uppercase font-semibold text-[11px] border-b border-slate-200 select-none">
+                  <tr>
+                    <th className="py-3 px-3 text-center sticky left-0 bg-slate-50 z-10 w-16">NIS</th>
+                    <th className="py-3 px-4 text-left sticky left-16 bg-slate-50 z-10 min-w-[170px]">Nama Siswa</th>
 
-                  return (
-                    <tr key={st.id} className="hover:bg-slate-50/60 transition">
-                      <td className="py-3 px-4 font-mono text-slate-500">{st.nis}</td>
-                      <td className="py-3 px-4 font-semibold text-slate-900">
-                        {st.name}
-                        {st.gender && (
-                          <span className="ml-1.5 text-[10px] text-slate-400 font-normal">
-                            ({st.gender})
-                          </span>
-                        )}
-                      </td>
-                      {enabledComponents.map((comp) => {
-                        const val =
-                          summary.componentScores[comp.code] !== undefined && summary.componentScores[comp.code] !== null
-                            ? summary.componentScores[comp.code]
-                            : (Object.entries(summary.componentScores).find(([k]) => matchesScoreType(k, comp.code))?.[1] ?? null);
-                        return (
-                          <td key={comp.code} className="py-3 px-4 text-center font-medium text-slate-800">
-                            {val !== null && val !== undefined ? val : <span className="text-slate-300">-</span>}
-                          </td>
-                        );
-                      })}
-                      <td className="py-3 px-4 text-center font-bold">
-                        {summary.average !== null ? (
-                          <span className={summary.isPassing ? 'text-emerald-600' : 'text-rose-600'}>
-                            {summary.formattedFinalScore ?? summary.average}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300 font-normal">-</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        {summary.average === null ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-500">
-                            {summary.statusLabel}
-                          </span>
-                        ) : summary.isPassing ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <CheckCircle2 className="w-3 h-3" />
-                            {summary.statusLabel}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                            <AlertTriangle className="w-3 h-3" />
-                            {summary.statusLabel}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {canEditScores && (
-                            <button
-                              id={`btn-input-score-${st.id}`}
-                              onClick={() => handleOpenInputModal(st.id)}
-                              className="px-2 py-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition inline-flex items-center gap-1 cursor-pointer"
-                              title="Input atau ubah nilai siswa ini"
-                            >
-                              <Edit2 className="w-3 h-3" />
-                              <span>Nilai</span>
-                            </button>
+                    {/* 10 Kolom Tugas */}
+                    {showAllColumns &&
+                      TUGAS_COLUMNS.map((col, idx) => (
+                        <th
+                          key={col}
+                          className="py-2.5 px-1.5 text-center min-w-[50px] bg-indigo-50/40 text-indigo-900 border-l border-indigo-100/60"
+                          title={`Nilai ${col}`}
+                        >
+                          <span className="text-[11px] font-bold">T{idx + 1}</span>
+                          <span className="block text-[8px] font-normal text-indigo-600/70">Tugas {idx + 1}</span>
+                        </th>
+                      ))}
+
+                    {/* Rata-Rata Tugas (15%) */}
+                    <th className="py-2.5 px-2.5 text-center min-w-[85px] bg-indigo-100/70 text-indigo-950 font-bold border-r border-indigo-200">
+                      <span className="text-[11px] block">Rata Tugas</span>
+                      <span className="text-[9px] font-semibold text-indigo-700 bg-white/80 px-1 py-0.2 rounded">15%</span>
+                    </th>
+
+                    {/* 5 Kolom UH */}
+                    {showAllColumns &&
+                      UH_COLUMNS.map((col, idx) => (
+                        <th
+                          key={col}
+                          className="py-2.5 px-1.5 text-center min-w-[50px] bg-emerald-50/40 text-emerald-900 border-l border-emerald-100/60"
+                          title={`Nilai ${col}`}
+                        >
+                          <span className="text-[11px] font-bold">UH{idx + 1}</span>
+                          <span className="block text-[8px] font-normal text-emerald-600/70">Harian {idx + 1}</span>
+                        </th>
+                      ))}
+
+                    {/* Rata-Rata UH (20%) */}
+                    <th className="py-2.5 px-2.5 text-center min-w-[85px] bg-emerald-100/70 text-emerald-950 font-bold border-r border-emerald-200">
+                      <span className="text-[11px] block">Rata UH</span>
+                      <span className="text-[9px] font-semibold text-emerald-700 bg-white/80 px-1 py-0.2 rounded">20%</span>
+                    </th>
+
+                    {/* STS (25%) */}
+                    <th className="py-2.5 px-2.5 text-center min-w-[70px] bg-amber-50/60 text-amber-950 font-bold border-r border-amber-200">
+                      <span className="text-[11px] block">STS</span>
+                      <span className="text-[9px] font-semibold text-amber-700 bg-white/80 px-1 py-0.2 rounded">25%</span>
+                    </th>
+
+                    {/* SAS (40%) */}
+                    <th className="py-2.5 px-2.5 text-center min-w-[70px] bg-purple-50/60 text-purple-950 font-bold border-r border-purple-200">
+                      <span className="text-[11px] block">SAS</span>
+                      <span className="text-[9px] font-semibold text-purple-700 bg-white/80 px-1 py-0.2 rounded">40%</span>
+                    </th>
+
+                    {/* Nilai Akhir */}
+                    <th className="py-2.5 px-2.5 text-center min-w-[90px] bg-slate-100 text-slate-900 font-bold">
+                      <span className="text-[11px] block">Nilai Akhir</span>
+                      <span className="text-[9px] font-normal text-slate-500">100%</span>
+                    </th>
+
+                    {/* Status */}
+                    <th className="py-2.5 px-3 text-center min-w-[110px]">Status</th>
+
+                    {/* Aksi */}
+                    <th className="py-2.5 px-3 text-center min-w-[140px]">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {classStudents.map((st) => {
+                    const summary = getStudentScoreSummary(st.id);
+
+                    return (
+                      <tr key={st.id} className="hover:bg-slate-50/70 transition">
+                        <td className="py-2.5 px-3 font-mono text-slate-500 text-center sticky left-0 bg-white">{st.nis}</td>
+                        <td className="py-2.5 px-4 font-semibold text-slate-900 sticky left-16 bg-white">
+                          {st.name}
+                          {st.gender && (
+                            <span className="ml-1.5 text-[10px] text-slate-400 font-normal">
+                              ({st.gender})
+                            </span>
                           )}
-                          <button
-                            id={`btn-detail-${st.id}`}
-                            onClick={() => {
-                              setDetailStudentId(st.id);
-                              setDetailFormError(null);
-                              setDetailFormSuccess(null);
-                            }}
-                            className="px-2 py-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition inline-flex items-center gap-1 cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            Rincian ({summary.totalEntries})
-                          </button>
+                        </td>
+
+                        {/* 10 Tugas Cells */}
+                        {showAllColumns &&
+                          summary.tugasList.map((val, idx) => (
+                            <td key={`t_${idx}`} className="py-2.5 px-1.5 text-center font-medium text-slate-800 bg-indigo-50/15 border-l border-slate-100">
+                              {val !== null && val !== undefined ? (
+                                <span className="font-semibold text-slate-900">{val}</span>
+                              ) : (
+                                <span className="text-slate-300 font-light" title="Belum diisi">-</span>
+                              )}
+                            </td>
+                          ))}
+
+                        {/* Rata-Rata Tugas Cell */}
+                        <td className="py-2.5 px-2.5 text-center font-bold bg-indigo-50/40 border-r border-indigo-100">
+                          {summary.tugasAverage !== null ? (
+                            <span
+                              className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-indigo-700 bg-indigo-100/70 text-[11px] font-bold"
+                              title={`Rata-rata dari ${summary.tugasFilledCount} tugas yang terisi`}
+                            >
+                              {summary.tugasAverage}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 font-normal" title="Belum ada nilai tugas terisi">-</span>
+                          )}
+                        </td>
+
+                        {/* 5 UH Cells */}
+                        {showAllColumns &&
+                          summary.uhList.map((val, idx) => (
+                            <td key={`uh_${idx}`} className="py-2.5 px-1.5 text-center font-medium text-slate-800 bg-emerald-50/15 border-l border-slate-100">
+                              {val !== null && val !== undefined ? (
+                                <span className="font-semibold text-slate-900">{val}</span>
+                              ) : (
+                                <span className="text-slate-300 font-light" title="Belum diisi">-</span>
+                              )}
+                            </td>
+                          ))}
+
+                        {/* Rata-Rata UH Cell */}
+                        <td className="py-2.5 px-2.5 text-center font-bold bg-emerald-50/40 border-r border-emerald-100">
+                          {summary.uhAverage !== null ? (
+                            <span
+                              className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-emerald-700 bg-emerald-100/70 text-[11px] font-bold"
+                              title={`Rata-rata dari ${summary.uhFilledCount} UH yang terisi`}
+                            >
+                              {summary.uhAverage}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 font-normal" title="Belum ada nilai UH terisi">-</span>
+                          )}
+                        </td>
+
+                        {/* STS Cell */}
+                        <td className="py-2.5 px-2.5 text-center font-medium bg-amber-50/25 border-r border-amber-100">
+                          {summary.stsScore !== null ? (
+                            <span className="font-semibold text-amber-900">{summary.stsScore}</span>
+                          ) : (
+                            <span className="text-slate-300 font-normal">-</span>
+                          )}
+                        </td>
+
+                        {/* SAS Cell */}
+                        <td className="py-2.5 px-2.5 text-center font-medium bg-purple-50/25 border-r border-purple-100">
+                          {summary.sasScore !== null ? (
+                            <span className="font-semibold text-purple-900">{summary.sasScore}</span>
+                          ) : (
+                            <span className="text-slate-300 font-normal">-</span>
+                          )}
+                        </td>
+
+                        {/* Nilai Akhir Cell */}
+                        <td className="py-2.5 px-2.5 text-center font-bold">
+                          {summary.average !== null ? (
+                            <span className={summary.isPassing ? 'text-emerald-600 font-bold text-sm' : 'text-rose-600 font-bold text-sm'}>
+                              {summary.formattedFinalScore ?? summary.average}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 font-normal">-</span>
+                          )}
+                        </td>
+
+                        {/* Status Ketuntasan & Kelengkapan Cell */}
+                        <td className="py-2.5 px-3 text-center">
+                          {summary.isComplete ? (
+                            summary.isPassing ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Tuntas
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                <AlertTriangle className="w-3 h-3" />
+                                Remedial
+                              </span>
+                            )
+                          ) : summary.totalEntries === 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-500">
+                              Belum Dinilai
+                            </span>
+                          ) : (
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200"
+                              title={`Belum lengkap: belum ada nilai ${summary.missingComponents.join(', ')}`}
+                            >
+                              <AlertCircle className="w-3 h-3 text-amber-600" />
+                              Belum Lengkap
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Aksi Cell */}
+                        <td className="py-2.5 px-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {canEditScores && (
+                              <button
+                                id={`btn-input-score-${st.id}`}
+                                onClick={() => handleOpenStudentScoreModal(st)}
+                                className="px-2.5 py-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition inline-flex items-center gap-1 cursor-pointer"
+                                title="Input atau ubah 10 Tugas, 5 UH, STS, & SAS"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                                <span>Nilai</span>
+                              </button>
+                            )}
+                            <button
+                              id={`btn-detail-${st.id}`}
+                              onClick={() => {
+                                setDetailStudentId(st.id);
+                                setDetailFormError(null);
+                                setDetailFormSuccess(null);
+                              }}
+                              className="px-2 py-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Rincian</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile / HP Cards View */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {classStudents.map((st) => {
+                const summary = getStudentScoreSummary(st.id);
+                const isExpanded = mobileExpandedStudentId === st.id;
+
+                return (
+                  <div key={`m_${st.id}`} className="p-3.5 space-y-2.5 bg-white">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-slate-900 text-xs">{st.name}</div>
+                        <div className="text-[10px] font-mono text-slate-400">NIS: {st.nis}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] text-slate-400 font-medium">Nilai Akhir</div>
+                        <div
+                          className={`text-sm font-extrabold ${
+                            summary.average !== null
+                              ? summary.isPassing
+                                ? 'text-emerald-600'
+                                : 'text-rose-600'
+                              : 'text-slate-400'
+                          }`}
+                        >
+                          {summary.average !== null ? summary.formattedFinalScore : '-'}
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      </div>
+                    </div>
+
+                    {/* 4 Komponen Utama Grid */}
+                    <div className="grid grid-cols-4 gap-1.5 text-center text-[10px]">
+                      <div className="p-1.5 rounded-lg bg-indigo-50/70 border border-indigo-100">
+                        <span className="text-slate-500 block text-[9px]">Rata Tugas</span>
+                        <strong className="text-indigo-900 font-bold">{summary.tugasAverage !== null ? summary.tugasAverage : '-'}</strong>
+                        <span className="block text-[8px] text-indigo-600">({summary.tugasFilledCount}/10)</span>
+                      </div>
+                      <div className="p-1.5 rounded-lg bg-emerald-50/70 border border-emerald-100">
+                        <span className="text-slate-500 block text-[9px]">Rata UH</span>
+                        <strong className="text-emerald-900 font-bold">{summary.uhAverage !== null ? summary.uhAverage : '-'}</strong>
+                        <span className="block text-[8px] text-emerald-600">({summary.uhFilledCount}/5)</span>
+                      </div>
+                      <div className="p-1.5 rounded-lg bg-amber-50/70 border border-amber-100">
+                        <span className="text-slate-500 block text-[9px]">STS</span>
+                        <strong className="text-amber-900 font-bold">{summary.stsScore !== null ? summary.stsScore : '-'}</strong>
+                        <span className="block text-[8px] text-amber-600">25%</span>
+                      </div>
+                      <div className="p-1.5 rounded-lg bg-purple-50/70 border border-purple-100">
+                        <span className="text-slate-500 block text-[9px]">SAS</span>
+                        <strong className="text-purple-900 font-bold">{summary.sasScore !== null ? summary.sasScore : '-'}</strong>
+                        <span className="block text-[8px] text-purple-600">40%</span>
+                      </div>
+                    </div>
+
+                    {/* Accordion Toggle for 10 Tugas & 5 UH */}
+                    <button
+                      type="button"
+                      onClick={() => setMobileExpandedStudentId(isExpanded ? null : st.id)}
+                      className="w-full text-center py-1.5 text-[11px] text-slate-600 hover:text-indigo-600 font-medium inline-flex items-center justify-center gap-1 cursor-pointer bg-slate-50 rounded-lg border border-slate-200/60"
+                    >
+                      <span>{isExpanded ? 'Tutup Rincian Tugas & UH' : 'Lihat 10 Tugas & 5 UH'}</span>
+                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+
+                    {isExpanded && (
+                      <div className="p-2.5 bg-slate-50 rounded-xl space-y-2.5 border border-slate-200/80 text-[10px]">
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-bold text-indigo-900">Nilai Tugas (1 - 10):</span>
+                            <span className="text-indigo-700 font-semibold">{summary.tugasFilledCount} terisi &bull; Rata: {summary.tugasAverage ?? '-'}</span>
+                          </div>
+                          <div className="grid grid-cols-5 gap-1 text-center">
+                            {summary.tugasList.map((val, idx) => (
+                              <div key={idx} className="bg-white p-1 rounded border border-indigo-100">
+                                <span className="text-[8px] text-slate-400 block font-semibold">T{idx + 1}</span>
+                                <strong className={val !== null ? 'text-slate-800' : 'text-slate-300 font-normal'}>
+                                  {val !== null ? val : '-'}
+                                </strong>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-bold text-emerald-900">Ulangan Harian (1 - 5):</span>
+                            <span className="text-emerald-700 font-semibold">{summary.uhFilledCount} terisi &bull; Rata: {summary.uhAverage ?? '-'}</span>
+                          </div>
+                          <div className="grid grid-cols-5 gap-1 text-center">
+                            {summary.uhList.map((val, idx) => (
+                              <div key={idx} className="bg-white p-1 rounded border border-emerald-100">
+                                <span className="text-[8px] text-slate-400 block font-semibold">UH{idx + 1}</span>
+                                <strong className={val !== null ? 'text-slate-800' : 'text-slate-300 font-normal'}>
+                                  {val !== null ? val : '-'}
+                                </strong>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center justify-between pt-1">
+                      <div>
+                        {summary.isComplete ? (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            Lengkap ({summary.isPassing ? 'Tuntas' : 'Remedial'})
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            {summary.totalEntries === 0 ? 'Belum Dinilai' : 'Belum Lengkap'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {canEditScores && (
+                          <button
+                            onClick={() => handleOpenStudentScoreModal(st)}
+                            className="px-2.5 py-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            <span>Nilai</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setDetailStudentId(st.id);
+                            setDetailFormError(null);
+                            setDetailFormSuccess(null);
+                          }}
+                          className="px-2.5 py-1 text-[11px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-lg inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>Rincian</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL 1: FORM INPUT NILAI BARU (Full Implementation) */}
+      {/* MODAL 1: FORMULIR INPUT / EDIT NILAI LENGKAP SISWA (10 Tugas + 5 UH + STS + SAS) */}
       {/* ========================================================================= */}
-      {isInputModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+      {studentScoreModalOpen && studentScoreModalStudent && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div
-            id="modal-input-nilai"
-            className="bg-white w-full max-w-lg rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-8"
+            id="modal-student-all-scores"
+            className="bg-white w-full max-w-3xl rounded-2xl border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-6 max-h-[92vh] flex flex-col"
           >
-            {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            {/* Header */}
+            <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 shrink-0">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Input Nilai Siswa</h3>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Edit2 className="w-4 h-4 text-indigo-600" />
+                  <span>Input &amp; Edit Nilai Siswa</span>
+                </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Periode Akademik: {activeAcademicYear?.name || '2026/2027'} - {activeAcademicYear?.semester || 'Ganjil'}
+                  <strong>{studentScoreModalStudent.name}</strong> (NIS: {studentScoreModalStudent.nis}) • Kelas {currentClass?.name} • Mapel: {currentSubject?.name} (KKM: {effectiveCurrentKkm})
                 </p>
               </div>
               <button
-                onClick={() => setIsInputModalOpen(false)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+                onClick={() => setStudentScoreModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Modal Form */}
-            <form onSubmit={handleSaveScore} className="p-6 space-y-4">
-              {/* Security & Assignment Notice */}
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1">
-                <div className="flex items-center justify-between text-slate-600">
-                  <span>Guru Pengampu:</span>
-                  <strong className="text-slate-900">
-                    {teacherProfile?.name || currentUser?.displayName || currentUser?.name || 'Budi Santoso, S.Si.'}
-                  </strong>
+            {/* Scrollable Form Body */}
+            <form onSubmit={handleSaveStudentAllScores} className="p-5 overflow-y-auto space-y-4 flex-1">
+              {/* Guidance Notice */}
+              <div className="p-3 rounded-xl bg-blue-50/80 border border-blue-200 text-blue-900 text-xs flex items-start gap-2">
+                <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  <strong>Ketentuan Input Nilai:</strong> Guru bebas mengisi kolom yang diperlukan saja (tidak wajib semua). Kolom yang dibiarkan kosong <strong>bukan nilai 0</strong> dan tidak masuk dalam pembagi rata-rata. Nilai 0 yang sengaja diisi sah sebagai nilai 0.
                 </div>
-                <div className="flex items-center justify-between text-slate-600">
-                  <span>Teacher ID:</span>
-                  <span className="font-mono text-indigo-600 font-semibold">{effectiveTeacherId || 't_003'}</span>
+              </div>
+
+              {studentFormError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{studentFormError}</span>
                 </div>
-                <div className="flex items-center justify-between text-slate-600">
-                  <span>Semester / Tahun:</span>
-                  <span className="font-medium text-slate-800">
-                    {activeAcademicYear?.semester} / {activeAcademicYear?.name}
+              )}
+
+              {studentFormSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
+                  <Check className="w-4 h-4 shrink-0" />
+                  <span>{studentFormSuccess}</span>
+                </div>
+              )}
+
+              {/* SECTION 1: 10 TUGAS (Bobot 15%) */}
+              <div className="p-4 rounded-xl border border-indigo-100 bg-indigo-50/30 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-100/80 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+                    <h4 className="font-bold text-xs text-indigo-950 uppercase tracking-wider">
+                      Nilai Tugas (Tugas 1 s.d. 10)
+                    </h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-indigo-100 text-indigo-800">
+                      Bobot: 15%
+                    </span>
+                  </div>
+                  <div className="text-xs font-semibold text-indigo-900">
+                    Terisi: <strong className="text-indigo-700">{liveCalc.tugasCount}</strong> / 10 &bull; Rata-rata:{' '}
+                    <strong className="text-indigo-700 font-mono text-sm">
+                      {liveCalc.tugasAvg !== null ? liveCalc.tugasAvg : '-'}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                  {TUGAS_COLUMNS.map((col, idx) => (
+                    <div key={col} className="space-y-1">
+                      <label className="block text-[11px] font-semibold text-slate-700 flex items-center justify-between">
+                        <span>{col}</span>
+                        <span className="text-[9px] text-slate-400 font-normal">0-100</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        placeholder="Kosong (-)"
+                        value={studentFormTugas[idx]}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setStudentFormTugas((prev) => {
+                            const next = [...prev];
+                            next[idx] = val;
+                            return next;
+                          });
+                        }}
+                        className={`w-full px-2.5 py-1.5 text-xs rounded-xl border font-semibold text-center focus:outline-none focus:ring-2 focus:ring-indigo-600 ${
+                          studentFormTugas[idx].trim() !== ''
+                            ? 'bg-white border-indigo-300 text-indigo-900 font-bold'
+                            : 'bg-white/80 border-slate-200 text-slate-700 placeholder:text-slate-300'
+                        }`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* SECTION 2: 5 ULANGAN HARIAN (Bobot 20%) */}
+              <div className="p-4 rounded-xl border border-emerald-100 bg-emerald-50/30 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100/80 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+                    <h4 className="font-bold text-xs text-emerald-950 uppercase tracking-wider">
+                      Ulangan Harian (UH 1 s.d. 5)
+                    </h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-emerald-100 text-emerald-800">
+                      Bobot: 20%
+                    </span>
+                  </div>
+                  <div className="text-xs font-semibold text-emerald-900">
+                    Terisi: <strong className="text-emerald-700">{liveCalc.uhCount}</strong> / 5 &bull; Rata-rata:{' '}
+                    <strong className="text-emerald-700 font-mono text-sm">
+                      {liveCalc.uhAvg !== null ? liveCalc.uhAvg : '-'}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                  {UH_COLUMNS.map((col, idx) => (
+                    <div key={col} className="space-y-1">
+                      <label className="block text-[11px] font-semibold text-slate-700 flex items-center justify-between">
+                        <span>{col}</span>
+                        <span className="text-[9px] text-slate-400 font-normal">0-100</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        placeholder="Kosong (-)"
+                        value={studentFormUh[idx]}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setStudentFormUh((prev) => {
+                            const next = [...prev];
+                            next[idx] = val;
+                            return next;
+                          });
+                        }}
+                        className={`w-full px-2.5 py-1.5 text-xs rounded-xl border font-semibold text-center focus:outline-none focus:ring-2 focus:ring-emerald-600 ${
+                          studentFormUh[idx].trim() !== ''
+                            ? 'bg-white border-emerald-300 text-emerald-900 font-bold'
+                            : 'bg-white/80 border-slate-200 text-slate-700 placeholder:text-slate-300'
+                        }`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* SECTION 3: STS (25%) & SAS (40%) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* STS */}
+                <div className="p-3.5 rounded-xl border border-amber-200/80 bg-amber-50/40 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-amber-950 uppercase tracking-wider">
+                      Sumatif Tengah Semester (STS)
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-amber-100 text-amber-800">
+                      Bobot: 25%
+                    </span>
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      placeholder="Nilai STS (contoh: 80)"
+                      value={studentFormSts}
+                      onChange={(e) => setStudentFormSts(e.target.value)}
+                      className={`w-full px-3 py-2 text-xs rounded-xl border font-bold text-center focus:outline-none focus:ring-2 focus:ring-amber-600 ${
+                        studentFormSts.trim() !== ''
+                          ? 'bg-white border-amber-300 text-amber-950 text-sm'
+                          : 'bg-white/90 border-slate-200 text-slate-700 placeholder:text-slate-300'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {/* SAS */}
+                <div className="p-3.5 rounded-xl border border-purple-200/80 bg-purple-50/40 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-purple-950 uppercase tracking-wider">
+                      Sumatif Akhir Semester (SAS)
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-purple-100 text-purple-800">
+                      Bobot: 40%
+                    </span>
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      placeholder="Nilai SAS (contoh: 85)"
+                      value={studentFormSas}
+                      onChange={(e) => setStudentFormSas(e.target.value)}
+                      className={`w-full px-3 py-2 text-xs rounded-xl border font-bold text-center focus:outline-none focus:ring-2 focus:ring-purple-600 ${
+                        studentFormSas.trim() !== ''
+                          ? 'bg-white border-purple-300 text-purple-950 text-sm'
+                          : 'bg-white/90 border-slate-200 text-slate-700 placeholder:text-slate-300'
+                      }`}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 4: REAL-TIME AUDIT CALCULATION PREVIEW */}
+              <div className="p-4 rounded-xl bg-slate-900 text-white space-y-2.5 shadow-md">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                    <Calculator className="w-3.5 h-3.5 text-indigo-400" />
+                    Kalkulasi Nilai Akhir (Live Preview):
+                  </span>
+                  <div>
+                    {liveCalc.isComplete ? (
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        Status: Lengkap ({liveCalc.isPassing ? 'Tuntas' : 'Remedial'})
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        Status: Belum Lengkap (Kurang: {liveCalc.missing.join(', ')})
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                  <div className="p-2 rounded-lg bg-white/5 border border-white/10">
+                    <span className="text-[10px] text-slate-400 block">Rata Tugas (15%)</span>
+                    <strong className="text-indigo-300 text-sm">
+                      {liveCalc.tugasAvg !== null ? liveCalc.tugasAvg : '-'}
+                    </strong>
+                    <span className="block text-[9px] text-slate-400">
+                      {liveCalc.tugasAvg !== null ? `+${(liveCalc.tugasAvg * 0.15).toFixed(2)}` : '0 poin'}
+                    </span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-white/5 border border-white/10">
+                    <span className="text-[10px] text-slate-400 block">Rata UH (20%)</span>
+                    <strong className="text-emerald-300 text-sm">
+                      {liveCalc.uhAvg !== null ? liveCalc.uhAvg : '-'}
+                    </strong>
+                    <span className="block text-[9px] text-slate-400">
+                      {liveCalc.uhAvg !== null ? `+${(liveCalc.uhAvg * 0.20).toFixed(2)}` : '0 poin'}
+                    </span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-white/5 border border-white/10">
+                    <span className="text-[10px] text-slate-400 block">STS (25%)</span>
+                    <strong className="text-amber-300 text-sm">
+                      {liveCalc.stsVal !== null ? liveCalc.stsVal : '-'}
+                    </strong>
+                    <span className="block text-[9px] text-slate-400">
+                      {liveCalc.stsVal !== null ? `+${(liveCalc.stsVal * 0.25).toFixed(2)}` : '0 poin'}
+                    </span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-white/5 border border-white/10">
+                    <span className="text-[10px] text-slate-400 block">SAS (40%)</span>
+                    <strong className="text-purple-300 text-sm">
+                      {liveCalc.sasVal !== null ? liveCalc.sasVal : '-'}
+                    </strong>
+                    <span className="block text-[9px] text-slate-400">
+                      {liveCalc.sasVal !== null ? `+${(liveCalc.sasVal * 0.40).toFixed(2)}` : '0 poin'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-white/10 text-xs">
+                  <span className="text-slate-300 font-medium">Prediksi Nilai Akhir:</span>
+                  <span className="text-base font-extrabold text-white">
+                    {liveCalc.finalScore !== null ? (
+                      <span className={liveCalc.isPassing ? 'text-emerald-400' : 'text-rose-400'}>
+                        {liveCalc.finalScore} {liveCalc.isPassing ? '(Tuntas)' : '(Perlu Remedial)'}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400 font-normal">- (Menunggu kelengkapan seluruh komponen)</span>
+                    )}
                   </span>
                 </div>
               </div>
 
-              {/* Feedback messages */}
+              {/* Tanggal & Catatan Umum */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Tanggal Penilaian
+                  </label>
+                  <input
+                    type="date"
+                    value={studentFormDate}
+                    onChange={(e) => setStudentFormDate(e.target.value)}
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    Catatan Penilaian (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    value={studentFormNotes}
+                    onChange={(e) => setStudentFormNotes(e.target.value)}
+                    placeholder="Contoh: Penilaian Pembelajaran Semester Ganjil"
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                  />
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setStudentScoreModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={studentFormSaving}
+                  className="inline-flex items-center gap-2 px-6 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl transition shadow-xs cursor-pointer font-medium"
+                >
+                  {studentFormSaving ? 'Menyimpan Semua Nilai...' : 'Simpan Semua Nilai Siswa'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 2: QUICK INPUT SINGLE COMPONENT */}
+      {/* ========================================================================= */}
+      {isInputModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div
+            id="modal-input-nilai-komponen"
+            className="bg-white w-full max-w-lg rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-8"
+          >
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  {existingScoreInModal ? 'Edit Nilai Komponen' : 'Input Nilai Komponen'}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Input cepat per kolom untuk satu siswa
+                </p>
+              </div>
+              <button
+                onClick={() => setIsInputModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveScore} className="p-6 space-y-4">
               {formError && (
                 <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -1538,7 +2319,7 @@ export const ScoresView: React.FC = () => {
                     id="form-select-class"
                     value={formData.classId}
                     onChange={(e) => setFormData((prev) => ({ ...prev, classId: e.target.value }))}
-                    disabled={modalAvailableClasses.length <= 1 && role === 'GURU_MAPEL'}
+                    disabled={modalAvailableClasses.length <= 1 && !isAdmin && !isWaliKelas && isGuruMapel}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 font-medium focus:ring-2 focus:ring-indigo-600 focus:outline-none disabled:bg-slate-100"
                     required
                   >
@@ -1558,7 +2339,7 @@ export const ScoresView: React.FC = () => {
                     id="form-select-subject"
                     value={formData.subjectId}
                     onChange={(e) => setFormData((prev) => ({ ...prev, subjectId: e.target.value }))}
-                    disabled={availableSubjects.length <= 1 && role === 'GURU_MAPEL'}
+                    disabled={availableSubjects.length <= 1 && !isAdmin && !isWaliKelas && isGuruMapel}
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 font-medium focus:ring-2 focus:ring-indigo-600 focus:outline-none disabled:bg-slate-100"
                     required
                   >
@@ -1598,22 +2379,6 @@ export const ScoresView: React.FC = () => {
                 </select>
               </div>
 
-              {/* Existing Score Indicator / Non-destructive overwrite reminder */}
-              {existingScoreInModal && (
-                <div className="p-3 bg-amber-50/90 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
-                  <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="space-y-0.5">
-                    <p className="font-semibold text-amber-950">
-                      Nilai {formData.type} siswa ini sudah tercatat di database:{' '}
-                      <span className="font-bold underline text-amber-900 text-sm">{existingScoreInModal.value}</span>
-                    </p>
-                    <p className="text-[11px] text-amber-800 leading-relaxed">
-                      Menyimpan nilai baru akan memperbarui komponen {formData.type} ini secara aman (upsert/update) tanpa menghapus atau menimpa nilai Tugas, UH, STS, atau SAS lainnya.
-                    </p>
-                  </div>
-                </div>
-              )}
-
               {/* Grid: Jenis Penilaian & Nilai */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -1629,14 +2394,27 @@ export const ScoresView: React.FC = () => {
                         type: e.target.value
                       }))
                     }
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 font-medium focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 font-medium focus:ring-2 focus:ring-indigo-600 focus:outline-none cursor-pointer"
                     required
                   >
-                    {enabledComponents.map((comp) => (
-                      <option key={comp.code} value={comp.code}>
-                        {comp.name} {currentAcademicSetting.calculationMethod === 'WEIGHTED' && comp.weight > 0 ? `(${comp.weight}%)` : ''}
-                      </option>
-                    ))}
+                    <optgroup label="Tugas (Bobot 15%)">
+                      {TUGAS_COLUMNS.map((col) => (
+                        <option key={col} value={col}>
+                          {col}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Ulangan Harian (Bobot 20%)">
+                      {UH_COLUMNS.map((col) => (
+                        <option key={col} value={col}>
+                          {col}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Ujian Sumatif">
+                      <option value="STS">STS - Sumatif Tengah Semester (25%)</option>
+                      <option value="SAS">SAS - Sumatif Akhir Semester (40%)</option>
+                    </optgroup>
                   </select>
                 </div>
 
@@ -1652,7 +2430,7 @@ export const ScoresView: React.FC = () => {
                     step="0.5"
                     value={formData.value}
                     onChange={(e) => setFormData((prev) => ({ ...prev, value: e.target.value }))}
-                    placeholder="Contoh: 85"
+                    placeholder="Contoh: 85 (0 sah)"
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 font-medium focus:ring-2 focus:ring-indigo-600 focus:outline-none"
                     required
                   />
@@ -1683,18 +2461,17 @@ export const ScoresView: React.FC = () => {
                     type="text"
                     value={formData.notes}
                     onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
-                    placeholder="Contoh: Materi Bab Ekosistem"
+                    placeholder="Contoh: Bab 1"
                     className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-800 font-medium focus:ring-2 focus:ring-indigo-600 focus:outline-none"
                   />
                 </div>
               </div>
 
-              {/* Modal Actions */}
               <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsInputModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition cursor-pointer"
                 >
                   Batal
                 </button>
@@ -1713,76 +2490,384 @@ export const ScoresView: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 2: RINCIAN NILAI SISWA */}
+      {/* MODAL 3: RINCIAN NILAI SISWA (FULL AUDIT & INLINE EDITING) */}
       {/* ========================================================================= */}
       {detailStudentId && selectedStudentForDetail && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-lg rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-8">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div
+            id="modal-rincian-nilai"
+            className="bg-white w-full max-w-3xl rounded-2xl border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-6 max-h-[92vh] flex flex-col"
+          >
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/60 shrink-0">
               <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  Rincian Nilai: {selectedStudentForDetail.name}
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Award className="w-4 h-4 text-indigo-600" />
+                  <span>Rincian Buku Nilai Siswa</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  NIS: {selectedStudentForDetail.nis} • {currentSubject?.name} • Kelas {currentClass?.name}
+                  <strong>{selectedStudentForDetail.name}</strong> (NIS: {selectedStudentForDetail.nis}) &bull; Kelas {currentClass?.name || '-'} &bull; Mapel: {currentSubject?.name || '-'}
                 </p>
               </div>
               <button
                 onClick={() => setDetailStudentId(null)}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+            {/* Content */}
+            <div className="p-5 overflow-y-auto space-y-4 flex-1">
               {(() => {
                 const summary = getStudentScoreSummary(selectedStudentForDetail.id);
 
                 return (
                   <div className="space-y-4">
                     {/* Overall Summary Card */}
-                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-3 gap-2 text-center text-xs">
-                      <div>
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center text-xs">
+                      <div className="p-2 bg-white rounded-lg border border-slate-100">
                         <span className="text-slate-500 block text-[11px]">KKM Mapel</span>
-                        <strong className="text-slate-800 text-sm">{effectiveCurrentKkm}</strong>
+                        <strong className="text-slate-900 text-sm font-bold">{effectiveCurrentKkm}</strong>
                       </div>
-                      <div>
-                        <span className="text-slate-500 block text-[11px]">
-                          {currentAcademicSetting.calculationMethod === 'WEIGHTED' ? 'Nilai Akhir' : 'Rata-Rata'}
-                        </span>
-                        <strong className={`text-sm ${summary.average !== null ? (summary.isPassing ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold') : 'text-slate-400'}`}>
-                          {summary.average !== null ? (summary.formattedFinalScore ?? summary.average) : '-'}
+                      <div className="p-2 bg-white rounded-lg border border-slate-100">
+                        <span className="text-slate-500 block text-[11px]">Nilai Akhir</span>
+                        <strong
+                          className={`text-sm font-extrabold ${
+                            summary.average !== null
+                              ? summary.isPassing
+                                ? 'text-emerald-600'
+                                : 'text-rose-600'
+                              : 'text-slate-400'
+                          }`}
+                        >
+                          {summary.average !== null ? summary.formattedFinalScore : '-'}
                         </strong>
                       </div>
-                      <div>
-                        <span className="text-slate-500 block text-[11px]">Status</span>
+                      <div className="p-2 bg-white rounded-lg border border-slate-100">
+                        <span className="text-slate-500 block text-[11px]">Kelengkapan</span>
+                        <span
+                          className={`text-xs font-bold ${
+                            summary.isComplete ? 'text-emerald-700' : 'text-amber-700'
+                          }`}
+                        >
+                          {summary.completenessStatus}
+                        </span>
+                      </div>
+                      <div className="p-2 bg-white rounded-lg border border-slate-100">
+                        <span className="text-slate-500 block text-[11px]">Ketuntasan</span>
                         {summary.average === null ? (
                           <span className="text-slate-400 font-medium text-[11px]">{summary.statusLabel}</span>
                         ) : summary.isPassing ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-600 font-bold text-[11px]">
-                            <CheckCircle2 className="w-3 h-3" />
-                            {summary.statusLabel}
+                          <span className="inline-flex items-center gap-1 text-emerald-600 font-bold text-xs">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Tuntas
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-rose-600 font-bold text-[11px]">
-                            <AlertTriangle className="w-3 h-3" />
-                            {summary.statusLabel}
+                          <span className="inline-flex items-center gap-1 text-rose-600 font-bold text-xs">
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            Remedial
                           </span>
                         )}
                       </div>
                     </div>
 
-                    {/* Form Input / Ubah Nilai Langsung pada Rincian */}
-                    {canEditScores ? (
-                      <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-50/90 to-slate-50 border border-indigo-200 shadow-2xs space-y-3">
+                    {/* Quick Button to open complete 10 Tugas + 5 UH Editor */}
+                    {canEditScores && (
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDetailStudentId(null);
+                            handleOpenStudentScoreModal(selectedStudentForDetail);
+                          }}
+                          className="px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                          <span>Buka Formulir Lengkap (10 Tugas &amp; 5 UH)</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* SECTION: 10 TUGAS DETAIL TABLE */}
+                    <div className="border border-indigo-100 rounded-xl overflow-hidden bg-white shadow-2xs">
+                      <div className="px-4 py-2.5 bg-indigo-50/70 border-b border-indigo-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-indigo-950 uppercase tracking-wider">
+                            Rincian 10 Nilai Tugas
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-indigo-100 text-indigo-800">
+                            Bobot: 15%
+                          </span>
+                        </div>
+                        <div className="text-xs font-semibold text-indigo-900">
+                          Terisi: <strong>{summary.tugasFilledCount}</strong> / 10 &bull; Rata-rata:{' '}
+                          <strong className="text-indigo-700 text-sm">{summary.tugasAverage ?? '-'}</strong>
+                          {summary.tugasAverage !== null && (
+                            <span className="text-[11px] text-slate-500 ml-1">
+                              (Kontribusi: {(summary.tugasAverage * 0.15).toFixed(2)})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs divide-y divide-slate-100">
+                          <thead className="bg-slate-50 text-[10px] font-semibold text-slate-600 uppercase">
+                            <tr>
+                              <th className="py-2 px-3">Kolom</th>
+                              <th className="py-2 px-3 text-center">Nilai</th>
+                              <th className="py-2 px-3">Status</th>
+                              <th className="py-2 px-3">Tanggal</th>
+                              <th className="py-2 px-3">Catatan</th>
+                              <th className="py-2 px-3 text-center">Aksi</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {TUGAS_COLUMNS.map((col, idx) => {
+                              const val = summary.tugasList[idx];
+                              const scoreObj = summary.scoresList.find((s) => isExactScoreTypeMatch(s.type, col));
+
+                              return (
+                                <tr key={col} className="hover:bg-slate-50/60 transition">
+                                  <td className="py-2 px-3 font-semibold text-slate-900">{col}</td>
+                                  <td className="py-2 px-3 text-center font-bold">
+                                    {val !== null ? (
+                                      <span className="inline-flex px-2 py-0.5 rounded text-indigo-800 bg-indigo-50 font-bold">
+                                        {val}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-300 font-light">-</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    {val !== null ? (
+                                      <span className="text-[10px] text-emerald-700 font-medium">Terisi</span>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-400">Belum diisi</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-3 text-slate-500 text-[11px] font-mono">
+                                    {scoreObj?.date || '-'}
+                                  </td>
+                                  <td className="py-2 px-3 text-slate-600 text-[11px] max-w-xs truncate">
+                                    {scoreObj?.notes || '-'}
+                                  </td>
+                                  <td className="py-2 px-3 text-center">
+                                    <div className="flex items-center justify-center gap-1">
+                                      {canEditScores && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setDetailInputType(col);
+                                            setDetailInputValue(val !== null ? String(val) : '');
+                                            setDetailInputNotes(scoreObj?.notes || '');
+                                            setDetailInputDate(scoreObj?.date || new Date().toISOString().split('T')[0]);
+                                          }}
+                                          className="p-1 text-slate-400 hover:text-indigo-600 transition cursor-pointer"
+                                          title="Ubah nilai di form bawah"
+                                        >
+                                          <Edit2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                      {canEditScores && scoreObj && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteScore(scoreObj)}
+                                          className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                                          title="Hapus nilai"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* SECTION: 5 ULANGAN HARIAN DETAIL TABLE */}
+                    <div className="border border-emerald-100 rounded-xl overflow-hidden bg-white shadow-2xs">
+                      <div className="px-4 py-2.5 bg-emerald-50/70 border-b border-emerald-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-emerald-950 uppercase tracking-wider">
+                            Rincian 5 Ulangan Harian (UH)
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-emerald-100 text-emerald-800">
+                            Bobot: 20%
+                          </span>
+                        </div>
+                        <div className="text-xs font-semibold text-emerald-900">
+                          Terisi: <strong>{summary.uhFilledCount}</strong> / 5 &bull; Rata-rata:{' '}
+                          <strong className="text-emerald-700 text-sm">{summary.uhAverage ?? '-'}</strong>
+                          {summary.uhAverage !== null && (
+                            <span className="text-[11px] text-slate-500 ml-1">
+                              (Kontribusi: {(summary.uhAverage * 0.20).toFixed(2)})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs divide-y divide-slate-100">
+                          <thead className="bg-slate-50 text-[10px] font-semibold text-slate-600 uppercase">
+                            <tr>
+                              <th className="py-2 px-3">Kolom</th>
+                              <th className="py-2 px-3 text-center">Nilai</th>
+                              <th className="py-2 px-3">Status</th>
+                              <th className="py-2 px-3">Tanggal</th>
+                              <th className="py-2 px-3">Catatan</th>
+                              <th className="py-2 px-3 text-center">Aksi</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {UH_COLUMNS.map((col, idx) => {
+                              const val = summary.uhList[idx];
+                              const scoreObj = summary.scoresList.find((s) => isExactScoreTypeMatch(s.type, col));
+
+                              return (
+                                <tr key={col} className="hover:bg-slate-50/60 transition">
+                                  <td className="py-2 px-3 font-semibold text-slate-900">{col}</td>
+                                  <td className="py-2 px-3 text-center font-bold">
+                                    {val !== null ? (
+                                      <span className="inline-flex px-2 py-0.5 rounded text-emerald-800 bg-emerald-50 font-bold">
+                                        {val}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-300 font-light">-</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    {val !== null ? (
+                                      <span className="text-[10px] text-emerald-700 font-medium">Terisi</span>
+                                    ) : (
+                                      <span className="text-[10px] text-slate-400">Belum diisi</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-3 text-slate-500 text-[11px] font-mono">
+                                    {scoreObj?.date || '-'}
+                                  </td>
+                                  <td className="py-2 px-3 text-slate-600 text-[11px] max-w-xs truncate">
+                                    {scoreObj?.notes || '-'}
+                                  </td>
+                                  <td className="py-2 px-3 text-center">
+                                    <div className="flex items-center justify-center gap-1">
+                                      {canEditScores && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setDetailInputType(col);
+                                            setDetailInputValue(val !== null ? String(val) : '');
+                                            setDetailInputNotes(scoreObj?.notes || '');
+                                            setDetailInputDate(scoreObj?.date || new Date().toISOString().split('T')[0]);
+                                          }}
+                                          className="p-1 text-slate-400 hover:text-emerald-600 transition cursor-pointer"
+                                          title="Ubah nilai di form bawah"
+                                        >
+                                          <Edit2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                      {canEditScores && scoreObj && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteScore(scoreObj)}
+                                          className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                                          title="Hapus nilai"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* SECTION: STS & SAS CARD */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* STS */}
+                      <div className="p-3.5 rounded-xl border border-amber-200/80 bg-white shadow-2xs space-y-2">
+                        <div className="flex items-center justify-between border-b border-amber-100 pb-1.5">
+                          <span className="font-bold text-xs text-amber-950 uppercase">STS (Tengah Semester)</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded font-semibold bg-amber-100 text-amber-800">
+                            Bobot: 25%
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-[11px] text-slate-500">Nilai: </span>
+                            <strong className="text-sm font-bold text-amber-900">
+                              {summary.stsScore !== null ? summary.stsScore : '-'}
+                            </strong>
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            Kontribusi: <strong className="text-amber-800">{summary.stsScore !== null ? (summary.stsScore * 0.25).toFixed(2) : '-'}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SAS */}
+                      <div className="p-3.5 rounded-xl border border-purple-200/80 bg-white shadow-2xs space-y-2">
+                        <div className="flex items-center justify-between border-b border-purple-100 pb-1.5">
+                          <span className="font-bold text-xs text-purple-950 uppercase">SAS (Akhir Semester)</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded font-semibold bg-purple-100 text-purple-800">
+                            Bobot: 40%
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-[11px] text-slate-500">Nilai: </span>
+                            <strong className="text-sm font-bold text-purple-900">
+                              {summary.sasScore !== null ? summary.sasScore : '-'}
+                            </strong>
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            Kontribusi: <strong className="text-purple-800">{summary.sasScore !== null ? (summary.sasScore * 0.40).toFixed(2) : '-'}</strong>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SECTION: AUDIT RUMUS PENILAIAN */}
+                    <div className="p-4 rounded-xl bg-slate-900 text-white space-y-2 text-xs">
+                      <div className="font-bold text-slate-200 flex items-center gap-2">
+                        <Calculator className="w-4 h-4 text-indigo-400" />
+                        <span>Audit Rumus Nilai Akhir:</span>
+                      </div>
+                      <p className="font-mono text-[11px] text-indigo-200 bg-white/5 p-2 rounded-lg leading-relaxed">
+                        Nilai Akhir = (Rata-rata Tugas × 15%) + (Rata-rata UH × 20%) + (STS × 25%) + (SAS × 40%)
+                        <br />
+                        {summary.isComplete ? (
+                          <span className="text-emerald-300 font-bold">
+                            = ({summary.tugasAverage} × 15%) + ({summary.uhAverage} × 20%) + ({summary.stsScore} × 25%) + ({summary.sasScore} × 40%) = {summary.formattedFinalScore}
+                          </span>
+                        ) : (
+                          <span className="text-amber-300">
+                            Status: Belum Lengkap. Komponen belum terisi: {summary.missingComponents.join(', ')}.
+                            Nilai akhir belum diterbitkan karena komponen belum terpenuhi (bobot tidak diubah dan kolom kosong tidak dianggap 0).
+                          </span>
+                        )}
+                      </p>
+                    </div>
+
+                    {/* SECTION: FORM INPUT CEPAT LANGSUNG DI MODAL RINCIAN */}
+                    {canEditScores && (
+                      <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-50/90 to-slate-50 border border-indigo-200 space-y-3">
                         <div className="flex items-center justify-between">
                           <h4 className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
                             <Edit2 className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>Input / Ubah Nilai Siswa</span>
+                            <span>Input / Ubah Nilai Komponen Spesifik</span>
                           </h4>
                           <span className="text-[11px] font-medium text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-md">
-                            {currentSubject?.name} • KKM: {effectiveCurrentKkm}
+                            KKM: {effectiveCurrentKkm}
                           </span>
                         </div>
 
@@ -1804,19 +2889,32 @@ export const ScoresView: React.FC = () => {
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                               <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                                Jenis / Komponen Nilai <span className="text-rose-500">*</span>
+                                Pilih Kolom Nilai <span className="text-rose-500">*</span>
                               </label>
                               <select
                                 id="detail-select-type"
                                 value={detailInputType}
                                 onChange={(e) => setDetailInputType(e.target.value)}
-                                className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+                                className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white font-medium text-slate-800 focus:ring-2 focus:ring-indigo-600 focus:outline-none cursor-pointer"
                               >
-                                {enabledComponents.map((comp) => (
-                                  <option key={comp.code} value={comp.code}>
-                                    {comp.name} {currentAcademicSetting.calculationMethod === 'WEIGHTED' && comp.weight > 0 ? `(${comp.weight}%)` : ''}
-                                  </option>
-                                ))}
+                                <optgroup label="10 Tugas (Bobot 15%)">
+                                  {TUGAS_COLUMNS.map((col) => (
+                                    <option key={col} value={col}>
+                                      {col}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                                <optgroup label="5 Ulangan Harian (Bobot 20%)">
+                                  {UH_COLUMNS.map((col) => (
+                                    <option key={col} value={col}>
+                                      {col}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                                <optgroup label="Sumatif">
+                                  <option value="STS">STS (25%)</option>
+                                  <option value="SAS">SAS (40%)</option>
+                                </optgroup>
                               </select>
                             </div>
 
@@ -1832,7 +2930,7 @@ export const ScoresView: React.FC = () => {
                                 step="0.5"
                                 value={detailInputValue}
                                 onChange={(e) => setDetailInputValue(e.target.value)}
-                                placeholder="Contoh: 85"
+                                placeholder="Contoh: 85 (0 sah)"
                                 className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white font-semibold text-slate-900 focus:ring-2 focus:ring-indigo-600 focus:outline-none"
                                 required
                               />
@@ -1883,142 +2981,7 @@ export const ScoresView: React.FC = () => {
                           </div>
                         </form>
                       </div>
-                    ) : (
-                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
-                        <span>Mode Hanya Lihat: Anda tidak memiliki penugasan mengajar aktif untuk mata pelajaran ini sehingga tidak dapat menginput atau mengubah nilai.</span>
-                      </div>
                     )}
-
-                    {/* Breakdown by Academic Components */}
-                    <div className="space-y-3">
-                      {currentAcademicSetting.components.map((comp) => {
-                        const items = summary.scoresList.filter((s) => matchesScoreType(comp.code, s.type));
-                        const avgVal = summary.componentScores[comp.code];
-
-                        return (
-                          <div
-                            key={comp.code}
-                            className={`border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs ${
-                              !comp.enabled ? 'opacity-65 bg-slate-50/70 border-dashed' : ''
-                            }`}
-                          >
-                            <div className="px-3.5 py-2.5 bg-slate-50/70 border-b border-slate-100 flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-xs text-slate-800">
-                                  {comp.name}
-                                </span>
-                                {!comp.enabled && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold border border-amber-200">
-                                    Nonaktif (Tidak Dihitung)
-                                  </span>
-                                )}
-                                {comp.enabled && currentAcademicSetting.calculationMethod === 'WEIGHTED' && comp.weight > 0 && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-semibold border border-indigo-100">
-                                    Bobot: {comp.weight}%
-                                  </span>
-                                )}
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">
-                                  {items.length} entri
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 text-xs">
-                                {canEditScores && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setDetailInputType(comp.code);
-                                      const existing = items[0];
-                                      if (existing) {
-                                        setDetailInputValue(String(existing.value));
-                                        setDetailInputNotes(existing.notes || '');
-                                        setDetailInputDate(existing.date || new Date().toISOString().split('T')[0]);
-                                      } else {
-                                        setDetailInputValue('');
-                                        setDetailInputNotes('');
-                                        setDetailInputDate(new Date().toISOString().split('T')[0]);
-                                      }
-                                    }}
-                                    className="text-[10px] px-2 py-0.5 rounded bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-semibold transition cursor-pointer"
-                                  >
-                                    + Input {comp.name}
-                                  </button>
-                                )}
-                                <div>
-                                  <span className="text-slate-500 text-[11px] mr-1">Rata-rata:</span>
-                                  <strong className={`font-semibold ${avgVal !== null && avgVal !== undefined ? 'text-indigo-600' : 'text-slate-400'}`}>
-                                    {avgVal !== null && avgVal !== undefined ? avgVal : '-'}
-                                  </strong>
-                                </div>
-                              </div>
-                            </div>
-
-                            {items.length === 0 ? (
-                              <div className="p-3 text-center text-xs text-slate-400 italic">
-                                Belum ada catatan nilai {comp.name}
-                              </div>
-                            ) : (
-                              <div className="divide-y divide-slate-100">
-                                {items.map((sc) => (
-                                  <div
-                                    key={sc.id}
-                                    className="p-3 flex items-center justify-between hover:bg-slate-50/60 text-xs"
-                                  >
-                                    <div className="space-y-0.5">
-                                      <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                                        <CalendarDays className="w-3 h-3 text-slate-400" />
-                                        <span>{sc.date || '-'}</span>
-                                      </div>
-                                      {sc.notes ? (
-                                        <p className="text-[11px] text-slate-700 font-medium">
-                                          "{sc.notes}"
-                                        </p>
-                                      ) : (
-                                        <p className="text-[10px] text-slate-400 italic">
-                                          Tanpa catatan
-                                        </p>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                      <span className="text-sm font-bold text-slate-900 bg-slate-100 px-2.5 py-1 rounded-lg">
-                                        {sc.value}
-                                      </span>
-                                      {canEditScores && (
-                                        <div className="flex items-center gap-1">
-                                          <button
-                                            onClick={() => {
-                                              setDetailInputType(sc.type);
-                                              setDetailInputValue(String(sc.value));
-                                              setDetailInputNotes(sc.notes || '');
-                                              setDetailInputDate(sc.date || new Date().toISOString().split('T')[0]);
-                                            }}
-                                            className="text-slate-400 hover:text-indigo-600 transition p-1 cursor-pointer"
-                                            title="Ubah Nilai Ini di Form"
-                                          >
-                                            <Edit2 className="w-3.5 h-3.5" />
-                                          </button>
-                                          <button
-                                            onClick={() => handleDeleteScore(sc)}
-                                            className="text-slate-400 hover:text-rose-600 transition p-1 cursor-pointer"
-                                            title="Hapus Nilai"
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <p className="text-[11px] text-slate-400 text-center italic">
-                      * Rata-rata dihitung murni dari komponen nilai yang sudah tersedia (tanpa pembobotan).
-                    </p>
                   </div>
                 );
               })()}
@@ -2038,7 +3001,7 @@ export const ScoresView: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 3: INPUT / EDIT NILAI EKSTRAKURIKULER */}
+      {/* MODAL 4: INPUT / EDIT NILAI EKSTRAKURIKULER */}
       {/* ========================================================================= */}
       {isEksInputModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
@@ -2157,7 +3120,7 @@ export const ScoresView: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 4: RINCIAN EKSTRAKURIKULER */}
+      {/* MODAL 5: RINCIAN EKSTRAKURIKULER */}
       {/* ========================================================================= */}
       {eksDetailStudentId && selectedStudentForEksDetail && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
@@ -2256,7 +3219,10 @@ export const ScoresView: React.FC = () => {
           </div>
         </div>
       )}
-      {/* Score Deletion Confirmation Modal */}
+
+      {/* ========================================================================= */}
+      {/* MODAL 6: KONFIRMASI HAPUS NILAI */}
+      {/* ========================================================================= */}
       {isDeleteScoreModalOpen && scoreToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-fade-in">

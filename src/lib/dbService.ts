@@ -78,8 +78,11 @@ import {
   SchoolIdentity,
   PesantrenFacilityItem,
   EducationFacilitiesMap,
-  EducationFacilityLevel
+  EducationFacilityLevel,
+  UserRole,
+  hasRole
 } from '../types';
+import { normalizeScoreType } from './academicCalculation';
 import {
   INITIAL_ACADEMIC_YEARS,
   INITIAL_TEACHERS,
@@ -302,35 +305,8 @@ export function normalizeScore(raw: any): Score {
     ayId = sem === 'Genap' ? 'ay_2025_2026_2' : 'ay_2025_2026_1';
   }
 
-  let type = String(raw.type || raw.jenisNilai || raw.componentCode || 'UH').trim();
-  const upperType = type.toUpperCase();
-  if (
-    upperType === 'UTS' ||
-    upperType === 'PTS' ||
-    upperType === 'SUMATIF TENGAH SEMESTER' ||
-    upperType === 'PENILAIAN TENGAH SEMESTER' ||
-    upperType.startsWith('STS')
-  ) {
-    type = 'STS';
-  } else if (
-    upperType === 'UAS' ||
-    upperType === 'PAS' ||
-    upperType === 'PAT' ||
-    upperType === 'SUMATIF AKHIR SEMESTER' ||
-    upperType === 'PENILAIAN AKHIR SEMESTER' ||
-    upperType.startsWith('SAS')
-  ) {
-    type = 'SAS';
-  } else if (
-    upperType === 'PH' ||
-    upperType === 'ULANGAN HARIAN' ||
-    upperType === 'FORMATIF' ||
-    upperType.startsWith('UH')
-  ) {
-    type = 'UH';
-  } else if (upperType === 'PR' || upperType === 'PROJEK' || upperType.startsWith('TUGAS')) {
-    type = 'Tugas';
-  }
+  const rawType = String(raw.type || raw.jenisNilai || raw.componentCode || 'Tugas 1').trim();
+  const type = normalizeScoreType(rawType);
 
   const result: Score = {
     id: String(raw.id || `sc_${Date.now()}`),
@@ -1539,7 +1515,7 @@ export function validateTeacherAssignmentAuth(
  * Throws or returns an authorization result conforming to least privilege access control.
  */
 export function assertTeacherScoreAccess(
-  userRole: string | null | undefined,
+  userOrRole: Partial<UserProfile> | UserRole | string | null | undefined,
   currentTeacherId: string | null | undefined,
   assignments: TeacherAssignment[],
   score: {
@@ -1552,15 +1528,15 @@ export function assertTeacherScoreAccess(
   activeYear?: { id: string; name: string; semester: 'Ganjil' | 'Genap' } | null
 ): { allowed: boolean; reason?: string } {
   // ADMIN has full administrative oversight
-  if (userRole === 'ADMIN') {
+  if (hasRole(userOrRole, 'ADMIN')) {
     return { allowed: true };
   }
 
   // Both GURU_MAPEL and WALI_KELAS who hold active teaching assignments can manage scores
-  if (userRole !== 'GURU_MAPEL' && userRole !== 'WALI_KELAS') {
+  if (!hasRole(userOrRole, 'GURU_MAPEL') && !hasRole(userOrRole, 'WALI_KELAS')) {
     return {
       allowed: false,
-      reason: `Akses Ditolak (403 Forbidden): Peran '${userRole || 'Tamu'}' tidak memiliki wewenang untuk mengelola nilai siswa.`
+      reason: `Akses Ditolak (403 Forbidden): Peran Anda tidak memiliki wewenang untuk mengelola nilai siswa.`
     };
   }
 
@@ -1606,12 +1582,12 @@ export function assertTeacherScoreAccess(
  * then falling back to matching email, nip, or user id in teachers list.
  */
 export function getEffectiveTeacherId(
-  currentUser: { id?: string; teacherId?: string | null; email?: string | null; nip?: string | null; name?: string; displayName?: string } | null | undefined,
+  currentUser: { id?: string; teacherId?: string | null; email?: string | null; nip?: string | null; name?: string; displayName?: string; role?: UserRole; roles?: UserRole[] } | null | undefined,
   role: string | null | undefined,
   teachers: Teacher[]
 ): string | null {
   if (currentUser?.teacherId) return currentUser.teacherId;
-  if (role === 'GURU_MAPEL' || role === 'WALI_KELAS' || role === 'KEPALA_SEKOLAH') {
+  if (hasRole(currentUser, 'GURU_MAPEL') || hasRole(currentUser, 'WALI_KELAS') || hasRole(currentUser, 'KEPALA_SEKOLAH') || role === 'GURU_MAPEL' || role === 'WALI_KELAS' || role === 'KEPALA_SEKOLAH') {
     const cleanEmail = currentUser?.email?.toLowerCase().trim();
     const cleanNip = currentUser?.nip?.trim();
     const cleanName = (currentUser?.displayName || currentUser?.name || '').toLowerCase().trim();

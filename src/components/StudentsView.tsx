@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Student } from '../types';
+import { Student, hasRole, hasAnyRole } from '../types';
 import { useMasterData } from '../context/MasterDataContext';
 import { useAuth } from '../context/AuthContext';
 import { getEffectiveTeacherId, getActiveTeacherAssignments } from '../lib/dbService';
@@ -64,10 +64,13 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
   const [reportNoteSuccess, setReportNoteSuccess] = useState<string>('');
   const [reportNoteError, setReportNoteError] = useState<string>('');
 
-  const canEditReportNote =
-    currentRole === 'ADMIN' ||
-    currentRole === 'WALI_KELAS' ||
-    currentRole === 'KEPALA_SEKOLAH';
+  // Multi-role permissions
+  const isAdmin = hasRole(currentUser, 'ADMIN') || currentRole === 'ADMIN';
+  const isHeadOrMudir = hasAnyRole(currentUser, ['MUDIR', 'KEPALA_SEKOLAH']) || currentRole === 'MUDIR' || currentRole === 'KEPALA_SEKOLAH';
+  const isWaliKelas = hasRole(currentUser, 'WALI_KELAS') || currentRole === 'WALI_KELAS';
+  const isGuruMapel = hasRole(currentUser, 'GURU_MAPEL') || currentRole === 'GURU_MAPEL';
+
+  const canEditReportNote = isAdmin || isHeadOrMudir || isWaliKelas;
 
   // Role-based data access restriction (ID-based)
   const effectiveTeacherId = useMemo(() => {
@@ -76,7 +79,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
 
   // 1. Wali Kelas: strictly filter by currentUser.teacherId -> class.teacherId / homeroomTeacherId
   const homeroomClass = useMemo(() => {
-    if (currentRole !== 'WALI_KELAS') return null;
+    if (!isWaliKelas) return null;
     return (
       (classes || []).find(
         (c) =>
@@ -89,39 +92,41 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
       ) ||
       null
     );
-  }, [currentRole, classes, effectiveTeacherId, activeAcademicYear]);
+  }, [isWaliKelas, classes, effectiveTeacherId, activeAcademicYear]);
 
   // 2. Guru Mapel: strictly filter by currentUser.teacherId -> teacherAssignments.teacherId -> active academicYearId & semester
   const myAssignments = useMemo(() => {
-    if (currentRole !== 'GURU_MAPEL') return [];
+    if (!isGuruMapel) return [];
     return getActiveTeacherAssignments(teacherAssignments, effectiveTeacherId, activeAcademicYear);
-  }, [currentRole, teacherAssignments, effectiveTeacherId, activeAcademicYear]);
+  }, [isGuruMapel, teacherAssignments, effectiveTeacherId, activeAcademicYear]);
 
   const taughtClassIds = useMemo(() => {
     return Array.from(new Set(myAssignments.map((a) => a.classId)));
   }, [myAssignments]);
 
-  // Determine permitted students and available class dropdown options
+  // Determine permitted students and available class dropdown options (Combined for multi-role)
   const { accessibleStudents, selectableClasses } = useMemo(() => {
-    let accStudents: Student[] = [];
-    let selClasses = classes || [];
-
-    if (currentRole === 'WALI_KELAS') {
-      accStudents = homeroomClass
-        ? (students || []).filter((s) => s && s.classId === homeroomClass.id)
-        : [];
-      selClasses = homeroomClass && homeroomClass.isActive !== false ? [homeroomClass] : [];
-    } else if (currentRole === 'GURU_MAPEL') {
-      accStudents = (students || []).filter((s) => s && taughtClassIds.includes(s.classId));
-      selClasses = (classes || []).filter((c) => c && c.isActive !== false && taughtClassIds.includes(c.id));
-    } else {
-      // ADMIN and KEPALA_SEKOLAH have access to all students, and active classes for selection
-      accStudents = students || [];
-      selClasses = (classes || []).filter((c) => c && c.isActive !== false);
+    if (isAdmin || isHeadOrMudir) {
+      // ADMIN and KEPALA_SEKOLAH/MUDIR have access to all students, and active classes for selection
+      return {
+        accessibleStudents: students || [],
+        selectableClasses: (classes || []).filter((c) => c && c.isActive !== false),
+      };
     }
 
+    const permittedClassIds = new Set<string>();
+    if (isWaliKelas && homeroomClass) {
+      permittedClassIds.add(homeroomClass.id);
+    }
+    if (isGuruMapel) {
+      taughtClassIds.forEach((id) => permittedClassIds.add(id));
+    }
+
+    const accStudents = (students || []).filter((s) => s && permittedClassIds.has(s.classId));
+    const selClasses = (classes || []).filter((c) => c && c.isActive !== false && permittedClassIds.has(c.id));
+
     return { accessibleStudents: accStudents, selectableClasses: selClasses };
-  }, [currentRole, homeroomClass, students, classes, taughtClassIds]);
+  }, [isAdmin, isHeadOrMudir, isWaliKelas, isGuruMapel, homeroomClass, students, classes, taughtClassIds]);
 
   const [formData, setFormData] = useState<{
     id: string;
@@ -401,7 +406,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
           </p>
         </div>
 
-        {currentRole === 'ADMIN' && (
+        {isAdmin && (
           <button
             onClick={openAddModal}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-xs self-start sm:self-auto cursor-pointer"
@@ -488,7 +493,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
               onChange={(e) => setSelectedClass(e.target.value)}
               className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-slate-50 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-600"
             >
-              {currentRole !== 'WALI_KELAS' && <option value="ALL">Semua Kelas</option>}
+              {(!isWaliKelas || isGuruMapel || isAdmin || isHeadOrMudir) && <option value="ALL">Semua Kelas</option>}
               {(selectableClasses || []).map((c) => (
                 <option key={c.id} value={c.id}>
                   Kelas {c.name}
@@ -588,7 +593,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
                             <FileText className="w-3 h-3" />
                             Catatan Raport
                           </button>
-                          {currentRole === 'ADMIN' && (
+                          {isAdmin && (
                             <button
                               onClick={() => openEditModal(s)}
                               className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
@@ -626,7 +631,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
       </div>
 
       {/* Modal Add/Edit (Admin only) */}
-      {isModalOpen && currentRole === 'ADMIN' && (
+      {isModalOpen && isAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 my-8 animate-scale-in">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -947,7 +952,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ userRole }) => {
               </div>
 
               {/* Status Action Switcher (Admin only) */}
-              {currentRole === 'ADMIN' && (
+              {isAdmin && (
                 <div className="pt-3 border-t border-slate-100">
                   <span className="text-[11px] font-semibold text-slate-500 block mb-1.5">
                     Ubah Cepat Status Kesiswaan:

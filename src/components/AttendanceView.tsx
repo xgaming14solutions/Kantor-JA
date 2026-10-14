@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Attendance } from '../types';
+import { Attendance, hasRole, hasAnyRole } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
 import { getEffectiveTeacherId, getActiveTeacherAssignments } from '../lib/dbService';
@@ -22,36 +22,34 @@ export const AttendanceView: React.FC = () => {
     return getActiveTeacherAssignments(teacherAssignments, effectiveTeacherId, activeAcademicYear);
   }, [teacherAssignments, effectiveTeacherId, activeAcademicYear]);
 
-  const isReadOnlySupervisor = role === 'MUDIR' || role === 'mudir';
+  const isReadOnlySupervisor =
+    hasRole(currentUser || role, 'MUDIR') &&
+    !hasAnyRole(currentUser || role, ['ADMIN', 'KEPALA_SEKOLAH', 'WALI_KELAS', 'GURU_MAPEL']);
 
-  // 3. Resolve Authorized Classes strictly: GURU_MAPEL only sees classes in their active assignments
+  // 3. Resolve Authorized Classes strictly: combines access across all roles
   const authorizedClasses = useMemo(() => {
-    if (
-      role === 'ADMIN' ||
-      role === 'KEPALA_SEKOLAH' ||
-      role === 'MUDIR' ||
-      role === 'mudir'
-    ) {
+    if (hasAnyRole(currentUser || role, ['ADMIN', 'KEPALA_SEKOLAH', 'MUDIR'])) {
       return classes.filter((c) => c.isActive !== false);
     }
-    if (role === 'GURU_MAPEL') {
-      const taughtClassIds = new Set(myAssignments.map((a) => a.classId));
-      return classes.filter((c) => c.isActive !== false && taughtClassIds.has(c.id));
-    }
-    if (role === 'WALI_KELAS') {
+
+    const authorizedIds = new Set<string>();
+
+    if (hasRole(currentUser || role, 'WALI_KELAS')) {
       const homeroomClass = classes.find(
         (c) =>
           c.isActive !== false &&
           (c.teacherId === effectiveTeacherId || c.homeroomTeacherId === effectiveTeacherId) &&
           (activeAcademicYear ? c.academicYearId === activeAcademicYear.id : true)
       );
-      const authorizedIds = new Set<string>();
       if (homeroomClass) authorizedIds.add(homeroomClass.id);
-      myAssignments.forEach((a) => authorizedIds.add(a.classId));
-      return classes.filter((c) => c.isActive !== false && authorizedIds.has(c.id));
     }
-    return [];
-  }, [role, classes, myAssignments, effectiveTeacherId, activeAcademicYear]);
+
+    if (hasRole(currentUser || role, 'GURU_MAPEL') || hasRole(currentUser || role, 'WALI_KELAS')) {
+      myAssignments.forEach((a) => authorizedIds.add(a.classId));
+    }
+
+    return classes.filter((c) => c.isActive !== false && authorizedIds.has(c.id));
+  }, [currentUser, role, classes, myAssignments, effectiveTeacherId, activeAcademicYear]);
 
   // 4. Auto-sync selected class
   const [selectedClassId, setSelectedClassId] = useState<string>('');

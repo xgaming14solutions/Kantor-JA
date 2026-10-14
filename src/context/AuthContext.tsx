@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { UserProfile, UserRole, normalizeUserRole } from '../types';
+import { UserProfile, UserRole, normalizeUserRole, getUserRoles } from '../types';
 import { auth } from '../lib/firebase';
 import { onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth';
 import {
@@ -116,6 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   normalizeBrandDisplayName(parsedUser.displayName || parsedUser.name) ||
                   parsedUser.displayName,
                 role: normalizeUserRole(parsedUser.role, parsedUser),
+                roles: getUserRoles(parsedUser),
               };
               setCurrentUser(normalizedUser);
               localStorage.setItem('kantoja_currentUser', JSON.stringify(normalizedUser));

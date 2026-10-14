@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { UserProfile, UserRole, normalizeUserRole } from '../types';
+import {
+  UserProfile,
+  UserRole,
+  normalizeUserRole,
+  AVAILABLE_USER_ROLES,
+  getUserRoles,
+  hasRole
+} from '../types';
 import { useMasterData } from '../context/MasterDataContext';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -54,24 +61,41 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
   const [userToReset, setUserToReset] = useState<UserProfile | null>(null);
 
-  // Form states
-  const [addForm, setAddForm] = useState({
+  // Form states (Multi-Role Checkbox Enabled)
+  const [addForm, setAddForm] = useState<{
+    name: string;
+    username: string;
+    email: string;
+    password: string;
+    roles: UserRole[];
+    teacherId: string;
+    isActive: boolean;
+  }>({
     name: '',
     username: '',
     email: '',
     password: '',
-    role: 'GURU_MAPEL' as UserRole,
+    roles: ['GURU_MAPEL'],
     teacherId: '',
     isActive: true,
   });
 
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<{
+    id: string;
+    userId: string;
+    name: string;
+    username: string;
+    email: string;
+    roles: UserRole[];
+    teacherId: string;
+    isActive: boolean;
+  }>({
     id: '',
     userId: '',
     name: '',
     username: '',
     email: '',
-    role: 'GURU_MAPEL' as UserRole,
+    roles: ['GURU_MAPEL'],
     teacherId: '',
     isActive: true,
   });
@@ -82,8 +106,9 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resetSent, setResetSent] = useState(false);
 
-  // Access check: Only ADMIN can access
-  if (userRole !== 'ADMIN') {
+  // Access check: Only ADMIN can access (supports multi-role)
+  const isAdmin = hasRole(currentUser, 'ADMIN') || userRole === 'ADMIN';
+  if (!isAdmin) {
     return (
       <div className="bg-white rounded-2xl border border-rose-200 p-8 text-center max-w-lg mx-auto my-12 shadow-xs">
         <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-4">
@@ -126,7 +151,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
           ? 'musyrifkesantrian@kantoja.sch.id'
           : '',
       password: '',
-      role: presetRole,
+      roles: [presetRole],
       teacherId: '',
       isActive: true,
     });
@@ -136,13 +161,14 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
 
   const handleOpenEdit = (user: UserProfile) => {
     setSelectedUser(user);
+    const existingRoles = getUserRoles(user);
     setEditForm({
       id: user.id,
       userId: user.userId || user.id,
       name: user.name || user.displayName || '',
       username: user.username || '',
       email: user.email,
-      role: normalizeUserRole(user.role, user),
+      roles: existingRoles.length > 0 ? existingRoles : [normalizeUserRole(user.role, user)],
       teacherId: user.teacherId || '',
       isActive: user.isActive !== false,
     });
@@ -221,30 +247,25 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
       return;
     }
 
-    // Role validation
-    const validRoles: UserRole[] = [
-      'ADMIN',
-      'MUDIR',
-      'mudir',
-      'KEPALA_SEKOLAH',
-      'WALI_KELAS',
-      'GURU_MAPEL',
-      'KEPALA_KESANTRIAN',
-      'MUSYRIF_KESANTRIAN',
-      'PETUGAS_KESANTRIAN',
-    ];
-    if (!addForm.role || !validRoles.includes(addForm.role)) {
-      setFormError('Role hak akses pengguna tidak valid.');
+    // Multi-role selection validation
+    if (!addForm.roles || addForm.roles.length === 0) {
+      setFormError('Minimal satu role hak akses wajib dipilih.');
       return;
     }
 
-    // Role-teacher validation: WALI_KELAS and GURU_MAPEL MUST have teacherId
-    if (addForm.role === 'WALI_KELAS' || addForm.role === 'GURU_MAPEL') {
+    const normalizedRoles = Array.from(new Set(addForm.roles.map((r) => normalizeUserRole(r))));
+    const primaryRole =
+      normalizedRoles.find((r) => r === 'ADMIN') ||
+      normalizedRoles.find((r) => r === 'MUDIR') ||
+      normalizedRoles.find((r) => r === 'KEPALA_SEKOLAH') ||
+      normalizedRoles[0];
+
+    // Role-teacher validation: WALI_KELAS or GURU_MAPEL MUST have teacherId
+    const requiresTeacher = normalizedRoles.includes('WALI_KELAS') || normalizedRoles.includes('GURU_MAPEL');
+    if (requiresTeacher) {
       if (!addForm.teacherId || addForm.teacherId.trim() === '') {
         setFormError(
-          `Untuk peran ${
-            addForm.role === 'WALI_KELAS' ? 'Wali Kelas' : 'Guru Mapel'
-          }, Guru Terkait (teacherId) wajib dipilih dari master data.`
+          'Untuk pengguna yang memiliki peran Wali Kelas atau Guru Mapel, Guru Terkait (teacherId) wajib dipilih dari master data.'
         );
         return;
       }
@@ -258,7 +279,8 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
         username: cleanUsername,
         email: cleanEmail,
         password: addForm.password,
-        role: addForm.role,
+        role: primaryRole,
+        roles: normalizedRoles,
         teacherId: addForm.teacherId ? addForm.teacherId.trim() : null,
         nip: linkedTeacher?.nip,
         phone: linkedTeacher?.phone,
@@ -280,10 +302,12 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
 
       const userWithSubRole: UserProfile = {
         ...res.user,
+        role: primaryRole,
+        roles: normalizedRoles,
         kesantrianRole:
-          addForm.role === 'MUSYRIF_KESANTRIAN'
+          normalizedRoles.includes('MUSYRIF_KESANTRIAN')
             ? 'MUSYRIF_KESANTRIAN'
-            : addForm.role === 'KEPALA_KESANTRIAN' || addForm.role === 'PETUGAS_KESANTRIAN'
+            : normalizedRoles.includes('KEPALA_KESANTRIAN')
             ? 'KEPALA_KESANTRIAN'
             : undefined,
       };
@@ -296,14 +320,14 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
         username: '',
         email: '',
         password: '',
-        role: 'GURU_MAPEL',
+        roles: ['GURU_MAPEL'],
         teacherId: '',
         isActive: true,
       });
 
       setIsAddModalOpen(false);
       setNotice(
-        `Akun ${res.user.name} (@${res.user.username}) dengan email ${res.user.email} dan role ${res.user.role} berhasil dibuat di Firebase Auth (UID: ${res.user.userId}) dan tersimpan di Firestore.`
+        `Akun ${res.user.name} (@${res.user.username}) dengan email ${res.user.email} dan role [${normalizedRoles.join(', ')}] berhasil dibuat di Firebase Auth (UID: ${res.user.userId}) dan tersimpan di Firestore.`
       );
       setTimeout(() => setNotice(''), 6000);
     } catch (err: any) {
@@ -313,7 +337,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
     }
   };
 
-  // Submit Edit User
+  // Submit Edit User (DOES NOT TOUCH PASSWORD OR AUTH UID)
   const handleSubmitEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
@@ -336,13 +360,25 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
       return;
     }
 
+    // Multi-role validation
+    if (!editForm.roles || editForm.roles.length === 0) {
+      setFormError('Minimal satu role hak akses wajib dipilih.');
+      return;
+    }
+
+    const normalizedRoles = Array.from(new Set(editForm.roles.map((r) => normalizeUserRole(r))));
+    const primaryRole =
+      normalizedRoles.find((r) => r === 'ADMIN') ||
+      normalizedRoles.find((r) => r === 'MUDIR') ||
+      normalizedRoles.find((r) => r === 'KEPALA_SEKOLAH') ||
+      normalizedRoles[0];
+
     // Role-teacher validation
-    if (editForm.role === 'WALI_KELAS' || editForm.role === 'GURU_MAPEL') {
+    const requiresTeacher = normalizedRoles.includes('WALI_KELAS') || normalizedRoles.includes('GURU_MAPEL');
+    if (requiresTeacher) {
       if (!editForm.teacherId) {
         setFormError(
-          `Untuk peran ${
-            editForm.role === 'WALI_KELAS' ? 'Wali Kelas' : 'Guru Mapel'
-          }, Guru Terkait wajib dipilih.`
+          'Untuk pengguna yang memiliki peran Wali Kelas atau Guru Mapel, Guru Terkait (teacherId) wajib dipilih dari master data.'
         );
         return;
       }
@@ -352,20 +388,24 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
     try {
       const linkedTeacher = teachers.find((t) => t.id === editForm.teacherId);
       const updatedProfile: UserProfile = {
+        ...selectedUser,
         id: editForm.id,
         userId: editForm.userId || editForm.id,
+        uid: selectedUser?.uid || editForm.userId || editForm.id,
         name: editForm.name.trim(),
         displayName: editForm.name.trim(),
         username: cleanUsername,
         email: editForm.email.trim().toLowerCase(),
-        role: editForm.role,
+        role: primaryRole,
+        roles: normalizedRoles,
+        roleCode: primaryRole.toLowerCase(),
         kesantrianRole:
-          editForm.role === 'MUSYRIF_KESANTRIAN'
+          normalizedRoles.includes('MUSYRIF_KESANTRIAN')
             ? 'MUSYRIF_KESANTRIAN'
-            : editForm.role === 'KEPALA_KESANTRIAN' || editForm.role === 'PETUGAS_KESANTRIAN'
+            : normalizedRoles.includes('KEPALA_KESANTRIAN')
             ? 'KEPALA_KESANTRIAN'
             : undefined,
-        teacherId: editForm.teacherId || undefined,
+        teacherId: editForm.teacherId ? editForm.teacherId.trim() : null,
         nip: linkedTeacher?.nip || selectedUser?.nip,
         phone: linkedTeacher?.phone || selectedUser?.phone,
         isActive: editForm.isActive,
@@ -380,7 +420,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
       }
 
       setIsEditModalOpen(false);
-      setNotice(`Akun ${updatedProfile.name} berhasil diperbarui.`);
+      setNotice(`Akun ${updatedProfile.name} berhasil diperbarui dengan role: ${normalizedRoles.join(', ')}.`);
       setTimeout(() => setNotice(''), 4000);
     } catch (err: any) {
       setFormError(err.message || 'Gagal memperbarui akun.');
@@ -482,24 +522,24 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
       u.email.toLowerCase().includes(q) ||
       (u.teacherId && u.teacherId.toLowerCase().includes(q));
 
+    const userRoles = getUserRoles(u);
     const matchesRole =
       roleFilter === 'ALL' ||
+      hasRole(u, roleFilter) ||
+      userRoles.includes(roleFilter as UserRole) ||
       u.role === roleFilter ||
-      (roleFilter === 'MUDIR' && (u.role === 'MUDIR' || u.role === 'mudir')) ||
-      (roleFilter === 'KEPALA_KESANTRIAN' &&
-        u.role === 'PETUGAS_KESANTRIAN' &&
-        u.kesantrianRole !== 'MUSYRIF_KESANTRIAN') ||
-      (roleFilter === 'MUSYRIF_KESANTRIAN' &&
-        u.role === 'PETUGAS_KESANTRIAN' &&
-        u.kesantrianRole === 'MUSYRIF_KESANTRIAN');
+      (roleFilter === 'MUDIR' && hasRole(u, 'MUDIR')) ||
+      (roleFilter === 'KEPALA_KESANTRIAN' && hasRole(u, 'KEPALA_KESANTRIAN')) ||
+      (roleFilter === 'MUSYRIF_KESANTRIAN' && hasRole(u, 'MUSYRIF_KESANTRIAN'));
+
     return matchesSearch && matchesRole;
   });
 
-  const getRoleBadge = (role: UserRole, user?: UserProfile | null) => {
-    switch (role) {
+  const renderSingleRoleBadge = (r: UserRole, user?: UserProfile | null) => {
+    switch (r) {
       case 'ADMIN':
         return (
-          <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 inline-flex items-center gap-1">
+          <span key={r} className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 inline-flex items-center gap-1 shadow-2xs">
             <Shield className="w-3 h-3 text-purple-600" />
             ADMIN
           </span>
@@ -507,28 +547,28 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
       case 'MUDIR':
       case 'mudir':
         return (
-          <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1">
+          <span key={r} className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1 shadow-2xs">
             <ShieldCheck className="w-3 h-3 text-emerald-700" />
-            MUDIR PESANTREN
+            MUDIR
           </span>
         );
       case 'KEPALA_SEKOLAH':
         return (
-          <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 inline-flex items-center gap-1">
+          <span key={r} className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 inline-flex items-center gap-1 shadow-2xs">
             <GraduationCap className="w-3 h-3 text-amber-600" />
             KEPALA SEKOLAH
           </span>
         );
       case 'WALI_KELAS':
         return (
-          <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1">
+          <span key={r} className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1 shadow-2xs">
             <UserCheck className="w-3 h-3 text-blue-600" />
             WALI KELAS
           </span>
         );
       case 'GURU_MAPEL':
         return (
-          <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+          <span key={r} className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1 shadow-2xs">
             <GraduationCap className="w-3 h-3 text-emerald-600" />
             GURU MAPEL
           </span>
@@ -536,31 +576,46 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
       case 'KEPALA_KESANTRIAN':
       case 'kepala_kesantrian':
         return (
-          <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-teal-50 text-teal-800 border border-teal-300 inline-flex items-center gap-1">
+          <span key={r} className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-teal-50 text-teal-800 border border-teal-300 inline-flex items-center gap-1 shadow-2xs">
             <ShieldCheck className="w-3 h-3 text-teal-700" />
-            KEPALA KESANTRIAN (kepala_kesantrian)
+            KEPALA KESANTRIAN
           </span>
         );
       case 'MUSYRIF_KESANTRIAN':
       case 'musyrif_kesantrian':
         return (
-          <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-cyan-50 text-cyan-800 border border-cyan-300 inline-flex items-center gap-1">
+          <span key={r} className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-cyan-50 text-cyan-800 border border-cyan-300 inline-flex items-center gap-1 shadow-2xs">
             <ShieldCheck className="w-3 h-3 text-cyan-700" />
-            MUSYRIF KESANTRIAN (musyrif_kesantrian)
+            MUSYRIF KESANTRIAN
           </span>
         );
       case 'PETUGAS_KESANTRIAN':
         return (
-          <span className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-teal-50 text-teal-700 border border-teal-200 inline-flex items-center gap-1">
+          <span key={r} className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-teal-50 text-teal-700 border border-teal-200 inline-flex items-center gap-1 shadow-2xs">
             <ShieldCheck className="w-3 h-3 text-teal-600" />
             {user?.kesantrianRole === 'MUSYRIF_KESANTRIAN'
-              ? 'MUSYRIF KESANTRIAN (musyrif_kesantrian)'
-              : 'KEPALA KESANTRIAN (kepala_kesantrian)'}
+              ? 'MUSYRIF KESANTRIAN'
+              : 'KEPALA KESANTRIAN'}
           </span>
         );
       default:
-        return null;
+        return (
+          <span key={r} className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200 inline-flex items-center gap-1">
+            {r}
+          </span>
+        );
     }
+  };
+
+  const getRoleBadge = (role: UserRole, user?: UserProfile | null) => {
+    const rolesToRender = user ? getUserRoles(user) : [role];
+    if (rolesToRender.length === 0) return renderSingleRoleBadge(role, user);
+
+    return (
+      <div className="flex flex-wrap items-center gap-1.5 max-w-xs">
+        {rolesToRender.map((r) => renderSingleRoleBadge(r, user))}
+      </div>
+    );
   };
 
   return (
@@ -808,7 +863,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                                   username: u.username || '',
                                   email: u.email || '',
                                   password: '',
-                                  role: u.role,
+                                  roles: getUserRoles(u),
                                   teacherId: u.teacherId || '',
                                   isActive: u.isActive !== false,
                                 });
@@ -973,51 +1028,66 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                 </p>
               </div>
 
-              {/* Role Dropdown */}
+              {/* Role Checkboxes (Multi-Role Enabled) */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Role Pengguna (Hak Akses) <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={addForm.role}
-                  onChange={(e) =>
-                    setAddForm({
-                      ...addForm,
-                      role: e.target.value as UserRole,
-                      teacherId:
-                        e.target.value === 'ADMIN' ||
-                        e.target.value === 'MUDIR' ||
-                        e.target.value === 'KEPALA_KESANTRIAN' ||
-                        e.target.value === 'MUSYRIF_KESANTRIAN' ||
-                        e.target.value === 'PETUGAS_KESANTRIAN'
-                          ? ''
-                          : addForm.teacherId,
-                    })
-                  }
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
-                >
-                  <option value="ADMIN">ADMIN – Administrator Sistem (Akses Penuh)</option>
-                  <option value="MUDIR">MUDIR – Pimpinan Pesantren (Mudir Pesantren)</option>
-                  <option value="KEPALA_SEKOLAH">KEPALA_SEKOLAH – Kepala Sekolah (Operasional Sekolah)</option>
-                  <option value="KEPALA_KESANTRIAN">
-                    KEPALA_KESANTRIAN – Kepala Kesantrian (Penanggung Jawab Kesantrian)
-                  </option>
-                  <option value="MUSYRIF_KESANTRIAN">
-                    MUSYRIF_KESANTRIAN – Musyrif Kesantrian (Pelaksana Harian Kesantrian)
-                  </option>
-                  <option value="WALI_KELAS">WALI_KELAS – Wali Kelas Rombel</option>
-                  <option value="GURU_MAPEL">GURU_MAPEL – Guru Mata Pelajaran</option>
-                </select>
-                {(addForm.role === 'MUDIR' || addForm.role === 'mudir') && (
-                  <p className="text-[10px] text-emerald-800 mt-1 font-medium">
-                    Mudir Pesantren adalah pimpinan tertinggi lembaga dan pengawas utama lintas unit (Akademik, Kesantrian, Tahfizh, &amp; ATK) tanpa kewenangan teknis pengelolaan akun Admin.
-                  </p>
-                )}
-                {(addForm.role === 'KEPALA_KESANTRIAN' ||
-                  addForm.role === 'MUSYRIF_KESANTRIAN' ||
-                  addForm.role === 'PETUGAS_KESANTRIAN') && (
-                  <p className="text-[10px] text-teal-700 mt-1 font-medium">
-                    Kepala Kesantrian &amp; Musyrif Kesantrian menangani seluruh santri dari Master Data Siswa (tanpa pembagian santri binaan).
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Role Pengguna (Hak Akses Multi-Jabatan) <span className="text-rose-500">*</span>
+                  </label>
+                  <span className="text-[11px] font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                    {addForm.roles.length} role dipilih
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 mb-2.5">
+                  Centang satu atau beberapa role sekaligus jika ustadz/guru memangku lebih dari satu amanah jabatan di pesantren.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  {AVAILABLE_USER_ROLES.map((roleItem) => {
+                    const isChecked = addForm.roles.includes(roleItem.id);
+                    return (
+                      <label
+                        key={roleItem.id}
+                        className={`flex items-start gap-2.5 p-2.5 rounded-lg border transition cursor-pointer select-none ${
+                          isChecked
+                            ? 'bg-white border-indigo-400 shadow-2xs'
+                            : 'bg-white/70 border-slate-200 hover:bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const newRoles = e.target.checked
+                              ? Array.from(new Set([...addForm.roles, roleItem.id]))
+                              : addForm.roles.filter((r) => r !== roleItem.id);
+                            const hasTeacher = newRoles.includes('WALI_KELAS') || newRoles.includes('GURU_MAPEL');
+                            setAddForm({
+                              ...addForm,
+                              roles: newRoles,
+                              teacherId: hasTeacher ? addForm.teacherId : '',
+                            });
+                          }}
+                          className="mt-0.5 h-4 w-4 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-semibold text-slate-900 leading-tight">
+                              {roleItem.badge}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
+                            {roleItem.description}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                {addForm.roles.length === 0 && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                    * Minimal satu role wajib dipilih untuk akun pengguna.
                   </p>
                 )}
               </div>
@@ -1027,23 +1097,13 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-semibold text-slate-700">
                     Guru Terkait
-                    {(addForm.role === 'WALI_KELAS' || addForm.role === 'GURU_MAPEL') && (
+                    {(addForm.roles.includes('WALI_KELAS') || addForm.roles.includes('GURU_MAPEL')) && (
                       <span className="text-rose-500 ml-1">* Wajib dipilih</span>
                     )}
                   </label>
-                  {(addForm.role === 'ADMIN' ||
-                    addForm.role === 'MUDIR' ||
-                    addForm.role === 'mudir' ||
-                    addForm.role === 'KEPALA_SEKOLAH' ||
-                    addForm.role === 'KEPALA_KESANTRIAN' ||
-                    addForm.role === 'MUSYRIF_KESANTRIAN' ||
-                    addForm.role === 'PETUGAS_KESANTRIAN') && (
+                  {!(addForm.roles.includes('WALI_KELAS') || addForm.roles.includes('GURU_MAPEL')) && (
                     <span className="text-[10px] text-slate-400">
-                      {addForm.role === 'KEPALA_KESANTRIAN' ||
-                      addForm.role === 'MUSYRIF_KESANTRIAN' ||
-                      addForm.role === 'PETUGAS_KESANTRIAN'
-                        ? 'Tidak diperlukan untuk Petugas Kesantrian'
-                        : 'Opsional untuk Pimpinan/Admin'}
+                      Opsional untuk Admin, Mudir, &amp; Kesantrian
                     </span>
                   )}
                 </div>
@@ -1054,7 +1114,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
                 >
                   <option value="">
-                    -- {addForm.role === 'WALI_KELAS' || addForm.role === 'GURU_MAPEL'
+                    -- {addForm.roles.includes('WALI_KELAS') || addForm.roles.includes('GURU_MAPEL')
                       ? 'Pilih Guru yang Sesuai (Wajib)'
                       : 'Tanpa Relasi Guru (Opsional)'} --
                   </option>
@@ -1188,70 +1248,82 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                 </div>
               </div>
 
-              {/* Role Dropdown */}
+              {/* Role Checkboxes (Multi-Role Enabled) */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Role Pengguna (Hak Akses) <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={editForm.role}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      role: e.target.value as UserRole,
-                      teacherId:
-                        e.target.value === 'ADMIN' ||
-                        e.target.value === 'MUDIR' ||
-                        e.target.value === 'KEPALA_KESANTRIAN' ||
-                        e.target.value === 'MUSYRIF_KESANTRIAN' ||
-                        e.target.value === 'PETUGAS_KESANTRIAN'
-                          ? ''
-                          : editForm.teacherId,
-                    })
-                  }
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
-                >
-                  <option value="ADMIN">ADMIN – Administrator Sistem (Akses Penuh)</option>
-                  <option value="MUDIR">MUDIR – Pimpinan Pesantren (Mudir Pesantren)</option>
-                  <option value="KEPALA_SEKOLAH">KEPALA_SEKOLAH – Kepala Sekolah (Operasional Sekolah)</option>
-                  <option value="KEPALA_KESANTRIAN">
-                    KEPALA_KESANTRIAN – Kepala Kesantrian (Penanggung Jawab Kesantrian)
-                  </option>
-                  <option value="MUSYRIF_KESANTRIAN">
-                    MUSYRIF_KESANTRIAN – Musyrif Kesantrian (Pelaksana Harian Kesantrian)
-                  </option>
-                  <option value="WALI_KELAS">WALI_KELAS – Wali Kelas Rombel</option>
-                  <option value="GURU_MAPEL">GURU_MAPEL – Guru Mata Pelajaran</option>
-                </select>
-                {(editForm.role === 'MUDIR' || editForm.role === 'mudir') && (
-                  <p className="text-[10px] text-emerald-800 mt-1 font-medium">
-                    Mudir Pesantren adalah pimpinan tertinggi lembaga dan pengawas utama lintas unit (Akademik, Kesantrian, Tahfizh, &amp; ATK).
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Role Pengguna (Hak Akses Multi-Jabatan) <span className="text-rose-500">*</span>
+                  </label>
+                  <span className="text-[11px] font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                    {editForm.roles.length} role dipilih
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 mb-2.5">
+                  Centang satu atau beberapa role sekaligus jika ustadz/guru memangku lebih dari satu amanah jabatan di pesantren.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  {AVAILABLE_USER_ROLES.map((roleItem) => {
+                    const isChecked = editForm.roles.includes(roleItem.id);
+                    return (
+                      <label
+                        key={roleItem.id}
+                        className={`flex items-start gap-2.5 p-2.5 rounded-lg border transition cursor-pointer select-none ${
+                          isChecked
+                            ? 'bg-white border-indigo-400 shadow-2xs'
+                            : 'bg-white/70 border-slate-200 hover:bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const newRoles = e.target.checked
+                              ? Array.from(new Set([...editForm.roles, roleItem.id]))
+                              : editForm.roles.filter((r) => r !== roleItem.id);
+                            const hasTeacher = newRoles.includes('WALI_KELAS') || newRoles.includes('GURU_MAPEL');
+                            setEditForm({
+                              ...editForm,
+                              roles: newRoles,
+                              teacherId: hasTeacher ? editForm.teacherId : '',
+                            });
+                          }}
+                          className="mt-0.5 h-4 w-4 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-semibold text-slate-900 leading-tight">
+                              {roleItem.badge}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
+                            {roleItem.description}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                {editForm.roles.length === 0 && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                    * Minimal satu role wajib dipilih untuk akun pengguna.
                   </p>
                 )}
               </div>
 
-              {/* Guru Terkait */}
+              {/* Guru Terkait (Dropdown dari master data teachers) */}
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-semibold text-slate-700">
                     Guru Terkait
-                    {(editForm.role === 'WALI_KELAS' || editForm.role === 'GURU_MAPEL') && (
+                    {(editForm.roles.includes('WALI_KELAS') || editForm.roles.includes('GURU_MAPEL')) && (
                       <span className="text-rose-500 ml-1">* Wajib dipilih</span>
                     )}
                   </label>
-                  {(editForm.role === 'ADMIN' ||
-                    editForm.role === 'MUDIR' ||
-                    editForm.role === 'mudir' ||
-                    editForm.role === 'KEPALA_SEKOLAH' ||
-                    editForm.role === 'KEPALA_KESANTRIAN' ||
-                    editForm.role === 'MUSYRIF_KESANTRIAN' ||
-                    editForm.role === 'PETUGAS_KESANTRIAN') && (
+                  {!(editForm.roles.includes('WALI_KELAS') || editForm.roles.includes('GURU_MAPEL')) && (
                     <span className="text-[10px] text-slate-400">
-                      {editForm.role === 'KEPALA_KESANTRIAN' ||
-                      editForm.role === 'MUSYRIF_KESANTRIAN' ||
-                      editForm.role === 'PETUGAS_KESANTRIAN'
-                        ? 'Tidak diperlukan untuk Petugas Kesantrian'
-                        : 'Opsional untuk Pimpinan/Admin'}
+                      Opsional untuk Admin, Mudir, &amp; Kesantrian
                     </span>
                   )}
                 </div>
@@ -1262,7 +1334,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-600 bg-white"
                 >
                   <option value="">
-                    -- {editForm.role === 'WALI_KELAS' || editForm.role === 'GURU_MAPEL'
+                    -- {editForm.roles.includes('WALI_KELAS') || editForm.roles.includes('GURU_MAPEL')
                       ? 'Pilih Guru yang Sesuai (Wajib)'
                       : 'Tanpa Relasi Guru (Opsional)'} --
                   </option>
@@ -1272,6 +1344,9 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                     </option>
                   ))}
                 </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Sistem mempertahankan <strong className="font-mono text-slate-600">teacherId</strong> untuk menjaga relasi penugasan mengajar dan kelas binaan guru yang sudah ada.
+                </p>
               </div>
 
               {/* Status Akun */}

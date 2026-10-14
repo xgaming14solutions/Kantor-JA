@@ -6,7 +6,8 @@ import {
   AssessmentComponent,
   CalculationMethod,
   RoundingOption,
-  UserRole
+  UserRole,
+  hasAnyRole
 } from '../types';
 import {
   createDefaultAcademicSetting,
@@ -108,8 +109,9 @@ export const AcademicSettingsView: React.FC<AcademicSettingsViewProps> = ({ user
     }
   }, [activeAcademicYear?.id, activeAcademicYear?.semester]);
 
-  // RBAC Permission Check
+  // RBAC Permission Check (supports multi-role)
   const hasAccess =
+    hasAnyRole(currentUser, ['KEPALA_SEKOLAH', 'ADMIN', 'MUDIR']) ||
     effectiveRole === 'KEPALA_SEKOLAH' ||
     effectiveRole === 'ADMIN' ||
     effectiveRole === 'MUDIR' ||

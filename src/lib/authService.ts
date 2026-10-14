@@ -56,10 +56,17 @@ export function normalizeBrandDisplayName(text?: string | null): string {
 }
 
 function normalizeUserBranding(u: UserProfile): UserProfile {
+  const normRole = normalizeUserRole(u.role, u);
+  const normRoles = Array.isArray(u.roles) && u.roles.length > 0
+    ? Array.from(new Set(u.roles.map((r) => normalizeUserRole(r, u))))
+    : [normRole];
+
   return {
     ...u,
     name: normalizeBrandDisplayName(u.name || u.displayName) || u.name,
     displayName: normalizeBrandDisplayName(u.displayName || u.name) || u.displayName,
+    role: normRole,
+    roles: normRoles,
   };
 }
 
@@ -726,7 +733,8 @@ export async function createUserByAdmin(data: {
   username: string;
   email: string;
   password: string;
-  role: UserRole;
+  role?: UserRole;
+  roles?: UserRole[];
   teacherId?: string | null;
   nip?: string;
   phone?: string;
@@ -769,7 +777,18 @@ export async function createUserByAdmin(data: {
     };
   }
 
-  // Validasi Role
+  // Multi-role selection validation
+  const rawRoles: UserRole[] =
+    Array.isArray(data.roles) && data.roles.length > 0
+      ? data.roles
+      : data.role
+      ? [data.role]
+      : [];
+
+  if (rawRoles.length === 0) {
+    return { success: false, error: 'Minimal satu role hak akses pengguna wajib dipilih.' };
+  }
+
   const validRoles: UserRole[] = [
     'ADMIN',
     'MUDIR',
@@ -783,17 +802,32 @@ export async function createUserByAdmin(data: {
     'musyrif_kesantrian',
     'PETUGAS_KESANTRIAN',
   ];
-  const normalizedRole = normalizeUserRole(data.role);
-  if (!data.role || !validRoles.includes(data.role)) {
-    return { success: false, error: 'Role hak akses pengguna tidak valid atau belum dipilih.' };
+
+  const normalizedRoles: UserRole[] = Array.from(
+    new Set(rawRoles.map((r) => normalizeUserRole(r)))
+  );
+
+  for (const r of normalizedRoles) {
+    if (!validRoles.includes(r)) {
+      return { success: false, error: `Role hak akses '${r}' tidak valid.` };
+    }
   }
 
-  // Validasi Relasi Guru (teacherId)
-  if (normalizedRole === 'WALI_KELAS' || normalizedRole === 'GURU_MAPEL') {
+  // Primary role: First role in list, prioritizing ADMIN or primary leadership if present
+  const primaryRole: UserRole =
+    normalizedRoles.find((r) => r === 'ADMIN') ||
+    normalizedRoles.find((r) => r === 'MUDIR') ||
+    normalizedRoles.find((r) => r === 'KEPALA_SEKOLAH') ||
+    normalizedRoles[0];
+
+  // Validasi Relasi Guru (teacherId): wajib jika ada role WALI_KELAS atau GURU_MAPEL
+  const hasTeacherRole =
+    normalizedRoles.includes('WALI_KELAS') || normalizedRoles.includes('GURU_MAPEL');
+  if (hasTeacherRole) {
     if (!data.teacherId || data.teacherId.trim() === '') {
       return {
         success: false,
-        error: `Untuk peran ${normalizedRole === 'WALI_KELAS' ? 'Wali Kelas' : 'Guru Mapel'}, Guru Terkait (teacherId) wajib dipilih.`
+        error: 'Untuk pengguna dengan role Wali Kelas atau Guru Mapel, Guru Terkait (teacherId) wajib dipilih dari master data.'
       };
     }
   }
@@ -844,7 +878,8 @@ export async function createUserByAdmin(data: {
         username: cleanUsername,
         email: cleanEmail,
         password: data.password,
-        role: data.role,
+        role: primaryRole,
+        roles: normalizedRoles,
         teacherId: data.teacherId || null,
         nip: data.nip || undefined,
         phone: data.phone || undefined,
@@ -872,7 +907,8 @@ export async function createUserByAdmin(data: {
       username: cleanUsername,
       email: cleanEmail,
       password: data.password,
-      role: data.role,
+      role: primaryRole,
+      roles: normalizedRoles,
       teacherId: data.teacherId,
     });
 
@@ -900,12 +936,13 @@ export async function createUserByAdmin(data: {
     email: cleanEmail,
     displayName: cleanName,
     name: cleanName,
-    role: normalizedRole,
-    roleCode: normalizedRole.toLowerCase(),
+    role: primaryRole,
+    roles: normalizedRoles,
+    roleCode: primaryRole.toLowerCase(),
     kesantrianRole:
-      normalizedRole === 'MUSYRIF_KESANTRIAN'
+      normalizedRoles.includes('MUSYRIF_KESANTRIAN')
         ? 'MUSYRIF_KESANTRIAN'
-        : normalizedRole === 'KEPALA_KESANTRIAN'
+        : normalizedRoles.includes('KEPALA_KESANTRIAN')
         ? 'KEPALA_KESANTRIAN'
         : undefined,
     teacherId: data.teacherId || null,

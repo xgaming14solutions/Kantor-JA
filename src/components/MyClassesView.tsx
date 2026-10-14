@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useMasterData } from '../context/MasterDataContext';
+import { hasRole } from '../types';
 import { getEffectiveTeacherId, getActiveTeacherAssignments } from '../lib/dbService';
 import {
   BookOpen,
@@ -46,16 +47,17 @@ export const MyClassesView: React.FC = () => {
     return classes.filter((c) => c.isActive !== false && taughtClassIds.includes(c.id));
   }, [classes, taughtClassIds]);
 
-  // 4. Homeroom Class: ONLY for WALI_KELAS role
+  // 4. Homeroom Class: for users with WALI_KELAS role
+  const isWaliKelas = hasRole(currentUser || role, 'WALI_KELAS');
   const homeroomClass = useMemo(() => {
-    if (role !== 'WALI_KELAS') return null;
+    if (!isWaliKelas) return null;
     return classes.find(
       (c) =>
         c.isActive !== false &&
         (c.teacherId === effectiveTeacherId || c.homeroomTeacherId === effectiveTeacherId) &&
         (activeAcademicYear ? c.academicYearId === activeAcademicYear.id : true)
     ) || null;
-  }, [role, classes, effectiveTeacherId, activeAcademicYear]);
+  }, [isWaliKelas, classes, effectiveTeacherId, activeAcademicYear]);
 
   const homeroomStudents = useMemo(() => {
     if (!homeroomClass) return [];
@@ -67,16 +69,16 @@ export const MyClassesView: React.FC = () => {
     return myAssignments.reduce((sum, a) => sum + (a.totalHoursPerWeek || 0), 0);
   }, [myAssignments]);
 
-  // 6. Accessible Classes list for filtering students (strictly taught classes for GURU_MAPEL)
+  // 6. Accessible Classes list for filtering students (strictly taught classes + homeroom if WALI_KELAS)
   const accessibleClasses = useMemo(() => {
-    if (role === 'WALI_KELAS' && homeroomClass) {
+    if (isWaliKelas && homeroomClass) {
       const map = new Map<string, typeof classes[0]>();
       map.set(homeroomClass.id, homeroomClass);
       myClasses.forEach((c) => map.set(c.id, c));
       return Array.from(map.values());
     }
     return myClasses;
-  }, [role, homeroomClass, myClasses]);
+  }, [isWaliKelas, homeroomClass, myClasses]);
 
   const accessibleClassIds = useMemo(() => {
     return accessibleClasses.map((c) => c.id);
@@ -129,9 +131,23 @@ export const MyClassesView: React.FC = () => {
               <h2 className="text-lg font-bold text-slate-900 tracking-tight">
                 Kelas & Mapel Saya
               </h2>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                {role === 'WALI_KELAS' ? 'Wali Kelas' : 'Guru Mata Pelajaran'}
-              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {isWaliKelas && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                    Wali Kelas
+                  </span>
+                )}
+                {hasRole(currentUser || role, 'GURU_MAPEL') && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Guru Mapel
+                  </span>
+                )}
+                {!isWaliKelas && !hasRole(currentUser || role, 'GURU_MAPEL') && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                    Tenaga Pendidik
+                  </span>
+                )}
+              </div>
             </div>
             <div className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
               <span>
@@ -157,7 +173,7 @@ export const MyClassesView: React.FC = () => {
       </div>
 
       {/* Homeroom Highlight (Hanya jika pengguna bertugas sebagai Wali Kelas) */}
-      {role === 'WALI_KELAS' && homeroomClass && (
+      {isWaliKelas && homeroomClass && (
         <div className="bg-gradient-to-r from-indigo-900 to-indigo-800 rounded-2xl p-5 text-white shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-indigo-200">
@@ -323,7 +339,7 @@ export const MyClassesView: React.FC = () => {
               <option value="ALL">Semua Kelas Diajar ({eligibleStudents.length} Siswa)</option>
               {accessibleClasses.map((c) => (
                 <option key={c.id} value={c.id}>
-                  Kelas {c.name} {role === 'WALI_KELAS' && c.id === homeroomClass?.id ? '(Wali Kelas)' : '(Diajar)'}
+                  Kelas {c.name} {isWaliKelas && c.id === homeroomClass?.id ? '(Wali Kelas)' : '(Diajar)'}
                 </option>
               ))}
             </select>

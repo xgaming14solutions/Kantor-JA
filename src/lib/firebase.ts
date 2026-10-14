@@ -10,15 +10,17 @@ import { getStorage, FirebaseStorage } from 'firebase/storage';
 import baseFirebaseConfig from '../../firebase-applet-config.json';
 
 // Merge base applet config with optional VITE_ environment variables so GitHub/Vercel and AI Studio Preview use the exact same configuration
+const env = (typeof import.meta !== 'undefined' && (import.meta as any)?.env) ? (import.meta as any).env : {};
+
 export const firebaseConfig = {
-  projectId: (import.meta.env.VITE_FIREBASE_PROJECT_ID || baseFirebaseConfig.projectId || '').trim(),
-  appId: (import.meta.env.VITE_FIREBASE_APP_ID || baseFirebaseConfig.appId || '').trim(),
-  apiKey: (import.meta.env.VITE_FIREBASE_API_KEY || baseFirebaseConfig.apiKey || '').trim(),
-  authDomain: (import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || baseFirebaseConfig.authDomain || '').trim(),
-  firestoreDatabaseId: (import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || baseFirebaseConfig.firestoreDatabaseId || '(default)').trim(),
-  storageBucket: (import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || baseFirebaseConfig.storageBucket || '').trim(),
-  messagingSenderId: (import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || baseFirebaseConfig.messagingSenderId || '').trim(),
-  measurementId: (import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || baseFirebaseConfig.measurementId || '').trim(),
+  projectId: (env.VITE_FIREBASE_PROJECT_ID || baseFirebaseConfig.projectId || '').trim(),
+  appId: (env.VITE_FIREBASE_APP_ID || baseFirebaseConfig.appId || '').trim(),
+  apiKey: (env.VITE_FIREBASE_API_KEY || baseFirebaseConfig.apiKey || '').trim(),
+  authDomain: (env.VITE_FIREBASE_AUTH_DOMAIN || baseFirebaseConfig.authDomain || '').trim(),
+  firestoreDatabaseId: (env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || baseFirebaseConfig.firestoreDatabaseId || '(default)').trim(),
+  storageBucket: (env.VITE_FIREBASE_STORAGE_BUCKET || baseFirebaseConfig.storageBucket || '').trim(),
+  messagingSenderId: (env.VITE_FIREBASE_MESSAGING_SENDER_ID || baseFirebaseConfig.messagingSenderId || '').trim(),
+  measurementId: (env.VITE_FIREBASE_MEASUREMENT_ID || baseFirebaseConfig.measurementId || '').trim(),
 };
 
 // Suppress noisy internal @firebase/firestore WebChannel timeout console.error logs

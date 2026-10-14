@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Teacher } from '../types';
+import { Teacher, hasRole } from '../types';
 import { useMasterData } from '../context/MasterDataContext';
+import { useAuth } from '../context/AuthContext';
 import {
   Users,
   Search,
@@ -23,6 +24,9 @@ interface TeachersViewProps {
 }
 
 export const TeachersView: React.FC<TeachersViewProps> = ({ userRole }) => {
+  const { currentUser } = useAuth();
+  const isAdmin = hasRole(currentUser, 'ADMIN') || userRole === 'ADMIN';
+
   const { teachers, classes, saveTeacher, toggleTeacherStatus } = useMasterData();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -171,7 +175,7 @@ export const TeachersView: React.FC<TeachersViewProps> = ({ userRole }) => {
           </p>
         </div>
 
-        {userRole === 'ADMIN' && (
+        {isAdmin && (
           <button
             onClick={openAddModal}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-xs self-start sm:self-auto"
@@ -315,7 +319,7 @@ export const TeachersView: React.FC<TeachersViewProps> = ({ userRole }) => {
                           >
                             <Info className="w-3.5 h-3.5" />
                           </button>
-                          {userRole === 'ADMIN' && (
+                          {isAdmin && (
                             <>
                               <button
                                 onClick={() => openEditModal(t)}

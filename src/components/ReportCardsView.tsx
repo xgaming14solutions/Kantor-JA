@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { calculateStudentScore, formatFinalScore } from '../lib/academicCalculation';
 import { formatReportProgram, formatReportClassLabel } from '../lib/dbService';
 import { SchoolLogo } from './SchoolLogo';
-import { ReportCard, UserRole } from '../types';
+import { ReportCard, UserRole, hasRole, hasAnyRole } from '../types';
 import {
   Award,
   CalendarDays,
@@ -48,20 +48,19 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
     schoolIdentity
   } = useMasterData();
 
-  const canEditReportNotes =
-    effectiveRole === 'ADMIN' ||
-    effectiveRole === 'WALI_KELAS' ||
-    effectiveRole === 'KEPALA_SEKOLAH';
+  const isWaliKelas = hasRole(currentUser || effectiveRole, 'WALI_KELAS');
+  const isAdminOrHead = hasAnyRole(currentUser || effectiveRole, ['ADMIN', 'KEPALA_SEKOLAH', 'MUDIR']);
+  const canEditReportNotes = isAdminOrHead || isWaliKelas;
 
   // Find homeroom class if current user is Wali Kelas
   const homeroomClass = useMemo(() => {
-    if (effectiveRole !== 'WALI_KELAS') return null;
+    if (!isWaliKelas) return null;
     const currentTeacher = teachers.find(
       (t) => t.email === currentUser?.email || t.id === currentUser?.teacherId
     );
     if (!currentTeacher) return null;
     return classes.find((c) => c.homeroomTeacherId === currentTeacher.id || c.teacherId === currentTeacher.id);
-  }, [effectiveRole, currentUser, teachers, classes]);
+  }, [isWaliKelas, currentUser, teachers, classes]);
 
   const activeClasses = useMemo(() => {
     return classes.filter((c) => c.isActive !== false);
@@ -466,7 +465,7 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
       </div>
 
       {/* Wali Kelas / Role Banner Notice */}
-      {effectiveRole === 'WALI_KELAS' && homeroomClass && (
+      {isWaliKelas && homeroomClass && (
         <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-start gap-3">
           <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
             <UserCheck className="w-4 h-4" />
@@ -533,7 +532,7 @@ export const ReportCardsView: React.FC<ReportCardsViewProps> = ({ userRole, onNa
             <select
               value={selectedClassId}
               onChange={(e) => setSelectedClassId(e.target.value)}
-              disabled={effectiveRole === 'WALI_KELAS' && !!homeroomClass}
+              disabled={!isAdminOrHead && isWaliKelas && !!homeroomClass}
               className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
             >
               {activeClasses.map((cls) => (

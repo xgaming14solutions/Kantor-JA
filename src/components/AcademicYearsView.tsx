@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { AcademicYear } from '../types';
+import { AcademicYear, hasRole } from '../types';
 import { useMasterData } from '../context/MasterDataContext';
+import { useAuth } from '../context/AuthContext';
 import {
   CalendarDays,
   Plus,
@@ -19,6 +20,9 @@ interface AcademicYearsViewProps {
 }
 
 export const AcademicYearsView: React.FC<AcademicYearsViewProps> = ({ userRole }) => {
+  const { currentUser } = useAuth();
+  const isAdmin = hasRole(currentUser, 'ADMIN') || userRole === 'ADMIN';
+
   const { academicYears, activeAcademicYear, saveAcademicYear, setActiveAcademicYear } = useMasterData();
 
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -119,7 +123,7 @@ export const AcademicYearsView: React.FC<AcademicYearsViewProps> = ({ userRole }
           </p>
         </div>
 
-        {userRole === 'ADMIN' && (
+        {isAdmin && (
           <button
             onClick={openAddModal}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-xs self-start sm:self-auto"
@@ -232,7 +236,7 @@ export const AcademicYearsView: React.FC<AcademicYearsViewProps> = ({ userRole }
                   </td>
                   <td className="py-3.5 px-4 text-center">
                     <div className="flex items-center justify-center gap-2">
-                      {userRole === 'ADMIN' && (
+                      {isAdmin && (
                         <>
                           {!ay.isActive && (
                             <button

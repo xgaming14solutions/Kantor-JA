@@ -20,23 +20,40 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return hasUserDoc() && getUserData().get('role', '') == 'ADMIN';
+      return hasUserDoc() && (getUserData().get('role', '') == 'ADMIN' || ('ADMIN' in getUserData().get('roles', [])));
     }
 
     function isMudir() {
-      return hasUserDoc() && (getUserData().get('role', '') == 'MUDIR' || getUserData().get('role', '') == 'mudir');
+      return hasUserDoc() && (
+        getUserData().get('role', '') == 'MUDIR' ||
+        getUserData().get('role', '') == 'mudir' ||
+        ('MUDIR' in getUserData().get('roles', []))
+      );
     }
 
     function isKepalaSekolah() {
-      return hasUserDoc() && getUserData().get('role', '') == 'KEPALA_SEKOLAH';
+      return hasUserDoc() && (
+        getUserData().get('role', '') == 'KEPALA_SEKOLAH' ||
+        ('KEPALA_SEKOLAH' in getUserData().get('roles', []))
+      );
     }
 
     function isGuruMapel() {
-      return hasUserDoc() && (getUserData().get('role', '') == 'GURU_MAPEL' || getUserData().get('role', '') == 'WALI_KELAS');
+      return hasUserDoc() && (
+        getUserData().get('role', '') == 'GURU_MAPEL' ||
+        getUserData().get('role', '') == 'WALI_KELAS' ||
+        ('GURU_MAPEL' in getUserData().get('roles', [])) ||
+        ('WALI_KELAS' in getUserData().get('roles', []))
+      );
     }
 
     function isGuru() {
-      return hasUserDoc() && (getUserData().get('role', '') == 'GURU_MAPEL' || getUserData().get('role', '') == 'WALI_KELAS');
+      return hasUserDoc() && (
+        getUserData().get('role', '') == 'GURU_MAPEL' ||
+        getUserData().get('role', '') == 'WALI_KELAS' ||
+        ('GURU_MAPEL' in getUserData().get('roles', [])) ||
+        ('WALI_KELAS' in getUserData().get('roles', []))
+      );
     }
 
     function getTeacherId() {

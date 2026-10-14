@@ -26,11 +26,12 @@ export interface UserProfile {
   email: string;
   displayName: string;
   name: string; // Keep for existing references
-  role: UserRole;
+  role: UserRole; // Primary role (retained for 100% backward compatibility)
+  roles?: UserRole[]; // Multi-role support: array of assigned roles
   roleCode?: string; // e.g. 'kepala_kesantrian' | 'musyrif_kesantrian'
   kesantrianRole?: KesantrianOfficerRole; // Jabatan spesifik di Kesantrian: Kepala Kesantrian atau Musyrif Kesantrian
-  nip?: string;
-  phone?: string;
+  nip?: string | null;
+  phone?: string | null;
   avatarUrl?: string;
   teacherId?: string | null; // Relation to Teacher if role is WALI_KELAS or GURU_MAPEL or KEPALA_SEKOLAH (null for ADMIN)
   isActive: boolean;
@@ -123,7 +124,27 @@ export interface Score {
   subjectId: string;
   academicYearId: string;
   semester: 'Ganjil' | 'Genap';
-  type: 'Tugas' | 'UH' | 'STS' | 'SAS' | 'UTS' | 'UAS' | 'Praktik' | (string & {});
+  type:
+    | 'Tugas 1'
+    | 'Tugas 2'
+    | 'Tugas 3'
+    | 'Tugas 4'
+    | 'Tugas 5'
+    | 'Tugas 6'
+    | 'Tugas 7'
+    | 'Tugas 8'
+    | 'Tugas 9'
+    | 'Tugas 10'
+    | 'UH 1'
+    | 'UH 2'
+    | 'UH 3'
+    | 'UH 4'
+    | 'UH 5'
+    | 'STS'
+    | 'SAS'
+    | 'Tugas'
+    | 'UH'
+    | (string & {});
   value: number; // 0 - 100
   notes?: string;
   date?: string;
@@ -470,21 +491,154 @@ export function normalizeUserRole(rawRole?: string | null, user?: Partial<UserPr
   return (rawRole as UserRole) || 'GURU_MAPEL';
 }
 
-export function isMudirRole(role?: UserRole | string | null): boolean {
-  const r = String(role || '').trim().toUpperCase();
-  return r === 'MUDIR' || r === 'MUDIR_PESANTREN' || r === 'MUDIR PESANTREN';
+/**
+ * Standard list of valid selectable canonical roles in the system
+ */
+export const AVAILABLE_USER_ROLES: {
+  id: UserRole;
+  label: string;
+  badge: string;
+  description: string;
+}[] = [
+  {
+    id: 'ADMIN',
+    label: 'Administrator (ADMIN)',
+    badge: 'ADMIN',
+    description: 'Akses penuh ke seluruh modul sistem dan pengelolaan akun pengguna.',
+  },
+  {
+    id: 'MUDIR',
+    label: 'Mudir Pesantren (MUDIR)',
+    badge: 'MUDIR PESANTREN',
+    description: 'Pimpinan tertinggi lembaga, pengawas seluruh unit (Akademik, Kesantrian, & ATK).',
+  },
+  {
+    id: 'KEPALA_SEKOLAH',
+    label: 'Kepala Sekolah (KEPALA_SEKOLAH)',
+    badge: 'KEPALA SEKOLAH',
+    description: 'Penanggung jawab operasional sekolah, kurikulum, dan kalender akademik.',
+  },
+  {
+    id: 'KEPALA_KESANTRIAN',
+    label: 'Kepala Kesantrian (KEPALA_KESANTRIAN)',
+    badge: 'KEPALA KESANTRIAN',
+    description: 'Penanggung jawab pengasuhan, kedisiplinan, perizinan, mabit, dan kesehatan santri.',
+  },
+  {
+    id: 'MUSYRIF_KESANTRIAN',
+    label: 'Musyrif Kesantrian (MUSYRIF_KESANTRIAN)',
+    badge: 'MUSYRIF KESANTRIAN',
+    description: 'Pelaksana harian kesantrian, pencatatan pelanggaran, izin pulang, dan santri sakit.',
+  },
+  {
+    id: 'WALI_KELAS',
+    label: 'WALI_KELAS – Wali Kelas',
+    badge: 'WALI KELAS',
+    description: 'Pengelola kelas binaan, presensi santri kelas, dan pencetakan raport santri.',
+  },
+  {
+    id: 'GURU_MAPEL',
+    label: 'GURU_MAPEL – Guru Mata Pelajaran',
+    badge: 'GURU MAPEL',
+    description: 'Pengajar mata pelajaran sesuai penugasan mengajar aktif dan penginput nilai.',
+  },
+];
+
+/**
+ * Extracts and normalizes the full array of roles assigned to a user.
+ * Seamlessly backwards compatible: if user has `roles: [...]`, it returns all normalized roles.
+ * If user only has single `role: '...'`, it wraps and normalizes into an array.
+ */
+export function getUserRoles(user?: Partial<UserProfile> | Record<string, any> | null): UserRole[] {
+  if (!user) return [];
+  const set = new Set<UserRole>();
+
+  // If user has multi-role array
+  if (Array.isArray(user.roles) && user.roles.length > 0) {
+    user.roles.forEach((r: any) => {
+      if (r) {
+        const norm = normalizeUserRole(r, user);
+        set.add(norm);
+      }
+    });
+  }
+
+  // Also include user.role if present
+  if (user.role) {
+    set.add(normalizeUserRole(user.role, user));
+  }
+
+  // Also check kesantrianRole
+  if (user.kesantrianRole === 'MUSYRIF_KESANTRIAN') {
+    set.add('MUSYRIF_KESANTRIAN');
+  } else if (user.kesantrianRole === 'KEPALA_KESANTRIAN') {
+    set.add('KEPALA_KESANTRIAN');
+  }
+
+  const result = Array.from(set);
+  return result.length > 0 ? result : ['GURU_MAPEL'];
 }
 
-export function isKesantrianOfficerRole(role?: UserRole | string | null): boolean {
-  const r = String(role || '').trim().toUpperCase();
-  return (
-    r === 'KEPALA_KESANTRIAN' ||
-    r === 'MUSYRIF_KESANTRIAN' ||
-    r === 'PETUGAS_KESANTRIAN'
-  );
+/**
+ * Checks whether a user or a specific role/roles array possesses a required role.
+ * e.g. hasRole(currentUser, 'WALI_KELAS')
+ */
+export function hasRole(
+  userOrRoles: Partial<UserProfile> | Record<string, any> | UserRole[] | UserRole | string | null | undefined,
+  targetRole: UserRole | string
+): boolean {
+  if (!userOrRoles) return false;
+  const targetClean = String(targetRole).trim().toUpperCase();
+
+  let rolesToCheck: UserRole[] = [];
+  if (Array.isArray(userOrRoles)) {
+    rolesToCheck = userOrRoles.map((r) => normalizeUserRole(r));
+  } else if (typeof userOrRoles === 'object' && userOrRoles !== null) {
+    rolesToCheck = getUserRoles(userOrRoles as Partial<UserProfile>);
+  } else {
+    rolesToCheck = [normalizeUserRole(userOrRoles as string)];
+  }
+
+  return rolesToCheck.some((r) => {
+    const rc = String(r).trim().toUpperCase();
+    if (rc === targetClean) return true;
+    if (targetClean === 'MUDIR' && (rc === 'MUDIR_PESANTREN' || rc === 'MUDIR PESANTREN')) return true;
+    if (targetClean === 'PETUGAS_KESANTRIAN' && (rc === 'KEPALA_KESANTRIAN' || rc === 'MUSYRIF_KESANTRIAN')) return true;
+    return false;
+  });
+}
+
+/**
+ * Checks whether a user or roles array possesses ANY of the allowed roles.
+ * e.g. hasAnyRole(currentUser, ['ADMIN', 'MUDIR', 'KEPALA_SEKOLAH'])
+ */
+export function hasAnyRole(
+  userOrRoles: Partial<UserProfile> | Record<string, any> | UserRole[] | UserRole | string | null | undefined,
+  allowedRoles: (UserRole | string)[]
+): boolean {
+  if (!userOrRoles || !allowedRoles || allowedRoles.length === 0) return false;
+  return allowedRoles.some((target) => hasRole(userOrRoles, target));
+}
+
+/**
+ * Check if user has teacher privileges (either GURU_MAPEL or WALI_KELAS or KEPALA_SEKOLAH)
+ */
+export function isTeacherRole(userOrRole?: Partial<UserProfile> | UserRole | string | null): boolean {
+  return hasAnyRole(userOrRole, ['GURU_MAPEL', 'WALI_KELAS']);
+}
+
+export function isMudirRole(roleOrUser?: Partial<UserProfile> | UserRole | string | null): boolean {
+  return hasRole(roleOrUser, 'MUDIR');
+}
+
+export function isKesantrianOfficerRole(roleOrUser?: Partial<UserProfile> | UserRole | string | null): boolean {
+  return hasAnyRole(roleOrUser, ['KEPALA_KESANTRIAN', 'MUSYRIF_KESANTRIAN', 'PETUGAS_KESANTRIAN']);
 }
 
 export function isKepalaKesantrianRole(role?: UserRole | string | null, user?: Partial<UserProfile> | null): boolean {
+  if (user) {
+    if (hasRole(user, 'KEPALA_KESANTRIAN')) return true;
+  }
   const r = String(role || user?.role || '').trim().toUpperCase();
   if (r === 'MUSYRIF_KESANTRIAN') return false;
   if (r === 'KEPALA_KESANTRIAN') return true;
@@ -499,6 +653,9 @@ export function isKepalaKesantrianRole(role?: UserRole | string | null, user?: P
 }
 
 export function isMusyrifKesantrianRole(role?: UserRole | string | null, user?: Partial<UserProfile> | null): boolean {
+  if (user) {
+    if (hasRole(user, 'MUSYRIF_KESANTRIAN')) return true;
+  }
   const r = String(role || user?.role || '').trim().toUpperCase();
   if (r === 'MUSYRIF_KESANTRIAN') return true;
   if (r === 'PETUGAS_KESANTRIAN') {
@@ -514,32 +671,26 @@ export function isMusyrifKesantrianRole(role?: UserRole | string | null, user?: 
 export function getKesantrianOfficerLabel(
   user?: Partial<UserProfile> | null
 ): string {
-  const rawRole = String(user?.role || '').trim().toUpperCase();
-  if (rawRole === 'MUSYRIF_KESANTRIAN' || isMusyrifKesantrianRole(user?.role, user)) {
+  if (hasRole(user, 'MUSYRIF_KESANTRIAN')) {
     return 'Musyrif Kesantrian';
   }
-  if (rawRole === 'KEPALA_KESANTRIAN' || isKepalaKesantrianRole(user?.role, user)) {
+  if (hasRole(user, 'KEPALA_KESANTRIAN')) {
     return 'Kepala Kesantrian';
   }
-  if (rawRole === 'ADMIN') return 'Administrator';
-  if (rawRole === 'MUDIR') return 'Mudir Pesantren';
-  if (rawRole === 'KEPALA_SEKOLAH') return 'Kepala Sekolah';
+  if (hasRole(user, 'ADMIN')) return 'Administrator';
+  if (hasRole(user, 'MUDIR')) return 'Mudir Pesantren';
+  if (hasRole(user, 'KEPALA_SEKOLAH')) return 'Kepala Sekolah';
   return 'Petugas Kesantrian';
 }
 
 export function isKepalaKesantrianUser(
   user?: Partial<UserProfile> | null
 ): boolean {
-  const rawRole = String(user?.role || '').trim().toUpperCase();
-  if (rawRole === 'MUSYRIF_KESANTRIAN' || isMusyrifKesantrianRole(user?.role, user)) {
-    return false;
-  }
   return (
-    rawRole === 'KEPALA_KESANTRIAN' ||
-    isKepalaKesantrianRole(user?.role, user) ||
-    rawRole === 'ADMIN' ||
-    rawRole === 'MUDIR' ||
-    rawRole === 'KEPALA_SEKOLAH'
+    hasRole(user, 'KEPALA_KESANTRIAN') ||
+    hasRole(user, 'ADMIN') ||
+    hasRole(user, 'MUDIR') ||
+    hasRole(user, 'KEPALA_SEKOLAH')
   );
 }
 
@@ -677,14 +828,12 @@ export function calculateAtkStockStatus(
   return 'Stok Aman';
 }
 
-export function isAtkAdminRole(role?: UserRole | string | null): boolean {
-  const r = String(role || '').trim().toUpperCase();
-  return r === 'ADMIN' || r === 'KEPALA_SEKOLAH';
+export function isAtkAdminRole(userOrRole?: Partial<UserProfile> | UserRole | string | null): boolean {
+  return hasAnyRole(userOrRole, ['ADMIN', 'KEPALA_SEKOLAH']);
 }
 
-export function isAtkReadAllRole(role?: UserRole | string | null): boolean {
-  const r = String(role || '').trim().toUpperCase();
-  return r === 'ADMIN' || r === 'MUDIR' || r === 'KEPALA_SEKOLAH';
+export function isAtkReadAllRole(userOrRole?: Partial<UserProfile> | UserRole | string | null): boolean {
+  return hasAnyRole(userOrRole, ['ADMIN', 'MUDIR', 'KEPALA_SEKOLAH']);
 }
 
 // ============================================================================
@@ -758,9 +907,8 @@ export interface AcademicCalendarEvent {
   updatedAt: string;
 }
 
-export function canManageAcademicCalendar(role?: UserRole | string | null): boolean {
-  const r = String(role || '').trim().toUpperCase();
-  return r === 'ADMIN' || r === 'MUDIR' || r === 'KEPALA_SEKOLAH';
+export function canManageAcademicCalendar(userOrRole?: Partial<UserProfile> | UserRole | string | null): boolean {
+  return hasAnyRole(userOrRole, ['ADMIN', 'MUDIR', 'KEPALA_SEKOLAH']);
 }
 
 export interface SpmbBrochure {
@@ -778,9 +926,8 @@ export interface SpmbBrochure {
   uploadedByName?: string;
 }
 
-export function canManageBrochures(role?: UserRole | string | null): boolean {
-  const r = String(role || '').trim().toUpperCase();
-  return r === 'ADMIN' || r === 'MUDIR' || r === 'KEPALA_SEKOLAH';
+export function canManageBrochures(userOrRole?: Partial<UserProfile> | UserRole | string | null): boolean {
+  return hasAnyRole(userOrRole, ['ADMIN', 'MUDIR', 'KEPALA_SEKOLAH']);
 }
 
 export type CurriculumGroup = 'PAKET_B' | 'PAKET_C';
@@ -851,7 +998,6 @@ export interface LessonSchedule {
   updatedAt: string;
 }
 
-export function canManageLessonSchedule(role?: UserRole | string | null): boolean {
-  const r = String(role || '').trim().toUpperCase();
-  return r === 'ADMIN' || r === 'MUDIR' || r === 'KEPALA_SEKOLAH';
+export function canManageLessonSchedule(userOrRole?: Partial<UserProfile> | UserRole | string | null): boolean {
+  return hasAnyRole(userOrRole, ['ADMIN', 'MUDIR', 'KEPALA_SEKOLAH']);
 }

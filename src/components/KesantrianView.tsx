@@ -994,9 +994,9 @@ export const KesantrianView: React.FC<KesantrianViewProps> = ({ tab, onNavigate 
   // Sub-navigation bar inside Kesantrian module (No duplicate "Data Santri" menu)
   const kesantrianNavTabs = [
     {
-      id: isKesantrianOfficerRole(role) ? 'dashboard' : 'kesantrian-dashboard',
+      id: isKesantrianOfficerRole(currentUser || role) ? 'dashboard' : 'kesantrian-dashboard',
       section: 'DASHBOARD',
-      label: isKesantrianOfficerRole(role) ? 'Dashboard Kesantrian' : 'Ringkasan Kesantrian',
+      label: isKesantrianOfficerRole(currentUser || role) ? 'Dashboard Kesantrian' : 'Ringkasan Kesantrian',
       icon: LayoutDashboard,
     },
     {

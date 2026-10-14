@@ -27,7 +27,7 @@ import {
   RotateCw,
   AlertTriangle,
 } from 'lucide-react';
-import { calculateAtkStockStatus } from '../types';
+import { calculateAtkStockStatus, hasRole, hasAnyRole } from '../types';
 import { getEffectiveTeacherId, getActiveTeacherAssignments } from '../lib/dbService';
 import {
   resolveEventEffectiveStatus,
@@ -37,6 +37,10 @@ import { SchoolLogo } from './SchoolLogo';
 
 export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({ onNavigate }) => {
   const { currentUser, role } = useAuth();
+  const isAdmin = hasRole(currentUser || role, 'ADMIN');
+  const isKepsek = hasRole(currentUser || role, 'KEPALA_SEKOLAH');
+  const isWaliKelas = hasRole(currentUser || role, 'WALI_KELAS');
+  const isGuruMapel = hasRole(currentUser || role, 'GURU_MAPEL');
   const {
     students = [],
     teachers = [],
@@ -610,7 +614,7 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
   const effectiveTeacherId = getEffectiveTeacherId(currentUser, role, teachers);
 
   const homeroomClass =
-    role === 'WALI_KELAS'
+    isWaliKelas
       ? classes.find(
           (c) =>
             (c.teacherId === effectiveTeacherId || c.homeroomTeacherId === effectiveTeacherId) &&
@@ -668,8 +672,7 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
   // =========================================================================
   // RENDER: DASHBOARD ADMINISTRATOR & KEPALA SEKOLAH (Sections 5, 6, 7, 8)
   // =========================================================================
-  if (role === 'ADMIN' || role === 'KEPALA_SEKOLAH') {
-    const isKepsek = role === 'KEPALA_SEKOLAH';
+  if (isAdmin || isKepsek) {
 
     return (
       <div className="space-y-6">
@@ -1698,7 +1701,11 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-xs text-[#71818A]">
               <span className="font-semibold text-[#24485A] bg-[#F0F5F7] border border-[#DCE5E8] px-2.5 py-0.5 rounded-md">
-                {role === 'WALI_KELAS' ? 'Dashboard Wali Kelas' : 'Dashboard Guru Mata Pelajaran'}
+                {isWaliKelas && isGuruMapel
+                  ? 'Dashboard Wali Kelas & Guru Mapel'
+                  : isWaliKelas
+                  ? 'Dashboard Wali Kelas'
+                  : 'Dashboard Guru Mata Pelajaran'}
               </span>
               <span>&bull;</span>
               <span className="font-semibold text-[#24343D]">
@@ -1713,7 +1720,9 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
               Selamat datang, {currentUser?.name}
             </h1>
             <p className="text-[13px] text-[#71818A] mt-0.5">
-              {role === 'WALI_KELAS'
+              {isWaliKelas && isGuruMapel
+                ? `Monitoring kelas binaan ${homeroomClass?.name || 'Binaan'}, absensi santri, serta penugasan mengajar mata pelajaran Anda.`
+                : isWaliKelas
                 ? `Monitoring kemajuan belajar, presensi, dan catatan raport siswa kelas ${homeroomClass?.name || 'Binaan'}.`
                 : 'Kelola kegiatan belajar mengajar, input nilai siswa, dan absensi mata pelajaran.'}
             </p>
@@ -1737,7 +1746,7 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
       </div>
 
       {/* WALI KELAS DASHBOARD */}
-      {role === 'WALI_KELAS' && (
+      {isWaliKelas && (
         <div className="space-y-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white p-4 rounded-xl border border-[#DCE5E8]">
@@ -1833,7 +1842,7 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
       )}
 
       {/* GURU MAPEL DASHBOARD */}
-      {role === 'GURU_MAPEL' && (
+      {isGuruMapel && (
         <div className="space-y-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white p-4 rounded-xl border border-[#DCE5E8]">

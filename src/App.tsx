@@ -9,7 +9,7 @@ import {
   formatRoleLabel,
 } from './components/Sidebar';
 import { SchoolLogo } from './components/SchoolLogo';
-import { calculateAtkStockStatus } from './types';
+import { calculateAtkStockStatus, hasRole, hasAnyRole, getUserRoles } from './types';
 import {
   Menu,
   ShieldAlert,
@@ -389,10 +389,10 @@ export default function App() {
     );
   }
 
-  // Enforce RBAC on current tab
+  // Enforce RBAC on current tab: user receives combined permissions from all assigned roles
   const activeNavItem = NAVIGATION_ITEMS.find((item) => item.id === currentTab);
-  const isAuthorized = activeNavItem ? activeNavItem.allowedRoles.includes(role) : true;
-  const roleLabel = formatRoleLabel(role, currentUser?.kesantrianRole);
+  const isAuthorized = activeNavItem ? hasAnyRole(currentUser || role, activeNavItem.allowedRoles) : true;
+  const roleLabel = formatRoleLabel(role, currentUser?.kesantrianRole, currentUser);
   const activeGroupLabel = activeNavItem ? MENU_GROUP_LABELS[activeNavItem.group] : 'MENU UTAMA';
 
   // Render view corresponding to currentTab
@@ -418,18 +418,27 @@ export default function App() {
     }
 
     switch (currentTab) {
-      case 'dashboard':
-        return role === 'MUDIR' || role === 'mudir' ? (
-          <MudirDashboardView onNavigate={handleNavigate} />
-        ) : role === 'PETUGAS_KESANTRIAN' ||
-          role === 'KEPALA_KESANTRIAN' ||
-          role === 'MUSYRIF_KESANTRIAN' ||
-          role === 'kepala_kesantrian' ||
-          role === 'musyrif_kesantrian' ? (
-          <KesantrianView tab="dashboard" onNavigate={handleNavigate} />
-        ) : (
-          <DashboardView onNavigate={handleNavigate} />
-        );
+      case 'dashboard': {
+        const userRolesList = currentUser ? getUserRoles(currentUser) : role ? [role] : [];
+        const isPureKesantrian =
+          userRolesList.length > 0 &&
+          userRolesList.every(
+            (r) =>
+              r === 'KEPALA_KESANTRIAN' ||
+              r === 'MUSYRIF_KESANTRIAN' ||
+              r === 'PETUGAS_KESANTRIAN' ||
+              r === 'kepala_kesantrian' ||
+              r === 'musyrif_kesantrian'
+          );
+
+        if (isPureKesantrian) {
+          return <KesantrianView tab="dashboard" onNavigate={handleNavigate} />;
+        }
+        if (hasRole(currentUser || role, 'MUDIR') && !hasRole(currentUser || role, 'ADMIN') && !hasRole(currentUser || role, 'KEPALA_SEKOLAH') && !hasRole(currentUser || role, 'GURU_MAPEL') && !hasRole(currentUser || role, 'WALI_KELAS')) {
+          return <MudirDashboardView onNavigate={handleNavigate} />;
+        }
+        return <DashboardView onNavigate={handleNavigate} />;
+      }
       case 'kesantrian-dashboard':
       case 'kesantrian-pelanggaran':
       case 'kesantrian-sakit':
@@ -683,7 +692,7 @@ export default function App() {
                       <CalendarDays className="w-3.5 h-3.5 text-[#5D8295]" />
                       <span>Kalender Akademik</span>
                     </button>
-                    {(role === 'ADMIN' || role === 'MUDIR' || role === 'mudir' || role === 'KEPALA_SEKOLAH') && (
+                    {hasAnyRole(currentUser || role, ['ADMIN', 'MUDIR', 'KEPALA_SEKOLAH']) && (
                       <button
                         onClick={() => handleNavigate('settings')}
                         className="w-full text-left px-4 py-2 text-[#24343D] hover:bg-[#F4F7F8] flex items-center gap-2 cursor-pointer"

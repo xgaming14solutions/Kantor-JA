@@ -6,7 +6,8 @@ export interface CreateUserInput {
   username: string;
   email: string;
   password: string;
-  role: UserRole;
+  role?: UserRole;
+  roles?: UserRole[];
   teacherId?: string | null;
   nip?: string;
   phone?: string;
@@ -53,6 +54,19 @@ export async function createAuthUserViaFirebase(data: CreateUserInput): Promise<
       error: 'Kata sandi awal minimal 6 karakter sesuai standar keamanan Firebase Authentication.'
     };
   }
+
+  // Multi-role support
+  const selectedRoles: UserRole[] =
+    Array.isArray(data.roles) && data.roles.length > 0
+      ? data.roles
+      : data.role
+      ? [data.role]
+      : [];
+
+  if (selectedRoles.length === 0) {
+    return { success: false, error: 'Minimal satu role hak akses pengguna wajib dipilih.' };
+  }
+
   const validRoles: UserRole[] = [
     'ADMIN',
     'MUDIR',
@@ -66,13 +80,18 @@ export async function createAuthUserViaFirebase(data: CreateUserInput): Promise<
     'musyrif_kesantrian',
     'PETUGAS_KESANTRIAN',
   ];
-  if (!data.role || !validRoles.includes(data.role)) {
-    return { success: false, error: 'Role hak akses pengguna tidak valid.' };
+
+  for (const r of selectedRoles) {
+    if (!validRoles.includes(r)) {
+      return { success: false, error: `Role hak akses '${r}' tidak valid.` };
+    }
   }
-  if ((data.role === 'WALI_KELAS' || data.role === 'GURU_MAPEL') && (!data.teacherId || !data.teacherId.trim())) {
+
+  const requiresTeacher = selectedRoles.includes('WALI_KELAS') || selectedRoles.includes('GURU_MAPEL');
+  if (requiresTeacher && (!data.teacherId || !data.teacherId.trim())) {
     return {
       success: false,
-      error: `Untuk peran ${data.role === 'WALI_KELAS' ? 'Wali Kelas' : 'Guru Mapel'}, Guru Terkait (teacherId) wajib dipilih.`
+      error: 'Untuk peran Wali Kelas atau Guru Mapel, Guru Terkait (teacherId) wajib dipilih dari master data.'
     };
   }
 

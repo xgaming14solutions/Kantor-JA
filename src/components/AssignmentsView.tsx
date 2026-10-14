@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useMasterData } from '../context/MasterDataContext';
 import { useAuth } from '../context/AuthContext';
-import { TeacherAssignment, UserRole } from '../types';
+import { TeacherAssignment, UserRole, hasRole, hasAnyRole } from '../types';
 import { getEffectiveTeacherId } from '../lib/dbService';
 import {
   ClipboardList,
@@ -46,9 +46,9 @@ export const AssignmentsView: React.FC<{ userRole: UserRole }> = ({ userRole }) 
     deleteTeacherAssignment
   } = useMasterData();
 
-  // Role resolution
-  const isAdmin = userRole === 'ADMIN' || role === 'ADMIN';
-  const isTeacher = userRole === 'GURU_MAPEL' || userRole === 'WALI_KELAS' || role === 'GURU_MAPEL' || role === 'WALI_KELAS';
+  // Role resolution (multi-role aware)
+  const isAdmin = hasRole(currentUser, 'ADMIN') || userRole === 'ADMIN' || role === 'ADMIN';
+  const isTeacher = hasAnyRole(currentUser, ['GURU_MAPEL', 'WALI_KELAS']) || userRole === 'GURU_MAPEL' || userRole === 'WALI_KELAS' || role === 'GURU_MAPEL' || role === 'WALI_KELAS';
 
   const effectiveTeacherId = useMemo(() => {
     return getEffectiveTeacherId(currentUser, role, teachers);

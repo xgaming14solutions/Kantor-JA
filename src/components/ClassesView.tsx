@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { SchoolClass, Student } from '../types';
+import { SchoolClass, Student, hasRole } from '../types';
 import { useMasterData } from '../context/MasterDataContext';
+import { useAuth } from '../context/AuthContext';
 import {
   DoorOpen,
   Users,
@@ -20,6 +21,9 @@ interface ClassesViewProps {
 }
 
 export const ClassesView: React.FC<ClassesViewProps> = ({ userRole }) => {
+  const { currentUser } = useAuth();
+  const isAdmin = hasRole(currentUser, 'ADMIN') || userRole === 'ADMIN';
+
   const { classes, teachers, students, academicYears, activeAcademicYear, saveClass, toggleActiveClass } =
     useMasterData();
 
@@ -136,7 +140,7 @@ export const ClassesView: React.FC<ClassesViewProps> = ({ userRole }) => {
           </p>
         </div>
 
-        {userRole === 'ADMIN' && (
+        {isAdmin && (
           <button
             onClick={openAddModal}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-xs self-start sm:self-auto"
@@ -245,7 +249,7 @@ export const ClassesView: React.FC<ClassesViewProps> = ({ userRole }) => {
                   Daftar Siswa ({studentCount})
                 </button>
 
-                {userRole === 'ADMIN' && (
+                {isAdmin && (
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => openEditModal(cls)}

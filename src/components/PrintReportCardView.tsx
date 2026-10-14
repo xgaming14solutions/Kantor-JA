@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { calculateStudentScore, formatFinalScore } from '../lib/academicCalculation';
 import { formatReportProgram, formatReportClassLabel } from '../lib/dbService';
 import { SchoolLogo } from './SchoolLogo';
-import { ReportCard, UserRole } from '../types';
+import { ReportCard, UserRole, hasRole, hasAnyRole } from '../types';
 import {
   Printer,
   Download,
@@ -248,9 +248,12 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
     loading
   } = useMasterData();
 
+  const isWaliKelas = hasRole(currentUser || effectiveRole, 'WALI_KELAS');
+  const isAdminOrHead = hasAnyRole(currentUser || effectiveRole, ['ADMIN', 'KEPALA_SEKOLAH', 'MUDIR']);
+
   // Find homeroom class if current user is Wali Kelas
   const homeroomClass = useMemo(() => {
-    if (effectiveRole !== 'WALI_KELAS') return null;
+    if (!isWaliKelas) return null;
     const currentTeacher = teachers.find(
       (t) => t.email === currentUser?.email || t.id === currentUser?.teacherId
     );
@@ -258,7 +261,7 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
     return classes.find(
       (c) => c.homeroomTeacherId === currentTeacher.id || c.teacherId === currentTeacher.id
     );
-  }, [effectiveRole, currentUser, teachers, classes]);
+  }, [isWaliKelas, currentUser, teachers, classes]);
 
   // Active classes only
   const activeClasses = useMemo(() => {
@@ -962,8 +965,9 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
     triggerPrintWithPaperSize();
   };
 
-  // RBAC Access Guard: GURU_MAPEL without homeroom is not allowed to print full official report card
-  if (effectiveRole === 'GURU_MAPEL') {
+  // RBAC Access Guard: User must possess ADMIN, KEPALA_SEKOLAH, MUDIR, or WALI_KELAS
+  const canPrintReportCard = hasAnyRole(currentUser || effectiveRole, ['ADMIN', 'KEPALA_SEKOLAH', 'WALI_KELAS', 'MUDIR']);
+  if (!canPrintReportCard) {
     return (
       <div className="bg-white rounded-2xl border border-rose-200 p-8 text-center max-w-lg mx-auto my-12 shadow-xs">
         <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-4">
@@ -1093,7 +1097,7 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                   );
                   setSelectedStudentId(firstInClass ? firstInClass.id : '');
                 }}
-                disabled={effectiveRole === 'WALI_KELAS' && !!homeroomClass}
+                disabled={!isAdminOrHead && isWaliKelas && !!homeroomClass}
                 className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:bg-slate-100 disabled:text-slate-500"
               >
                 {activeClasses.map((cls) => (
@@ -1102,7 +1106,7 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                   </option>
                 ))}
               </select>
-              {effectiveRole === 'WALI_KELAS' && homeroomClass && (
+              {!isAdminOrHead && isWaliKelas && homeroomClass && (
                 <span className="text-[10px] text-blue-600 mt-1 block">
                   Terkunci pada kelas binaan Anda: <strong>{homeroomClass.name}</strong>
                 </span>
@@ -1152,7 +1156,7 @@ export const PrintReportCardView: React.FC<PrintReportCardViewProps> = ({
                     </optgroup>
                   </>
                 )}
-                {effectiveRole !== 'WALI_KELAS' &&
+                {(isAdminOrHead || !isWaliKelas) &&
                   allActiveStudents.some((s) => s.classId !== selectedClassId) && (
                     <optgroup label="Pilih Siswa dari Kelas Lain">
                       {allActiveStudents

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Subject } from '../types';
+import { Subject, hasRole } from '../types';
 import { useMasterData } from '../context/MasterDataContext';
+import { useAuth } from '../context/AuthContext';
 import { ExtracurricularParticipantsView } from './ExtracurricularParticipantsView';
 import {
   BookOpen,
@@ -26,6 +27,9 @@ interface SubjectsViewProps {
 }
 
 export const SubjectsView: React.FC<SubjectsViewProps> = ({ userRole }) => {
+  const { currentUser } = useAuth();
+  const isAdmin = hasRole(currentUser, 'ADMIN') || userRole === 'ADMIN';
+
   const {
     subjects,
     saveSubject,
@@ -217,7 +221,7 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ userRole }) => {
   };
 
   const confirmDelete = async () => {
-    if (!deletingSubject || userRole !== 'ADMIN') return;
+    if (!deletingSubject || !isAdmin) return;
     setIsSubmitting(true);
     try {
       const isEks = deletingSubject.type === 'extracurricular';
@@ -259,7 +263,7 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ userRole }) => {
           </p>
         </div>
 
-        {userRole === 'ADMIN' && (
+        {isAdmin && (
           <button
             onClick={openAddModal}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-xs self-start sm:self-auto cursor-pointer"
@@ -469,7 +473,7 @@ export const SubjectsView: React.FC<SubjectsViewProps> = ({ userRole }) => {
                           >
                             <Info className="w-3.5 h-3.5" />
                           </button>
-                          {userRole === 'ADMIN' && (
+                          {isAdmin && (
                             <>
                               <button
                                 onClick={() => openEditModal(s)}

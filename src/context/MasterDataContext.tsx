@@ -35,7 +35,11 @@ import {
   LessonSchedule,
   canManageLessonSchedule,
   CurriculumGroup,
-  ScheduleDay
+  ScheduleDay,
+  hasRole,
+  hasAnyRole,
+  getUserRoles,
+  normalizeUserRole
 } from '../types';
 import {
   fetchCollection,
@@ -791,9 +795,26 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           : u.role === 'musyrif_kesantrian'
           ? 'MUSYRIF_KESANTRIAN'
           : u.role;
+
+        const rawRoles = Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [resolvedRole];
+        const normalizedRolesList = Array.from(
+          new Set(
+            rawRoles.map((r) =>
+              r === 'PETUGAS_KESANTRIAN'
+                ? resolvedRole
+                : r === 'kepala_kesantrian'
+                ? 'KEPALA_KESANTRIAN'
+                : r === 'musyrif_kesantrian'
+                ? 'MUSYRIF_KESANTRIAN'
+                : normalizeUserRole(r, u)
+            )
+          )
+        );
+
         return {
           ...u,
           role: resolvedRole,
+          roles: normalizedRolesList,
           isActive: u.isActive !== false,
         };
       });
@@ -1381,16 +1402,22 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // 7. User Account actions (Admin user management)
   const saveUser = async (data: UserProfile) => {
+    const roles = getUserRoles(data);
+    const normalizedData: UserProfile = {
+      ...data,
+      roles,
+      role: data.role ? normalizeUserRole(data.role, data) : roles[0],
+    };
     setUsers(prev => {
-      const idx = prev.findIndex(u => u.id === data.id);
+      const idx = prev.findIndex(u => u.id === normalizedData.id);
       if (idx >= 0) {
         const next = [...prev];
-        next[idx] = data;
+        next[idx] = normalizedData;
         return next;
       }
-      return [data, ...prev];
+      return [normalizedData, ...prev];
     });
-    await saveDocument('users', data);
+    await saveDocument('users', normalizedData);
   };
 
   const toggleUserStatus = async (id: string) => {
@@ -1408,10 +1435,18 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // 8. Score actions - Strictly isolated from academic setting configurations
   // SECURITY GUARD: Assert teacher assignment authorization at data-layer
   const saveScore = async (data: Score) => {
-    if (isKesantrianOfficerRole(role)) {
+    // If user only has kesantrian roles and no teacher or admin roles
+    const isPureKesantrian =
+      isKesantrianOfficerRole(currentUser) &&
+      !hasRole(currentUser, 'ADMIN') &&
+      !hasRole(currentUser, 'GURU_MAPEL') &&
+      !hasRole(currentUser, 'WALI_KELAS');
+
+    if (isPureKesantrian) {
       throw new Error('Akses Ditolak: Petugas Kesantrian tidak diizinkan menginput atau mengubah nilai akademik.');
     }
-    if (role === 'GURU_MAPEL' || role === 'WALI_KELAS') {
+
+    if (hasRole(currentUser, 'GURU_MAPEL') || hasRole(currentUser, 'WALI_KELAS')) {
       const effectiveTeacherId =
         currentUser?.teacherId ||
         teachers.find(
@@ -1422,7 +1457,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         )?.id;
 
       const authCheck = assertTeacherScoreAccess(
-        role,
+        currentUser,
         effectiveTeacherId,
         teacherAssignments,
         data,
@@ -1449,11 +1484,18 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const deleteScore = async (id: string) => {
-    if (isKesantrianOfficerRole(role)) {
+    const isPureKesantrian =
+      isKesantrianOfficerRole(currentUser) &&
+      !hasRole(currentUser, 'ADMIN') &&
+      !hasRole(currentUser, 'GURU_MAPEL') &&
+      !hasRole(currentUser, 'WALI_KELAS');
+
+    if (isPureKesantrian) {
       throw new Error('Akses Ditolak: Petugas Kesantrian tidak diizinkan menghapus nilai akademik.');
     }
+
     const existing = scores.find(s => s.id === id);
-    if (existing && (role === 'GURU_MAPEL' || role === 'WALI_KELAS')) {
+    if (existing && (hasRole(currentUser, 'GURU_MAPEL') || hasRole(currentUser, 'WALI_KELAS'))) {
       const effectiveTeacherId =
         currentUser?.teacherId ||
         teachers.find(
@@ -1464,7 +1506,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         )?.id;
 
       const authCheck = assertTeacherScoreAccess(
-        role,
+        currentUser,
         effectiveTeacherId,
         teacherAssignments,
         existing,
@@ -2731,7 +2773,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // 16. Academic Calendar (Kalender Akademik) Actions
   const saveAcademicCalendarEvent = async (data: AcademicCalendarEvent): Promise<void> => {
-    if (!canManageAcademicCalendar(role)) {
+    if (!canManageAcademicCalendar(currentUser || role)) {
       throw new Error('Akses Ditolak: Anda tidak memiliki izin untuk menambah atau mengubah agenda Kalender Akademik.');
     }
 
@@ -2779,7 +2821,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const deleteAcademicCalendarEvent = async (id: string): Promise<void> => {
-    if (!canManageAcademicCalendar(role)) {
+    if (!canManageAcademicCalendar(currentUser || role)) {
       throw new Error('Akses Ditolak: Anda tidak memiliki izin untuk menghapus agenda Kalender Akademik.');
     }
 
@@ -2788,7 +2830,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const saveLessonSchedule = async (data: LessonSchedule): Promise<void> => {
-    if (!canManageLessonSchedule(role)) {
+    if (!canManageLessonSchedule(currentUser || role)) {
       throw new Error('Akses Ditolak: Anda tidak memiliki izin untuk mengelola Jadwal Pelajaran.');
     }
 
@@ -2814,7 +2856,7 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const deleteLessonSchedule = async (id: string): Promise<void> => {
-    if (!canManageLessonSchedule(role)) {
+    if (!canManageLessonSchedule(currentUser || role)) {
       throw new Error('Akses Ditolak: Anda tidak memiliki izin untuk menghapus Jadwal Pelajaran.');
     }
 
