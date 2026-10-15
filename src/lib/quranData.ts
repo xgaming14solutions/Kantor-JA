@@ -1,6 +1,8 @@
 /**
- * AKSARA - Data Referensi Al-Qur'an 114 Surah (Standar Mushaf Utsmani / Madinah 604 Halaman)
- * Digunakan untuk panduan pencatatan hafalan santri yang akurat tanpa mengarang data.
+ * AKSARA - Data Referensi Al-Qur'an 114 Surah, 30 Juz, dan Kitab Hadis
+ * Berdasarkan Standar Mushaf Madinah (Mujamma' Malik Fahd) 604 Halaman.
+ * Digunakan untuk perhitungan otomatis hafalan Al-Qur'an dan Hadis santri
+ * tanpa mengarang data dan menjamin akurasi mutlak.
  */
 
 export interface SurahReference {
@@ -9,10 +11,31 @@ export interface SurahReference {
   arabic: string; // Tulisan Arab, e.g. "البقرة"
   meaning: string; // Arti, e.g. "Sapi Betina"
   ayahCount: number; // Total ayat
-  startPage: number; // Halaman awal mushaf standar
-  endPage: number; // Halaman akhir mushaf standar
-  startJuz: number; // Juz awal
-  endJuz: number; // Juz akhir
+  startPage: number; // Halaman awal mushaf standar (1 - 604)
+  endPage: number; // Halaman akhir mushaf standar (1 - 604)
+  startJuz: number; // Juz awal (1 - 30)
+  endJuz: number; // Juz akhir (1 - 30)
+}
+
+export interface JuzBoundary {
+  juz: number;
+  name: string;
+  startSurah: number;
+  startSurahName: string;
+  startAyah: number;
+  endSurah: number;
+  endSurahName: string;
+  endAyah: number;
+  startPage: number;
+  endPage: number;
+}
+
+export interface HadithBookMetadata {
+  id: string;
+  name: string;
+  author: string;
+  totalHadith: number; // Total hadis resmi dalam kitab
+  description: string;
 }
 
 export const QURAN_SURAHS: SurahReference[] = [
@@ -132,13 +155,84 @@ export const QURAN_SURAHS: SurahReference[] = [
   { number: 114, name: 'An-Nas', arabic: 'الناس', meaning: 'Manusia', ayahCount: 6, startPage: 604, endPage: 604, startJuz: 30, endJuz: 30 }
 ];
 
-export const HADITH_BOOKS: string[] = [
-  'Arba\'in An-Nawawi',
-  'Umdatul Ahkam',
-  'Bulughul Maram',
-  'Riyadus Shalihin',
-  'Hadits Pilihan / Adab Santri'
+/**
+ * Pemetaan 30 Juz Al-Qur'an Standar Mushaf Madinah (604 Halaman)
+ */
+export const JUZ_BOUNDARIES: JuzBoundary[] = [
+  { juz: 1, name: 'Juz 1', startSurah: 1, startSurahName: 'Al-Fatihah', startAyah: 1, endSurah: 2, endSurahName: 'Al-Baqarah', endAyah: 141, startPage: 1, endPage: 21 },
+  { juz: 2, name: 'Juz 2', startSurah: 2, startSurahName: 'Al-Baqarah', startAyah: 142, endSurah: 2, endSurahName: 'Al-Baqarah', endAyah: 252, startPage: 22, endPage: 41 },
+  { juz: 3, name: 'Juz 3', startSurah: 2, startSurahName: 'Al-Baqarah', startAyah: 253, endSurah: 3, endSurahName: 'Ali \'Imran', endAyah: 92, startPage: 42, endPage: 61 },
+  { juz: 4, name: 'Juz 4', startSurah: 3, startSurahName: 'Ali \'Imran', startAyah: 93, endSurah: 4, endSurahName: 'An-Nisa\'', endAyah: 23, startPage: 62, endPage: 81 },
+  { juz: 5, name: 'Juz 5', startSurah: 4, startSurahName: 'An-Nisa\'', startAyah: 24, endSurah: 4, endSurahName: 'An-Nisa\'', endAyah: 147, startPage: 82, endPage: 101 },
+  { juz: 6, name: 'Juz 6', startSurah: 4, startSurahName: 'An-Nisa\'', startAyah: 148, endSurah: 5, endSurahName: 'Al-Ma\'idah', endAyah: 81, startPage: 102, endPage: 121 },
+  { juz: 7, name: 'Juz 7', startSurah: 5, startSurahName: 'Al-Ma\'idah', startAyah: 82, endSurah: 6, endSurahName: 'Al-An\'am', endAyah: 110, startPage: 122, endPage: 141 },
+  { juz: 8, name: 'Juz 8', startSurah: 6, startSurahName: 'Al-An\'am', startAyah: 111, endSurah: 7, endSurahName: 'Al-A\'raf', endAyah: 87, startPage: 142, endPage: 161 },
+  { juz: 9, name: 'Juz 9', startSurah: 7, startSurahName: 'Al-A\'raf', startAyah: 88, endSurah: 8, endSurahName: 'Al-Anfal', endAyah: 40, startPage: 162, endPage: 181 },
+  { juz: 10, name: 'Juz 10', startSurah: 8, startSurahName: 'Al-Anfal', startAyah: 41, endSurah: 9, endSurahName: 'At-Taubah', endAyah: 92, startPage: 182, endPage: 201 },
+  { juz: 11, name: 'Juz 11', startSurah: 9, startSurahName: 'At-Taubah', startAyah: 93, endSurah: 11, endSurahName: 'Hud', endAyah: 5, startPage: 202, endPage: 221 },
+  { juz: 12, name: 'Juz 12', startSurah: 11, startSurahName: 'Hud', startAyah: 6, endSurah: 12, endSurahName: 'Yusuf', endAyah: 52, startPage: 222, endPage: 241 },
+  { juz: 13, name: 'Juz 13', startSurah: 12, startSurahName: 'Yusuf', startAyah: 53, endSurah: 14, endSurahName: 'Ibrahim', endAyah: 52, startPage: 242, endPage: 261 },
+  { juz: 14, name: 'Juz 14', startSurah: 15, startSurahName: 'Al-Hijr', startAyah: 1, endSurah: 16, endSurahName: 'An-Nahl', endAyah: 128, startPage: 262, endPage: 281 },
+  { juz: 15, name: 'Juz 15', startSurah: 17, startSurahName: 'Al-Isra\'', startAyah: 1, endSurah: 18, endSurahName: 'Al-Kahf', endAyah: 74, startPage: 282, endPage: 301 },
+  { juz: 16, name: 'Juz 16', startSurah: 18, startSurahName: 'Al-Kahf', startAyah: 75, endSurah: 20, endSurahName: 'Ta-Ha', endAyah: 135, startPage: 302, endPage: 321 },
+  { juz: 17, name: 'Juz 17', startSurah: 21, startSurahName: 'Al-Anbiya\'', startAyah: 1, endSurah: 22, endSurahName: 'Al-Hajj', endAyah: 78, startPage: 322, endPage: 341 },
+  { juz: 18, name: 'Juz 18', startSurah: 23, startSurahName: 'Al-Mu\'minun', startAyah: 1, endSurah: 25, endSurahName: 'Al-Furqan', endAyah: 20, startPage: 342, endPage: 361 },
+  { juz: 19, name: 'Juz 19', startSurah: 25, startSurahName: 'Al-Furqan', startAyah: 21, endSurah: 27, endSurahName: 'An-Naml', endAyah: 55, startPage: 362, endPage: 381 },
+  { juz: 20, name: 'Juz 20', startSurah: 27, startSurahName: 'An-Naml', startAyah: 56, endSurah: 29, endSurahName: 'Al-\'Ankabut', endAyah: 45, startPage: 382, endPage: 401 },
+  { juz: 21, name: 'Juz 21', startSurah: 29, startSurahName: 'Al-\'Ankabut', startAyah: 46, endSurah: 33, endSurahName: 'Al-Ahzab', endAyah: 30, startPage: 402, endPage: 421 },
+  { juz: 22, name: 'Juz 22', startSurah: 33, startSurahName: 'Al-Ahzab', startAyah: 31, endSurah: 36, endSurahName: 'Ya-Sin', endAyah: 27, startPage: 422, endPage: 441 },
+  { juz: 23, name: 'Juz 23', startSurah: 36, startSurahName: 'Ya-Sin', startAyah: 28, endSurah: 39, endSurahName: 'Az-Zumar', endAyah: 31, startPage: 442, endPage: 461 },
+  { juz: 24, name: 'Juz 24', startSurah: 39, startSurahName: 'Az-Zumar', startAyah: 32, endSurah: 41, endSurahName: 'Fussilat', endAyah: 46, startPage: 462, endPage: 481 },
+  { juz: 25, name: 'Juz 25', startSurah: 41, startSurahName: 'Fussilat', startAyah: 47, endSurah: 45, endSurahName: 'Al-Jasiyah', endAyah: 37, startPage: 482, endPage: 501 },
+  { juz: 26, name: 'Juz 26', startSurah: 46, startSurahName: 'Al-Ahqaf', startAyah: 1, endSurah: 51, endSurahName: 'Az-Zariyat', endAyah: 30, startPage: 502, endPage: 521 },
+  { juz: 27, name: 'Juz 27', startSurah: 51, startSurahName: 'Az-Zariyat', startAyah: 31, endSurah: 57, endSurahName: 'Al-Hadid', endAyah: 29, startPage: 522, endPage: 541 },
+  { juz: 28, name: 'Juz 28', startSurah: 58, startSurahName: 'Al-Mujadilah', startAyah: 1, endSurah: 66, endSurahName: 'At-Tahrim', endAyah: 12, startPage: 542, endPage: 561 },
+  { juz: 29, name: 'Juz 29', startSurah: 67, startSurahName: 'Al-Mulk', startAyah: 1, endSurah: 77, endSurahName: 'Al-Mursalat', endAyah: 50, startPage: 562, endPage: 581 },
+  { juz: 30, name: 'Juz 30', startSurah: 78, startSurahName: 'An-Naba\'', startAyah: 1, endSurah: 114, endSurahName: 'An-Nas', endAyah: 6, startPage: 582, endPage: 604 }
 ];
+
+/**
+ * Katalog Kitab Hadis Resmi yang diajarkan di Ma'had AKSARA beserta batas total hadis
+ */
+export const HADITH_CATALOG: HadithBookMetadata[] = [
+  {
+    id: 'arbain',
+    name: "Arba'in An-Nawawi",
+    author: 'Imam An-Nawawi',
+    totalHadith: 42,
+    description: 'Kitab 42 hadis pokok dasar-dasar syariat Islam'
+  },
+  {
+    id: 'umdatul_ahkam',
+    name: 'Umdatul Ahkam',
+    author: 'Imam Abdul Ghani Al-Maqdisi',
+    totalHadith: 430,
+    description: 'Kumpulan hadis hukum fiqih muttafaq \'alaih (Bukhari & Muslim)'
+  },
+  {
+    id: 'bulughul_maram',
+    name: 'Bulughul Maram',
+    author: 'Al-Hafizh Ibnu Hajar Al-Asqalani',
+    totalHadith: 1596,
+    description: 'Kitab rujukan dalil hadis-hadis hukum syariat'
+  },
+  {
+    id: 'riyadus_shalihin',
+    name: 'Riyadus Shalihin',
+    author: 'Imam An-Nawawi',
+    totalHadith: 1896,
+    description: 'Taman orang-orang shalih: hadis adab, akhlak, dan tazkiyatun nufus'
+  },
+  {
+    id: 'hadits_pilihan',
+    name: 'Hadits Pilihan / Adab Santri',
+    author: 'Kurikulum Ma\'had AKSARA',
+    totalHadith: 100,
+    description: '100 hadis pilihan adab penuntut ilmu, akhlak mulia, dan ibadah harian'
+  }
+];
+
+export const HADITH_BOOKS: string[] = HADITH_CATALOG.map((b) => b.name);
 
 /**
  * Returns surah reference by 1-based number (1 to 114)
@@ -157,8 +251,66 @@ export function getSurahByName(name: string): SurahReference | undefined {
 }
 
 /**
- * Accurately calculates progress delta between starting position and ending position.
- * Handles same surah, multiple surahs, and page ranges.
+ * Menentukan Juz otomatis (1 - 30) dari posisi Surat dan Ayat Al-Qur'an
+ */
+export function getJuzFromSurahAyah(surahNum: number, ayahNum: number): number {
+  if (surahNum < 1) return 1;
+  if (surahNum > 114) return 30;
+
+  for (const b of JUZ_BOUNDARIES) {
+    const isAfterStart =
+      surahNum > b.startSurah || (surahNum === b.startSurah && ayahNum >= b.startAyah);
+    const isBeforeEnd =
+      surahNum < b.endSurah || (surahNum === b.endSurah && ayahNum <= b.endAyah);
+
+    if (isAfterStart && isBeforeEnd) {
+      return b.juz;
+    }
+  }
+
+  // Fallback berdasarkan data surah
+  const s = getSurahByNumber(surahNum);
+  return s ? s.startJuz : 30;
+}
+
+/**
+ * Menentukan Juz otomatis (1 - 30) dari nomor Halaman Mushaf Madinah (1 - 604)
+ */
+export function getJuzFromPage(page: number): number {
+  if (page <= 0) return 1;
+  if (page >= 604) return 30;
+  for (const b of JUZ_BOUNDARIES) {
+    if (page >= b.startPage && page <= b.endPage) {
+      return b.juz;
+    }
+  }
+  return 30;
+}
+
+/**
+ * Mendapatkan metadata kitab hadis berdasarkan nama
+ */
+export function getHadithBookByName(name: string): HadithBookMetadata | undefined {
+  if (!name) return undefined;
+  const clean = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return HADITH_CATALOG.find((b) => b.name.toLowerCase().replace(/[^a-z0-9]/g, '') === clean);
+}
+
+export interface QuranProgressResult {
+  isValid: boolean;
+  errorMessage?: string;
+  calculatedPages: number;
+  calculatedAyahs: number;
+  startJuz: number;
+  endJuz: number;
+}
+
+/**
+ * Menghitung perkembangan hafalan Al-Qur'an secara akurat dan otomatis:
+ * - Menghitung jumlah halaman baru (endPage - startPage + 1)
+ * - Menghitung jumlah ayat baru berdasarkan urutan 114 surah dan ayahCount resmi
+ * - Menentukan Juz awal dan akhir secara otomatis
+ * - Memvalidasi batas input dan urutan posisi
  */
 export function calculateQuranProgress(
   startSurahNum: number,
@@ -167,38 +319,181 @@ export function calculateQuranProgress(
   endSurahNum: number,
   endAyah: number,
   endPage: number
-): { calculatedPages: number; calculatedAyahs: number } {
-  // Page delta
-  let calculatedPages = 0;
-  if (startPage > 0 && endPage > 0) {
-    if (endPage >= startPage) {
-      calculatedPages = endPage - startPage + 1;
-    } else {
-      calculatedPages = 0;
-    }
+): QuranProgressResult {
+  const startSurah = getSurahByNumber(startSurahNum);
+  const endSurah = getSurahByNumber(endSurahNum);
+
+  if (!startSurah || !endSurah) {
+    return {
+      isValid: false,
+      errorMessage: 'Surat Al-Qur\'an awal atau akhir tidak valid (pilih 1 - 114).',
+      calculatedPages: 0,
+      calculatedAyahs: 0,
+      startJuz: 1,
+      endJuz: 1
+    };
   }
 
-  // Ayah delta
+  // Tentukan Juz otomatis
+  const startJuz = getJuzFromSurahAyah(startSurahNum, startAyah || 1);
+  const endJuz = getJuzFromSurahAyah(endSurahNum, endAyah || 1);
+
+  // Validasi batas ayat
+  if (startAyah < 1 || startAyah > startSurah.ayahCount) {
+    return {
+      isValid: false,
+      errorMessage: `Ayat awal Surat ${startSurah.name} harus antara 1 dan ${startSurah.ayahCount}.`,
+      calculatedPages: 0,
+      calculatedAyahs: 0,
+      startJuz,
+      endJuz
+    };
+  }
+
+  if (endAyah < 1 || endAyah > endSurah.ayahCount) {
+    return {
+      isValid: false,
+      errorMessage: `Ayat akhir Surat ${endSurah.name} harus antara 1 dan ${endSurah.ayahCount}.`,
+      calculatedPages: 0,
+      calculatedAyahs: 0,
+      startJuz,
+      endJuz
+    };
+  }
+
+  // Validasi batas halaman Mushaf Madinah (1 - 604)
+  if (startPage < 1 || startPage > 604 || endPage < 1 || endPage > 604) {
+    return {
+      isValid: false,
+      errorMessage: 'Halaman Al-Qur\'an harus berada di rentang 1 s.d. 604 (Mushaf Madinah).',
+      calculatedPages: 0,
+      calculatedAyahs: 0,
+      startJuz,
+      endJuz
+    };
+  }
+
+  // Validasi urutan halaman
+  if (endPage < startPage) {
+    return {
+      isValid: false,
+      errorMessage: `Halaman akhir (${endPage}) tidak boleh lebih kecil dari halaman awal (${startPage}).`,
+      calculatedPages: 0,
+      calculatedAyahs: 0,
+      startJuz,
+      endJuz
+    };
+  }
+
+  // Validasi urutan surat & ayat
+  if (endSurahNum < startSurahNum || (endSurahNum === startSurahNum && endAyah < startAyah)) {
+    return {
+      isValid: false,
+      errorMessage: 'Posisi akhir ayat Al-Qur\'an berada sebelum posisi awal.',
+      calculatedPages: 0,
+      calculatedAyahs: 0,
+      startJuz,
+      endJuz
+    };
+  }
+
+  // Hitung jumlah halaman yang dilewati
+  const calculatedPages = endPage - startPage + 1;
+
+  // Hitung jumlah ayat yang dilewati
   let calculatedAyahs = 0;
-  if (startSurahNum > 0 && endSurahNum > 0 && startAyah > 0 && endAyah > 0) {
-    if (startSurahNum === endSurahNum) {
-      if (endAyah >= startAyah) {
-        calculatedAyahs = endAyah - startAyah + 1;
+  if (startSurahNum === endSurahNum) {
+    calculatedAyahs = endAyah - startAyah + 1;
+  } else {
+    // Sisa ayat di surat awal
+    calculatedAyahs += Math.max(0, startSurah.ayahCount - startAyah + 1);
+
+    // Seluruh ayat di surat-surat perantara
+    for (let s = startSurahNum + 1; s < endSurahNum; s++) {
+      const intermediate = getSurahByNumber(s);
+      if (intermediate) {
+        calculatedAyahs += intermediate.ayahCount;
       }
-    } else if (endSurahNum > startSurahNum) {
-      const startSurah = getSurahByNumber(startSurahNum);
-      if (startSurah) {
-        calculatedAyahs += Math.max(0, startSurah.ayahCount - startAyah + 1);
-      }
-      for (let s = startSurahNum + 1; s < endSurahNum; s++) {
-        const intermediate = getSurahByNumber(s);
-        if (intermediate) {
-          calculatedAyahs += intermediate.ayahCount;
-        }
-      }
-      calculatedAyahs += endAyah;
     }
+
+    // Ayat di surat akhir
+    calculatedAyahs += endAyah;
   }
 
-  return { calculatedPages, calculatedAyahs };
+  return {
+    isValid: true,
+    calculatedPages,
+    calculatedAyahs,
+    startJuz,
+    endJuz
+  };
+}
+
+export interface HadithProgressResult {
+  isValid: boolean;
+  errorMessage?: string;
+  newCount: number;
+  formattedRange: string;
+}
+
+/**
+ * Menghitung perkembangan hafalan Hadis secara akurat dan otomatis:
+ * - Menghitung jumlah hadis baru berdasarkan rentang (endNum - startNum + 1)
+ * - Memvalidasi urutan nomor (start <= end)
+ * - Memvalidasi batas maksimal hadis sesuai data kitab
+ */
+export function calculateHadithProgress(
+  bookName: string,
+  startNum: number,
+  endNum: number
+): HadithProgressResult {
+  const book = getHadithBookByName(bookName) || HADITH_CATALOG[0];
+
+  if (!startNum || startNum < 1) {
+    return {
+      isValid: false,
+      errorMessage: 'Nomor hadis awal minimal adalah 1.',
+      newCount: 0,
+      formattedRange: '-'
+    };
+  }
+
+  if (!endNum || endNum < 1) {
+    return {
+      isValid: false,
+      errorMessage: 'Nomor hadis akhir minimal adalah 1.',
+      newCount: 0,
+      formattedRange: '-'
+    };
+  }
+
+  if (endNum < startNum) {
+    return {
+      isValid: false,
+      errorMessage: `Nomor hadis akhir (${endNum}) tidak boleh lebih kecil dari nomor awal (${startNum}).`,
+      newCount: 0,
+      formattedRange: '-'
+    };
+  }
+
+  if (book && endNum > book.totalHadith) {
+    return {
+      isValid: false,
+      errorMessage: `Nomor hadis akhir (${endNum}) melebihi total hadis dalam kitab ${book.name} (maksimal ${book.totalHadith} hadis).`,
+      newCount: 0,
+      formattedRange: '-'
+    };
+  }
+
+  const count = endNum - startNum + 1;
+  const rangeStr =
+    startNum === endNum
+      ? `Hadits No. ${startNum}`
+      : `Hadits No. ${startNum} s.d. ${endNum} (${count} hadis)`;
+
+  return {
+    isValid: true,
+    newCount: count,
+    formattedRange: rangeStr
+  };
 }

@@ -16,8 +16,13 @@ import {
 import {
   QURAN_SURAHS,
   HADITH_BOOKS,
+  HADITH_CATALOG,
   getSurahByNumber,
-  calculateQuranProgress
+  getJuzFromSurahAyah,
+  getJuzFromPage,
+  getHadithBookByName,
+  calculateQuranProgress,
+  calculateHadithProgress
 } from '../lib/quranData';
 import {
   BookOpen,
@@ -276,7 +281,19 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
   const [formHadithList, setFormHadithList] = useState<string>('1, 2, 3, 4, 5');
   const [formHadithNotes, setFormHadithNotes] = useState<string>('');
 
-  // Total Accumulation
+  // Total Accumulation & Baseline State
+  const [baselineAccumulation, setBaselineAccumulation] = useState<{
+    baselineReport: HalaqahMonthlyReport | null;
+    pages: number;
+    hadith: number;
+    juz: number;
+  }>({
+    baselineReport: null,
+    pages: 0,
+    hadith: 0,
+    juz: 0
+  });
+
   const [formAccJuz, setFormAccJuz] = useState<number>(1);
   const [formAccPages, setFormAccPages] = useState<number>(20);
   const [formAccHadith, setFormAccHadith] = useState<number>(5);
@@ -509,7 +526,7 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
     document.body.removeChild(link);
   };
 
-  // Auto-calculate Quran Progress when start or end changes
+  // 1. Auto-calculate Quran Progress when start or end changes (Mushaf Madinah 604 Hal & 114 Surah)
   const autoQuranCalc = useMemo(() => {
     return calculateQuranProgress(
       formQuranStartSurah,
@@ -528,6 +545,50 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
     formQuranEndPage
   ]);
 
+  // 2. Auto-calculate Hadith Progress when book or range changes
+  const autoHadithCalc = useMemo(() => {
+    return calculateHadithProgress(
+      formHadithBook,
+      formHadithStartNum,
+      formHadithEndNum
+    );
+  }, [formHadithBook, formHadithStartNum, formHadithEndNum]);
+
+  // 3. Auto-calculate Total Accumulation across months (strictly baseline + current month progress)
+  const autoAccumulation = useMemo(() => {
+    const newPages = autoQuranCalc.isValid ? autoQuranCalc.calculatedPages : 0;
+    const newHadith = autoHadithCalc.isValid ? autoHadithCalc.newCount : 0;
+
+    const totalPages = (baselineAccumulation?.pages || 0) + newPages;
+    const totalHadith = (baselineAccumulation?.hadith || 0) + newHadith;
+    // Standard ~20 pages per Juz in Mushaf Madinah
+    const totalJuz = Math.min(30, Math.floor(totalPages / 20));
+
+    const endSurahObj = getSurahByNumber(formQuranEndSurah);
+    const lastSurahName = endSurahObj ? endSurahObj.name : `Surat ${formQuranEndSurah}`;
+
+    return {
+      totalPages,
+      totalHadith,
+      totalJuz,
+      lastSurahName,
+      lastAyah: formQuranEndAyah,
+      lastPage: formQuranEndPage,
+      lastJuz: autoQuranCalc.endJuz,
+      lastHadithBook: formHadithBook,
+      lastHadithNumber: formHadithEndNum
+    };
+  }, [
+    baselineAccumulation,
+    autoQuranCalc,
+    autoHadithCalc,
+    formQuranEndSurah,
+    formQuranEndAyah,
+    formQuranEndPage,
+    formHadithBook,
+    formHadithEndNum
+  ]);
+
   // Open modal for editing or creating report
   const handleOpenReportModal = (st: Student) => {
     setSelectedStudentForReport(st);
@@ -543,18 +604,31 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
         r.year === selectedYear
     );
 
-    // Look for previous month report to intelligently default starting position
-    const prevMonth = selectedMonth === 1 ? 12 : selectedMonth - 1;
-    const prevYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear;
-    const previousReport = halaqahMonthlyReports.find(
-      (r) =>
-        r.studentId === st.id &&
-        r.halaqahId === selectedHalaqahId &&
-        r.month === prevMonth &&
-        r.year === prevYear
-    );
+    // Look for all historical reports strictly before this month/year to find baseline accumulation
+    const priorReports = halaqahMonthlyReports
+      .filter((r) => {
+        if (r.studentId !== st.id) return false;
+        if (existing && r.id === existing.id) return false;
+        const rTime = r.year * 12 + r.month;
+        const curTime = selectedYear * 12 + selectedMonth;
+        return rTime < curTime;
+      })
+      .sort((a, b) => (b.year * 12 + b.month) - (a.year * 12 + a.month));
+
+    const baselineReport = priorReports[0] || null;
+    const baselinePages = baselineReport ? (baselineReport.totalAccumulatedPages || 0) : 0;
+    const baselineHadith = baselineReport ? (baselineReport.totalAccumulatedHadith || 0) : 0;
+    const baselineJuz = baselineReport ? (baselineReport.totalAccumulatedJuz || 0) : 0;
+
+    setBaselineAccumulation({
+      baselineReport,
+      pages: baselinePages,
+      hadith: baselineHadith,
+      juz: baselineJuz
+    });
 
     if (existing) {
+      // 1. Existing report
       setFormQuranStartSurah(existing.quranStartSurahNumber || 78);
       setFormQuranStartAyah(existing.quranStartAyah || 1);
       setFormQuranStartJuz(existing.quranStartJuz || 30);
@@ -569,7 +643,7 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
       setFormQuranNewAyahs(existing.quranNewAyahs || 40);
       setFormQuranNotes(existing.quranNotes || '');
 
-      setFormHadithBook(existing.hadithBook || 'Arba\'in An-Nawawi');
+      setFormHadithBook(existing.hadithBook || "Arba'in An-Nawawi");
       setFormHadithStartNum(existing.hadithStartNumber || 1);
       setFormHadithStartTitle(existing.hadithStartTitle || '');
       setFormHadithEndNum(existing.hadithEndNumber || 5);
@@ -581,52 +655,84 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
       setFormAccJuz(existing.totalAccumulatedJuz || 1);
       setFormAccPages(existing.totalAccumulatedPages || 20);
       setFormAccHadith(existing.totalAccumulatedHadith || 5);
-      setFormLastSurah(existing.lastHafalanSurah || 'An-Naba\'');
+      setFormLastSurah(existing.lastHafalanSurah || "An-Naba'");
       setFormLastAyah(existing.lastHafalanAyah || 40);
       setFormLastJuz(existing.lastHafalanJuz || 30);
       setFormLastPage(existing.lastHafalanPage || 583);
       setFormLastHadithNum(existing.lastHadithNumber || 5);
-      setFormLastHadithBook(existing.lastHadithBook || 'Arba\'in An-Nawawi');
+      setFormLastHadithBook(existing.lastHadithBook || "Arba'in An-Nawawi");
       setFormAccVerified(existing.isAccumulationVerified !== false);
       setFormStatus(existing.status);
-    } else if (previousReport) {
-      // Advance position smoothly from previous month's ending position
-      setFormQuranStartSurah(previousReport.quranEndSurahNumber);
-      setFormQuranStartAyah(previousReport.quranEndAyah + 1);
-      setFormQuranStartJuz(previousReport.quranEndJuz);
-      setFormQuranStartPage(previousReport.quranEndPage);
+    } else if (baselineReport) {
+      // 2. Continuing from previous month's ending position
+      const prevEndSurah = getSurahByNumber(baselineReport.quranEndSurahNumber);
+      const isSurahFinished = prevEndSurah && baselineReport.quranEndAyah >= prevEndSurah.ayahCount;
 
-      setFormQuranEndSurah(previousReport.quranEndSurahNumber);
-      setFormQuranEndAyah(previousReport.quranEndAyah + 20);
-      setFormQuranEndJuz(previousReport.quranEndJuz);
-      setFormQuranEndPage(previousReport.quranEndPage + 1);
+      let nextStartSurahNum = baselineReport.quranEndSurahNumber;
+      let nextStartAyah = baselineReport.quranEndAyah + 1;
+      let nextStartPage = baselineReport.quranEndPage;
 
-      setFormQuranNewPages(1);
-      setFormQuranNewAyahs(20);
+      if (isSurahFinished && baselineReport.quranEndSurahNumber < 114) {
+        nextStartSurahNum = baselineReport.quranEndSurahNumber + 1;
+        nextStartAyah = 1;
+        const nextSurahObj = getSurahByNumber(nextStartSurahNum);
+        nextStartPage = nextSurahObj?.startPage || baselineReport.quranEndPage;
+      }
+
+      const nextStartJuz = getJuzFromSurahAyah(nextStartSurahNum, nextStartAyah);
+      const targetSurahObj = getSurahByNumber(nextStartSurahNum);
+
+      setFormQuranStartSurah(nextStartSurahNum);
+      setFormQuranStartAyah(nextStartAyah);
+      setFormQuranStartJuz(nextStartJuz);
+      setFormQuranStartPage(nextStartPage);
+
+      const nextEndAyah = Math.min(nextStartAyah + 19, targetSurahObj?.ayahCount || 40);
+      const nextEndPage = Math.min(nextStartPage + 1, targetSurahObj?.endPage || 604);
+      const nextEndJuz = getJuzFromSurahAyah(nextStartSurahNum, nextEndAyah);
+
+      setFormQuranEndSurah(nextStartSurahNum);
+      setFormQuranEndAyah(nextEndAyah);
+      setFormQuranEndJuz(nextEndJuz);
+      setFormQuranEndPage(nextEndPage);
+
+      setFormQuranNewPages(nextEndPage - nextStartPage + 1);
+      setFormQuranNewAyahs(nextEndAyah - nextStartAyah + 1);
       setFormQuranNotes('');
 
-      setFormHadithBook(previousReport.hadithBook);
-      setFormHadithStartNum(previousReport.hadithEndNumber + 1);
+      // Hadith
+      const hadithBook = baselineReport.hadithBook || "Arba'in An-Nawawi";
+      const bookMeta = getHadithBookByName(hadithBook);
+      const maxHadith = bookMeta?.totalHadith || 42;
+      const nextHadithStart = Math.min(baselineReport.hadithEndNumber + 1, maxHadith);
+      const nextHadithEnd = Math.min(nextHadithStart + 2, maxHadith);
+
+      setFormHadithBook(hadithBook);
+      setFormHadithStartNum(nextHadithStart);
       setFormHadithStartTitle('');
-      setFormHadithEndNum(previousReport.hadithEndNumber + 3);
+      setFormHadithEndNum(nextHadithEnd);
       setFormHadithEndTitle('');
-      setFormHadithNewCount(3);
-      setFormHadithList(`${previousReport.hadithEndNumber + 1}-${previousReport.hadithEndNumber + 3}`);
+      setFormHadithNewCount(Math.max(1, nextHadithEnd - nextHadithStart + 1));
+      setFormHadithList(
+        nextHadithStart === nextHadithEnd
+          ? `Hadits No. ${nextHadithStart}`
+          : `Hadits No. ${nextHadithStart} s.d. ${nextHadithEnd}`
+      );
       setFormHadithNotes('');
 
-      setFormAccJuz(previousReport.totalAccumulatedJuz);
-      setFormAccPages(previousReport.totalAccumulatedPages + 1);
-      setFormAccHadith(previousReport.totalAccumulatedHadith + 3);
-      setFormLastSurah(previousReport.lastHafalanSurah);
-      setFormLastAyah(previousReport.quranEndAyah + 20);
-      setFormLastJuz(previousReport.lastHafalanJuz);
-      setFormLastPage(previousReport.quranEndPage + 1);
-      setFormLastHadithNum(previousReport.hadithEndNumber + 3);
-      setFormLastHadithBook(previousReport.hadithBook);
+      setFormAccJuz(baselineJuz);
+      setFormAccPages(baselinePages + (nextEndPage - nextStartPage + 1));
+      setFormAccHadith(baselineHadith + Math.max(1, nextHadithEnd - nextHadithStart + 1));
+      setFormLastSurah(targetSurahObj?.name || `Surat ${nextStartSurahNum}`);
+      setFormLastAyah(nextEndAyah);
+      setFormLastJuz(nextEndJuz);
+      setFormLastPage(nextEndPage);
+      setFormLastHadithNum(nextHadithEnd);
+      setFormLastHadithBook(hadithBook);
       setFormAccVerified(true);
       setFormStatus('Draf');
     } else {
-      // Fresh new report initial values
+      // 3. Fresh new student report
       setFormQuranStartSurah(78);
       setFormQuranStartAyah(1);
       setFormQuranStartJuz(30);
@@ -641,24 +747,24 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
       setFormQuranNewAyahs(40);
       setFormQuranNotes('Alhamdulillah setoran hafalan lancar.');
 
-      setFormHadithBook('Arba\'in An-Nawawi');
+      setFormHadithBook("Arba'in An-Nawawi");
       setFormHadithStartNum(1);
       setFormHadithStartTitle('Hadits 1: Niat');
       setFormHadithEndNum(5);
       setFormHadithEndTitle('Hadits 5: Larangan Bid\'ah');
       setFormHadithNewCount(5);
-      setFormHadithList('1, 2, 3, 4, 5');
+      setFormHadithList('Hadits No. 1 s.d. 5 (5 hadis)');
       setFormHadithNotes('Hafalan matan hadits tartil dan paham makna ringkas.');
 
       setFormAccJuz(1);
-      setFormAccPages(20);
+      setFormAccPages(2);
       setFormAccHadith(5);
       setFormLastSurah('An-Naba\'');
       setFormLastAyah(40);
       setFormLastJuz(30);
       setFormLastPage(583);
       setFormLastHadithNum(5);
-      setFormLastHadithBook('Arba\'in An-Nawawi');
+      setFormLastHadithBook("Arba'in An-Nawawi");
       setFormAccVerified(true);
       setFormStatus('Draf');
     }
@@ -675,6 +781,17 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
     setIsSaving(true);
 
     try {
+      if (!autoQuranCalc.isValid) {
+        setFormError(autoQuranCalc.errorMessage || "Data posisi hafalan Al-Qur'an tidak valid.");
+        setIsSaving(false);
+        return;
+      }
+      if (!autoHadithCalc.isValid) {
+        setFormError(autoHadithCalc.errorMessage || 'Data hafalan Hadis tidak valid.');
+        setIsSaving(false);
+        return;
+      }
+
       const startSurahObj = getSurahByNumber(formQuranStartSurah);
       const endSurahObj = getSurahByNumber(formQuranEndSurah);
 
@@ -684,6 +801,15 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
         currentUser?.teacherId ||
         currentUser?.id ||
         't_001';
+
+      // Look up existing report to preserve original createdAt
+      const existingReport = halaqahMonthlyReports.find(
+        (r) =>
+          r.studentId === selectedStudentForReport.id &&
+          r.halaqahId === currentHalaqah.id &&
+          r.month === selectedMonth &&
+          r.year === selectedYear
+      );
 
       const reportData: HalaqahMonthlyReport = {
         id: `hlqr_${selectedYearId}_${selectedYear}_${selectedMonth}_${currentHalaqah.id}_${selectedStudentForReport.id}`,
@@ -703,19 +829,19 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
         quranStartSurah: startSurahObj?.name || `Surat ${formQuranStartSurah}`,
         quranStartSurahNumber: Number(formQuranStartSurah),
         quranStartAyah: Number(formQuranStartAyah),
-        quranStartJuz: Number(formQuranStartJuz),
+        quranStartJuz: Number(autoQuranCalc.startJuz),
         quranStartPage: Number(formQuranStartPage),
 
         // B. Quran End
         quranEndSurah: endSurahObj?.name || `Surat ${formQuranEndSurah}`,
         quranEndSurahNumber: Number(formQuranEndSurah),
         quranEndAyah: Number(formQuranEndAyah),
-        quranEndJuz: Number(formQuranEndJuz),
+        quranEndJuz: Number(autoQuranCalc.endJuz),
         quranEndPage: Number(formQuranEndPage),
 
-        // C. Quran New Progress
-        quranNewPages: Number(formQuranNewPages),
-        quranNewAyahs: Number(formQuranNewAyahs),
+        // C. Quran New Progress (Dihitung Otomatis Berdasarkan Mushaf Madinah 604 Hal & Urutan 114 Surat)
+        quranNewPages: autoQuranCalc.calculatedPages,
+        quranNewAyahs: autoQuranCalc.calculatedAyahs,
         quranNotes: formQuranNotes.trim(),
 
         // D. Hadith Start
@@ -727,26 +853,26 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
         hadithEndNumber: Number(formHadithEndNum),
         hadithEndTitle: formHadithEndTitle.trim(),
 
-        // F. Hadith New Progress
-        hadithNewCount: Number(formHadithNewCount),
-        hadithListNumbers: formHadithList.trim(),
+        // F. Hadith New Progress (Dihitung Otomatis dari Rentang Nomor Hadis)
+        hadithNewCount: autoHadithCalc.newCount,
+        hadithListNumbers: autoHadithCalc.formattedRange,
         hadithNotes: formHadithNotes.trim(),
 
-        // G. Total Accumulation
-        totalAccumulatedJuz: Number(formAccJuz),
-        totalAccumulatedPages: Number(formAccPages),
-        totalAccumulatedHadith: Number(formAccHadith),
-        lastHafalanSurah: formLastSurah,
-        lastHafalanAyah: Number(formLastAyah),
-        lastHafalanJuz: Number(formLastJuz),
-        lastHafalanPage: Number(formLastPage),
-        lastHadithNumber: Number(formLastHadithNum),
-        lastHadithBook: formLastHadithBook,
+        // G. Total Accumulation (Dihitung Otomatis Lintas Bulan: Baseline Lalu + Capaian Baru Bulan Ini)
+        totalAccumulatedJuz: autoAccumulation.totalJuz,
+        totalAccumulatedPages: autoAccumulation.totalPages,
+        totalAccumulatedHadith: autoAccumulation.totalHadith,
+        lastHafalanSurah: autoAccumulation.lastSurahName,
+        lastHafalanAyah: Number(autoAccumulation.lastAyah),
+        lastHafalanJuz: Number(autoAccumulation.lastJuz),
+        lastHafalanPage: Number(autoAccumulation.lastPage),
+        lastHadithNumber: Number(autoAccumulation.lastHadithNumber),
+        lastHadithBook: autoAccumulation.lastHadithBook,
         isAccumulationVerified: formAccVerified,
 
         // H. Status
         status: targetStatus,
-        createdAt: new Date().toISOString(),
+        createdAt: existingReport?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
 
@@ -2304,9 +2430,9 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
 
               {/* Guidance Info */}
               <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-100 text-indigo-950 text-xs leading-relaxed flex items-start gap-2">
-                <HelpCircle className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
                 <div>
-                  <strong>Panduan Pencatatan:</strong> Masukkan posisi awal bulan dan posisi akhir bulan santri. Sistem menyediakan bantuan penghitungan jumlah halaman dan ayat secara otomatis dari standar Mushaf Madinah 604 halaman serta memungkinkan penyesuaian manual jika diperlukan.
+                  <strong>Perhitungan Otomatis:</strong> Pengampu cukup memilih posisi awal (surat, ayat, halaman) dan posisi akhir (surat, ayat, halaman) untuk Al-Qur'an, serta kitab dan nomor hadis awal-akhir. Sistem otomatis menghitung jumlah halaman, ayat, hadis baru, juz, dan total akumulasi lintas bulan tanpa perlu perhitungan manual.
                 </div>
               </div>
 
@@ -2314,20 +2440,31 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
               {/* SECTION 1: HAFALAN AL-QUR'AN */}
               {/* ======================================================= */}
               <div className="p-4 rounded-xl border border-indigo-100 bg-indigo-50/20 space-y-4">
-                <div className="flex items-center gap-2 border-b border-indigo-100 pb-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
-                  <h4 className="font-bold text-xs text-indigo-950 uppercase tracking-wider">
-                    I. Perkembangan Hafalan Al-Qur'an Bulan Ini
-                  </h4>
+                <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+                    <h4 className="font-bold text-xs text-indigo-950 uppercase tracking-wider">
+                      I. Perkembangan Hafalan Al-Qur'an Bulan Ini
+                    </h4>
+                  </div>
+                  <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-indigo-600" />
+                    Mushaf Madinah 604 Hal
+                  </span>
                 </div>
 
                 {/* Grid: Posisi Awal vs Posisi Akhir */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* A. Posisi Awal */}
-                  <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2.5">
-                    <span className="text-[11px] font-bold text-slate-700 uppercase block border-b pb-1">
-                      A. Posisi Awal Bulan
-                    </span>
+                  <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2.5 shadow-sm">
+                    <div className="flex items-center justify-between border-b pb-1">
+                      <span className="text-[11px] font-bold text-slate-700 uppercase">
+                        A. Posisi Awal Bulan
+                      </span>
+                      <span className="text-[9px] text-indigo-600 font-semibold bg-indigo-50 px-1.5 py-0.5 rounded">
+                        Titik Mulai
+                      </span>
+                    </div>
                     <div>
                       <label className="block text-[10px] font-semibold text-slate-500 mb-1">
                         Surat Awal (1 - 114)
@@ -2339,12 +2476,12 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
                           setFormQuranStartSurah(num);
                           const s = getSurahByNumber(num);
                           if (s) {
-                            setFormQuranStartJuz(s.startJuz);
                             setFormQuranStartPage(s.startPage);
                             setFormQuranStartAyah(1);
+                            setFormQuranStartJuz(s.startJuz);
                           }
                         }}
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-50 font-semibold text-slate-800"
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-50 font-semibold text-slate-800 cursor-pointer"
                       >
                         {QURAN_SURAHS.map((s) => (
                           <option key={s.number} value={s.number}>
@@ -2362,46 +2499,58 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
                         <input
                           type="number"
                           min="1"
-                          max="286"
+                          max={getSurahByNumber(formQuranStartSurah)?.ayahCount || 286}
                           value={formQuranStartAyah}
-                          onChange={(e) => setFormQuranStartAyah(Number(e.target.value))}
-                          className="w-full px-2 py-1 text-xs rounded-lg border border-slate-200 text-center font-bold"
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setFormQuranStartAyah(val);
+                            const j = getJuzFromSurahAyah(formQuranStartSurah, val);
+                            setFormQuranStartJuz(j);
+                          }}
+                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 text-center font-bold text-slate-800"
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-semibold text-slate-500 mb-1">
-                          Juz Awal
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="30"
-                          value={formQuranStartJuz}
-                          onChange={(e) => setFormQuranStartJuz(Number(e.target.value))}
-                          className="w-full px-2 py-1 text-xs rounded-lg border border-slate-200 text-center font-bold"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-semibold text-slate-500 mb-1">
-                          Halaman
+                        <label className="block text-[10px] font-semibold text-slate-500 mb-1 flex items-center justify-between">
+                          <span>Halaman</span>
+                          <span className="text-[9px] text-slate-400">1–604</span>
                         </label>
                         <input
                           type="number"
                           min="1"
                           max="604"
                           value={formQuranStartPage}
-                          onChange={(e) => setFormQuranStartPage(Number(e.target.value))}
-                          className="w-full px-2 py-1 text-xs rounded-lg border border-slate-200 text-center font-bold"
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setFormQuranStartPage(val);
+                            const j = getJuzFromPage(val);
+                            setFormQuranStartJuz(j);
+                          }}
+                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 text-center font-bold text-slate-800"
                         />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-500 mb-1 flex items-center justify-between">
+                          <span>Juz Awal</span>
+                          <span className="text-[8px] text-indigo-600 font-bold bg-indigo-50 px-1 rounded">Auto</span>
+                        </label>
+                        <div className="w-full py-1.5 text-xs rounded-lg border border-indigo-200 bg-indigo-50/60 text-center font-extrabold text-indigo-900">
+                          Juz {autoQuranCalc.startJuz}
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* B. Posisi Akhir */}
-                  <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2.5">
-                    <span className="text-[11px] font-bold text-slate-700 uppercase block border-b pb-1">
-                      B. Posisi Akhir Bulan
-                    </span>
+                  <div className="p-3 rounded-xl bg-white border border-slate-200 space-y-2.5 shadow-sm">
+                    <div className="flex items-center justify-between border-b pb-1">
+                      <span className="text-[11px] font-bold text-slate-700 uppercase">
+                        B. Posisi Akhir Bulan
+                      </span>
+                      <span className="text-[9px] text-emerald-600 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded">
+                        Capaian Akhir
+                      </span>
+                    </div>
                     <div>
                       <label className="block text-[10px] font-semibold text-slate-500 mb-1">
                         Surat Akhir (1 - 114)
@@ -2413,12 +2562,12 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
                           setFormQuranEndSurah(num);
                           const s = getSurahByNumber(num);
                           if (s) {
-                            setFormQuranEndJuz(s.endJuz);
                             setFormQuranEndPage(s.endPage);
                             setFormQuranEndAyah(s.ayahCount);
+                            setFormQuranEndJuz(s.endJuz);
                           }
                         }}
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-50 font-semibold text-slate-800"
+                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-50 font-semibold text-slate-800 cursor-pointer"
                       >
                         {QURAN_SURAHS.map((s) => (
                           <option key={s.number} value={s.number}>
@@ -2436,85 +2585,99 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
                         <input
                           type="number"
                           min="1"
-                          max="286"
+                          max={getSurahByNumber(formQuranEndSurah)?.ayahCount || 286}
                           value={formQuranEndAyah}
-                          onChange={(e) => setFormQuranEndAyah(Number(e.target.value))}
-                          className="w-full px-2 py-1 text-xs rounded-lg border border-slate-200 text-center font-bold"
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setFormQuranEndAyah(val);
+                            const j = getJuzFromSurahAyah(formQuranEndSurah, val);
+                            setFormQuranEndJuz(j);
+                          }}
+                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 text-center font-bold text-slate-800"
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-semibold text-slate-500 mb-1">
-                          Juz Akhir
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="30"
-                          value={formQuranEndJuz}
-                          onChange={(e) => setFormQuranEndJuz(Number(e.target.value))}
-                          className="w-full px-2 py-1 text-xs rounded-lg border border-slate-200 text-center font-bold"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-semibold text-slate-500 mb-1">
-                          Halaman
+                        <label className="block text-[10px] font-semibold text-slate-500 mb-1 flex items-center justify-between">
+                          <span>Halaman</span>
+                          <span className="text-[9px] text-slate-400">1–604</span>
                         </label>
                         <input
                           type="number"
                           min="1"
                           max="604"
                           value={formQuranEndPage}
-                          onChange={(e) => setFormQuranEndPage(Number(e.target.value))}
-                          className="w-full px-2 py-1 text-xs rounded-lg border border-slate-200 text-center font-bold"
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setFormQuranEndPage(val);
+                            const j = getJuzFromPage(val);
+                            setFormQuranEndJuz(j);
+                          }}
+                          className="w-full px-2 py-1.5 text-xs rounded-lg border border-slate-200 text-center font-bold text-slate-800"
                         />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-500 mb-1 flex items-center justify-between">
+                          <span>Juz Akhir</span>
+                          <span className="text-[8px] text-indigo-600 font-bold bg-indigo-50 px-1 rounded">Auto</span>
+                        </label>
+                        <div className="w-full py-1.5 text-xs rounded-lg border border-indigo-200 bg-indigo-50/60 text-center font-extrabold text-indigo-900">
+                          Juz {autoQuranCalc.endJuz}
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* C. Capaian Baru Bulan Ini */}
-                <div className="p-3 rounded-xl bg-indigo-50/50 border border-indigo-200/80 space-y-2">
+                {/* C. Capaian Baru Bulan Ini (Dihitung Otomatis & Hanya-Baca) */}
+                <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200/90 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-indigo-950">
-                      Capaian Hafalan Baru Al-Qur'an (Bulan Berjalan):
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-indigo-600" />
+                      <span className="text-xs font-bold text-indigo-950">
+                        Capaian Hafalan Baru Al-Qur'an (Bulan Berjalan):
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-indigo-600" />
+                      Dihitung Otomatis (Hanya-Baca)
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFormQuranNewPages(autoQuranCalc.calculatedPages);
-                        setFormQuranNewAyahs(autoQuranCalc.calculatedAyahs);
-                      }}
-                      className="text-[10px] font-semibold text-indigo-700 hover:underline cursor-pointer"
-                    >
-                      Hitung Otomatis Ulang ({autoQuranCalc.calculatedPages} Hal, {autoQuranCalc.calculatedAyahs} Ayat)
-                    </button>
                   </div>
+
+                  {!autoQuranCalc.isValid && (
+                    <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center gap-2 font-medium">
+                      <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                      <span>{autoQuranCalc.errorMessage}</span>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[10px] font-semibold text-slate-600 mb-1">
-                        Jumlah Halaman Baru
+                      <label className="block text-[10px] font-semibold text-slate-600 mb-1 flex items-center justify-between">
+                        <span>Jumlah Halaman Baru</span>
+                        <span className="text-[9px] text-slate-400">
+                          {formQuranStartPage === formQuranEndPage
+                            ? `Halaman ${formQuranStartPage}`
+                            : `Halaman ${formQuranStartPage} s.d. ${formQuranEndPage}`}
+                        </span>
                       </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.5"
-                        value={formQuranNewPages}
-                        onChange={(e) => setFormQuranNewPages(Number(e.target.value))}
-                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-indigo-200 bg-white font-bold text-indigo-900"
-                      />
+                      <div className="w-full px-3 py-2 text-xs rounded-lg border border-indigo-200 bg-white font-extrabold text-indigo-900 shadow-sm flex items-center justify-between">
+                        <span className="text-sm">{autoQuranCalc.calculatedPages} Halaman</span>
+                        <span className="text-[10px] font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                          {autoQuranCalc.isValid ? 'Valid Sesuai Mushaf' : 'Perlu Koreksi'}
+                        </span>
+                      </div>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-semibold text-slate-600 mb-1">
-                        Jumlah Ayat Baru
+                      <label className="block text-[10px] font-semibold text-slate-600 mb-1 flex items-center justify-between">
+                        <span>Jumlah Ayat Baru</span>
+                        <span className="text-[9px] text-slate-400">Total ayat terlewati</span>
                       </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={formQuranNewAyahs}
-                        onChange={(e) => setFormQuranNewAyahs(Number(e.target.value))}
-                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-indigo-200 bg-white font-bold text-indigo-900"
-                      />
+                      <div className="w-full px-3 py-2 text-xs rounded-lg border border-indigo-200 bg-white font-extrabold text-indigo-900 shadow-sm flex items-center justify-between">
+                        <span className="text-sm">{autoQuranCalc.calculatedAyahs} Ayat</span>
+                        <span className="text-[10px] font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                          Juz {autoQuranCalc.startJuz} {autoQuranCalc.startJuz !== autoQuranCalc.endJuz ? `s.d. ${autoQuranCalc.endJuz}` : ''}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -2527,7 +2690,7 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
                       placeholder="Contoh: Makhraj huruf jelas, kelancaran mutqin, istiqamah ziyadah harian."
                       value={formQuranNotes}
                       onChange={(e) => setFormQuranNotes(e.target.value)}
-                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-800"
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-800 focus:ring-1 focus:ring-indigo-500"
                     />
                   </div>
                 </div>
@@ -2537,41 +2700,59 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
               {/* SECTION 2: HAFALAN HADIS */}
               {/* ======================================================= */}
               <div className="p-4 rounded-xl border border-emerald-100 bg-emerald-50/20 space-y-4">
-                <div className="flex items-center gap-2 border-b border-emerald-100 pb-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
-                  <h4 className="font-bold text-xs text-emerald-950 uppercase tracking-wider">
-                    II. Perkembangan Hafalan Hadis Bulan Ini
-                  </h4>
+                <div className="flex items-center justify-between border-b border-emerald-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+                    <h4 className="font-bold text-xs text-emerald-950 uppercase tracking-wider">
+                      II. Perkembangan Hafalan Hadis Bulan Ini
+                    </h4>
+                  </div>
+                  <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    Dihitung Otomatis (Hanya-Baca)
+                  </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      Kitab Hadis
+                {!autoHadithCalc.isValid && (
+                  <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center gap-2 font-medium">
+                    <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                    <span>{autoHadithCalc.errorMessage}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                      <span>Kitab Hadis</span>
+                      <span className="text-[9px] text-slate-400">Pilih kitab referensi resmi</span>
                     </label>
                     <select
                       value={formHadithBook}
-                      onChange={(e) => setFormHadithBook(e.target.value)}
+                      onChange={(e) => {
+                        const bName = e.target.value;
+                        setFormHadithBook(bName);
+                        const bookMeta = getHadithBookByName(bName);
+                        if (bookMeta && formHadithEndNum > bookMeta.totalHadith) {
+                          setFormHadithEndNum(Math.min(formHadithStartNum + 2, bookMeta.totalHadith));
+                        }
+                      }}
                       className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white font-semibold text-slate-800 cursor-pointer"
                     >
-                      {HADITH_BOOKS.map((b) => (
-                        <option key={b} value={b}>
-                          {b}
+                      {HADITH_CATALOG.map((b) => (
+                        <option key={b.id} value={b.name}>
+                          {b.name} ({b.totalHadith} hadis &bull; {b.author})
                         </option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      Jumlah Hadis Baru Bulan Ini
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                      <span>Jumlah Hadis Baru</span>
+                      <span className="text-[9px] text-emerald-600 font-bold bg-emerald-50 px-1 rounded">Auto</span>
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formHadithNewCount}
-                      onChange={(e) => setFormHadithNewCount(Number(e.target.value))}
-                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-emerald-200 bg-white font-bold text-emerald-900"
-                    />
+                    <div className="w-full px-3 py-1.5 text-xs rounded-lg border border-emerald-300 bg-white font-extrabold text-emerald-900 shadow-sm flex items-center justify-center">
+                      +{autoHadithCalc.newCount} Hadis
+                    </div>
                   </div>
                 </div>
 
@@ -2583,35 +2764,51 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
                     <input
                       type="number"
                       min="1"
+                      max={getHadithBookByName(formHadithBook)?.totalHadith || 2000}
                       value={formHadithStartNum}
                       onChange={(e) => setFormHadithStartNum(Number(e.target.value))}
-                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white font-medium"
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white font-bold text-slate-800"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-semibold text-slate-600 mb-1">
-                      Nomor Hadis Akhir Bulan
+                    <label className="block text-[10px] font-semibold text-slate-600 mb-1 flex items-center justify-between">
+                      <span>Nomor Hadis Akhir Bulan</span>
+                      <span className="text-[9px] text-slate-400">
+                        Maks. {getHadithBookByName(formHadithBook)?.totalHadith || 2000} hadis
+                      </span>
                     </label>
                     <input
                       type="number"
                       min="1"
+                      max={getHadithBookByName(formHadithBook)?.totalHadith || 2000}
                       value={formHadithEndNum}
                       onChange={(e) => setFormHadithEndNum(Number(e.target.value))}
-                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white font-medium"
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white font-bold text-slate-800"
                     />
                   </div>
                 </div>
 
                 <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 mb-1 flex items-center justify-between">
+                    <span>Rentang Nomor Hadis (Dihasilkan Otomatis)</span>
+                    <span className="text-[9px] text-emerald-700 font-semibold">{autoHadithCalc.formattedRange}</span>
+                  </label>
+                  <div className="w-full px-3 py-1.5 text-xs rounded-lg border border-emerald-200 bg-white font-medium text-slate-800 flex items-center justify-between">
+                    <span>{autoHadithCalc.formattedRange}</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Dari {formHadithBook}</span>
+                  </div>
+                </div>
+
+                <div>
                   <label className="block text-[10px] font-semibold text-slate-600 mb-1">
-                    Daftar Nomor Hadis / Catatan Hadis
+                    Catatan Pengampu Hadis (Kelancaran Matan / Pemahaman Makna)
                   </label>
                   <input
                     type="text"
-                    placeholder="Contoh: Hadits No. 1 sampai 5 (Niat, Rukun Islam, Takdir)"
-                    value={formHadithList}
-                    onChange={(e) => setFormHadithList(e.target.value)}
-                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-800"
+                    placeholder="Contoh: Hafalan matan tartil, paham kosakata pokok dan perawi hadits."
+                    value={formHadithNotes}
+                    onChange={(e) => setFormHadithNotes(e.target.value)}
+                    className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-800 focus:ring-1 focus:ring-emerald-500"
                   />
                 </div>
               </div>
@@ -2619,7 +2816,7 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
               {/* ======================================================= */}
               {/* SECTION 3: TOTAL AKUMULASI HAFALAN SANTRI (HINGGA AKHIR BULAN) */}
               {/* ======================================================= */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-900 text-white space-y-3 shadow-md">
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-900 text-white space-y-3.5 shadow-md">
                 <div className="flex items-center justify-between border-b border-white/10 pb-2">
                   <div className="flex items-center gap-2">
                     <BookmarkCheck className="w-4 h-4 text-amber-400" />
@@ -2627,77 +2824,96 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
                       III. Total Akumulasi Hafalan Santri (Hingga Akhir Bulan Laporan)
                     </h4>
                   </div>
-                  <span className="text-[10px] text-amber-300 font-medium">
-                    *Dibedakan dari capaian baru bulan berjalan
+                  <span className="text-[10px] text-amber-300 font-medium bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded">
+                    Dihitung Otomatis Lintas Bulan
                   </span>
                 </div>
 
+                {/* Riwayat Akumulasi Lintas Bulan */}
+                {baselineAccumulation.baselineReport ? (
+                  <div className="p-2.5 rounded-lg bg-indigo-950/60 border border-indigo-500/30 text-xs text-indigo-200 flex items-start gap-2.5">
+                    <History className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-white">
+                        Riwayat Bulan Sebelumnya ({baselineAccumulation.baselineReport.monthName}):
+                      </p>
+                      <p className="text-[11px] text-slate-300 mt-0.5">
+                        Akumulasi dasar: <strong>{baselineAccumulation.pages} Halaman</strong> ({baselineAccumulation.juz} Juz) Al-Qur'an &bull; <strong>{baselineAccumulation.hadith} Hadis</strong>.
+                        Ditambah capaian baru bulan ini (+{autoQuranCalc.calculatedPages} Hal, +{autoHadithCalc.newCount} Hadis) secara otomatis tanpa penghitungan ganda.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2.5 rounded-lg bg-emerald-950/60 border border-emerald-500/30 text-xs text-emerald-200 flex items-start gap-2.5">
+                    <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold text-white">Laporan Perdana Santri di AKSARA</p>
+                      <p className="text-[11px] text-emerald-300 mt-0.5">
+                        Santri belum memiliki riwayat laporan bulan sebelumnya di database. Total akumulasi sampai akhir bulan ini dihitung langsung dari capaian perdana bulan ini.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-                    <label className="block text-[10px] text-slate-400 mb-1">
-                      Total Juz Tuntas
+                    <label className="block text-[10px] text-slate-400 mb-1 flex items-center justify-between">
+                      <span>Total Juz Tuntas</span>
+                      <span className="text-[9px] text-amber-300 font-bold">Otomatis</span>
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="30"
-                      value={formAccJuz}
-                      onChange={(e) => setFormAccJuz(Number(e.target.value))}
-                      className="w-full px-2 py-1 text-xs rounded border border-white/20 bg-white/10 text-white font-bold"
-                    />
+                    <div className="w-full px-2 py-1 text-sm rounded bg-white/10 text-amber-300 font-extrabold text-center">
+                      {autoAccumulation.totalJuz} Juz
+                    </div>
+                    <p className="text-[9px] text-slate-400 text-center mt-1">Standar 20 hal/juz</p>
                   </div>
                   <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-                    <label className="block text-[10px] text-slate-400 mb-1">
-                      Total Halaman Tuntas
+                    <label className="block text-[10px] text-slate-400 mb-1 flex items-center justify-between">
+                      <span>Total Halaman Tuntas</span>
+                      <span className="text-[9px] text-amber-300 font-bold">Otomatis</span>
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="604"
-                      value={formAccPages}
-                      onChange={(e) => setFormAccPages(Number(e.target.value))}
-                      className="w-full px-2 py-1 text-xs rounded border border-white/20 bg-white/10 text-white font-bold"
-                    />
+                    <div className="w-full px-2 py-1 text-sm rounded bg-white/10 text-white font-extrabold text-center">
+                      {autoAccumulation.totalPages} Halaman
+                    </div>
+                    <p className="text-[9px] text-slate-400 text-center mt-1">
+                      {baselineAccumulation.pages} lalu + {autoQuranCalc.calculatedPages} baru
+                    </p>
                   </div>
-                  <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
-                    <label className="block text-[10px] text-slate-400 mb-1">
-                      Total Hadis Tuntas
+                  <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 col-span-2 sm:col-span-1">
+                    <label className="block text-[10px] text-slate-400 mb-1 flex items-center justify-between">
+                      <span>Total Hadis Tuntas</span>
+                      <span className="text-[9px] text-amber-300 font-bold">Otomatis</span>
                     </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formAccHadith}
-                      onChange={(e) => setFormAccHadith(Number(e.target.value))}
-                      className="w-full px-2 py-1 text-xs rounded border border-white/20 bg-white/10 text-white font-bold"
-                    />
+                    <div className="w-full px-2 py-1 text-sm rounded bg-white/10 text-emerald-400 font-extrabold text-center">
+                      {autoAccumulation.totalHadith} Hadis
+                    </div>
+                    <p className="text-[9px] text-slate-400 text-center mt-1">
+                      {baselineAccumulation.hadith} lalu + {autoHadithCalc.newCount} baru
+                    </p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
-                  <div>
+                  <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
                     <label className="block text-[10px] text-slate-400 mb-1">
-                      Posisi Terakhir Al-Qur'an (Surat &amp; Ayat)
+                      Posisi Terakhir Al-Qur'an (Surat, Ayat, Hal, Juz)
                     </label>
-                    <input
-                      type="text"
-                      value={formLastSurah}
-                      onChange={(e) => setFormLastSurah(e.target.value)}
-                      placeholder="Contoh: An-Naba' : 40"
-                      className="w-full px-2.5 py-1 text-xs rounded border border-white/20 bg-white/10 text-white"
-                    />
+                    <div className="text-xs font-semibold text-white">
+                      {autoAccumulation.lastSurahName} : Ayat {autoAccumulation.lastAyah}
+                    </div>
+                    <p className="text-[10px] text-slate-400">
+                      Halaman {autoAccumulation.lastPage} &bull; Juz {autoAccumulation.lastJuz}
+                    </p>
                   </div>
-                  <div>
+                  <div className="p-2.5 rounded-lg bg-white/5 border border-white/10">
                     <label className="block text-[10px] text-slate-400 mb-1">
                       Posisi Terakhir Hadis (Kitab &amp; No)
                     </label>
-                    <input
-                      type="text"
-                      value={`${formLastHadithBook} No. ${formLastHadithNum}`}
-                      onChange={(e) => {
-                        setFormLastHadithBook(e.target.value);
-                      }}
-                      className="w-full px-2.5 py-1 text-xs rounded border border-white/20 bg-white/10 text-white"
-                    />
+                    <div className="text-xs font-semibold text-white">
+                      {autoAccumulation.lastHadithBook}
+                    </div>
+                    <p className="text-[10px] text-slate-400">
+                      Hadits Nomor {autoAccumulation.lastHadithNumber}
+                    </p>
                   </div>
                 </div>
 
@@ -2710,7 +2926,7 @@ export const HalaqahReportView: React.FC<HalaqahReportViewProps> = ({ userRole, 
                     className="h-4 w-4 rounded text-indigo-600 border-white/30 focus:ring-indigo-500 cursor-pointer"
                   />
                   <label htmlFor="chk-acc-verified" className="text-xs text-slate-300 cursor-pointer">
-                    Total akumulasi hafalan santri telah diverifikasi dan sesuai kartu setoran santri
+                    Total akumulasi hafalan santri dihitung otomatis oleh sistem dan sesuai buku/kartu setoran santri
                   </label>
                 </div>
               </div>
