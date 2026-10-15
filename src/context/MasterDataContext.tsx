@@ -39,7 +39,11 @@ import {
   hasRole,
   hasAnyRole,
   getUserRoles,
-  normalizeUserRole
+  normalizeUserRole,
+  Halaqah,
+  HalaqahMonthlyReport,
+  HalaqahReportStatus,
+  isAuthorizedForHalaqah
 } from '../types';
 import {
   fetchCollection,
@@ -75,7 +79,8 @@ import {
   DEMO_USERS,
   INITIAL_SCORES,
   INITIAL_REPORT_CARDS,
-  INITIAL_ATTENDANCE
+  INITIAL_ATTENDANCE,
+  INITIAL_HALAQAHS
 } from '../lib/mockData';
 
 export const INITIAL_VIOLATION_CATEGORIES: KesantrianViolationCategory[] = [
@@ -443,7 +448,18 @@ interface MasterDataContextType {
   atkRequests: AtkRequest[];
   academicCalendarEvents: AcademicCalendarEvent[];
   lessonSchedules: LessonSchedule[];
+  halaqahs: Halaqah[];
+  halaqahMonthlyReports: HalaqahMonthlyReport[];
   allowTeacherViewAtkStock: boolean;
+  saveHalaqah: (data: Halaqah) => Promise<void>;
+  deleteHalaqah: (id: string) => Promise<void>;
+  saveHalaqahMonthlyReport: (data: HalaqahMonthlyReport) => Promise<void>;
+  deleteHalaqahMonthlyReport: (id: string) => Promise<void>;
+  verifyHalaqahMonthlyReport: (
+    id: string,
+    status: HalaqahReportStatus,
+    feedback?: string
+  ) => Promise<void>;
   saveAcademicYear: (data: AcademicYear) => Promise<void>;
   setActiveAcademicYear: (id: string) => Promise<void>;
   saveTeacher: (data: Teacher) => Promise<void>;
@@ -600,6 +616,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     INITIAL_ACADEMIC_CALENDAR_EVENTS
   );
   const [lessonSchedules, setLessonSchedules] = useState<LessonSchedule[]>([]);
+  const [halaqahs, setHalaqahs] = useState<Halaqah[]>(INITIAL_HALAQAHS);
+  const [halaqahMonthlyReports, setHalaqahMonthlyReports] = useState<HalaqahMonthlyReport[]>([]);
   const [allowTeacherViewAtkStock, setAllowTeacherViewAtkStockState] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('kantoja_allow_teacher_view_atk_stock');
@@ -711,7 +729,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         loadedAtkConfig,
         rawStudentReportNotes,
         rawAcademicCalendar,
-        rawLessonSchedules
+        rawLessonSchedules,
+        rawHalaqahs,
+        rawHalaqahReports
       ] = await Promise.all([
         fetchCollection<AcademicYear>('academicYears', INITIAL_ACADEMIC_YEARS),
         fetchCollection<Teacher>('teachers', INITIAL_TEACHERS),
@@ -742,7 +762,9 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         fetchAtkConfig(),
         fetchCollection<StudentReportNote>('studentReportNotes', []),
         fetchCollection<AcademicCalendarEvent>('academicCalendar', INITIAL_ACADEMIC_CALENDAR_EVENTS),
-        fetchCollection<LessonSchedule>('lessonSchedules', [])
+        fetchCollection<LessonSchedule>('lessonSchedules', []),
+        fetchCollection<Halaqah>('halaqahs', INITIAL_HALAQAHS),
+        fetchCollection<HalaqahMonthlyReport>('halaqahMonthlyReports', [])
       ]);
 
       // Normalize all academic years to guarantee valid structure
@@ -936,6 +958,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''))
       );
       setLessonSchedules(rawLessonSchedules || []);
+      setHalaqahs(rawHalaqahs && rawHalaqahs.length > 0 ? rawHalaqahs : INITIAL_HALAQAHS);
+      setHalaqahMonthlyReports(rawHalaqahReports || []);
       setAttendance(rawAttList);
       setExtracurricularParticipants(rawEksPartList || []);
       setExtracurricularScores(rawEksScoreList || []);
@@ -2864,6 +2888,126 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     await deleteDocument('lessonSchedules', id);
   };
 
+  // =======================================================
+  // 12. Halaqah & Monthly Tahfiz/Hadith Reports Actions
+  // =======================================================
+  const saveHalaqah = async (data: Halaqah): Promise<void> => {
+    const isExecutive = hasAnyRole(currentUser, ['ADMIN', 'MUDIR', 'KEPALA_SEKOLAH', 'PENGAMPU_HALAQAH']);
+    if (!isExecutive) {
+      throw new Error('Akses Ditolak: Anda tidak memiliki wewenang mengelola data Halaqah.');
+    }
+
+    const cleanHalaqah: Halaqah = {
+      ...data,
+      id: data.id || `hlq_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      updatedAt: new Date().toISOString(),
+      createdAt: data.createdAt || new Date().toISOString()
+    };
+
+    setHalaqahs((prev) => {
+      const idx = prev.findIndex((h) => h.id === cleanHalaqah.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = cleanHalaqah;
+        return next;
+      }
+      return [...prev, cleanHalaqah];
+    });
+
+    await saveDocument('halaqahs', cleanHalaqah);
+  };
+
+  const deleteHalaqah = async (id: string): Promise<void> => {
+    const isExecutive = hasAnyRole(currentUser, ['ADMIN', 'MUDIR', 'KEPALA_SEKOLAH']);
+    if (!isExecutive) {
+      throw new Error('Akses Ditolak: Hanya Admin atau Mudir yang dapat menghapus data kelompok halaqah.');
+    }
+
+    setHalaqahs((prev) => prev.filter((h) => h.id !== id));
+    await deleteDocument('halaqahs', id);
+  };
+
+  const saveHalaqahMonthlyReport = async (data: HalaqahMonthlyReport): Promise<void> => {
+    const targetHalaqah = halaqahs.find((h) => h.id === data.halaqahId);
+    const auth = isAuthorizedForHalaqah(currentUser || role, targetHalaqah, teachers);
+    if (!auth.authorized) {
+      throw new Error(auth.reason || 'Akses Ditolak: Anda tidak memiliki wewenang untuk mencatat laporan halaqah ini.');
+    }
+
+    // Deterministic ID preventing duplicate records for the same student, halaqah, year, and month
+    const deterministicId = `hlqr_${data.academicYearId || 'ay_curr'}_${data.year}_${data.month}_${data.halaqahId}_${data.studentId}`;
+    const cleanReport: HalaqahMonthlyReport = {
+      ...data,
+      id: data.id || deterministicId,
+      updatedAt: new Date().toISOString(),
+      createdAt: data.createdAt || new Date().toISOString()
+    };
+
+    setHalaqahMonthlyReports((prev) => {
+      const idx = prev.findIndex((r) => r.id === cleanReport.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = cleanReport;
+        return next;
+      }
+      return [cleanReport, ...prev];
+    });
+
+    await saveDocument('halaqahMonthlyReports', cleanReport);
+  };
+
+  const deleteHalaqahMonthlyReport = async (id: string): Promise<void> => {
+    const existing = halaqahMonthlyReports.find((r) => r.id === id);
+    if (existing) {
+      const targetHalaqah = halaqahs.find((h) => h.id === existing.halaqahId);
+      const auth = isAuthorizedForHalaqah(currentUser || role, targetHalaqah, teachers);
+      if (!auth.authorized) {
+        throw new Error(auth.reason || 'Akses Ditolak: Anda tidak memiliki wewenang untuk menghapus laporan halaqah ini.');
+      }
+    }
+
+    setHalaqahMonthlyReports((prev) => prev.filter((r) => r.id !== id));
+    await deleteDocument('halaqahMonthlyReports', id);
+  };
+
+  const verifyHalaqahMonthlyReport = async (
+    id: string,
+    status: HalaqahReportStatus,
+    feedback?: string
+  ): Promise<void> => {
+    const isExecutive = hasAnyRole(currentUser, ['ADMIN', 'MUDIR', 'KEPALA_SEKOLAH']);
+    if (!isExecutive) {
+      throw new Error('Akses Ditolak: Hanya Mudir atau Admin yang berwenang memverifikasi laporan bulanan halaqah.');
+    }
+
+    const existing = halaqahMonthlyReports.find((r) => r.id === id);
+    if (!existing) {
+      throw new Error('Laporan bulanan halaqah tidak ditemukan.');
+    }
+
+    const updated: HalaqahMonthlyReport = {
+      ...existing,
+      status,
+      feedbackMudir: feedback !== undefined ? feedback : existing.feedbackMudir,
+      verifiedBy: status === 'Terverifikasi' ? (currentUser?.id || 'admin') : existing.verifiedBy,
+      verifiedByName: status === 'Terverifikasi' ? (currentUser?.displayName || currentUser?.name || 'Mudir') : existing.verifiedByName,
+      verifiedAt: status === 'Terverifikasi' ? new Date().toISOString() : existing.verifiedAt,
+      updatedAt: new Date().toISOString()
+    };
+
+    setHalaqahMonthlyReports((prev) => {
+      const idx = prev.findIndex((r) => r.id === id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = updated;
+        return next;
+      }
+      return [updated, ...prev];
+    });
+
+    await saveDocument('halaqahMonthlyReports', updated);
+  };
+
   return (
     <MasterDataContext.Provider
       value={{
@@ -2894,6 +3038,8 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         atkRequests,
         academicCalendarEvents,
         lessonSchedules,
+        halaqahs,
+        halaqahMonthlyReports,
         allowTeacherViewAtkStock,
         loading,
         dataError,
@@ -2951,6 +3097,11 @@ export const MasterDataProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         deleteAcademicCalendarEvent,
         saveLessonSchedule,
         deleteLessonSchedule,
+        saveHalaqah,
+        deleteHalaqah,
+        saveHalaqahMonthlyReport,
+        deleteHalaqahMonthlyReport,
+        verifyHalaqahMonthlyReport,
         refreshAll
       }}
     >

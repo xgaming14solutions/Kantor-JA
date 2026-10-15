@@ -88,6 +88,9 @@ const SpmbBrochuresAdminView = lazy(() =>
 const LessonSchedulesView = lazy(() =>
   import('./components/LessonSchedulesView').then((m) => ({ default: m.LessonSchedulesView }))
 );
+const HalaqahReportView = lazy(() =>
+  import('./components/HalaqahReportView').then((m) => ({ default: m.HalaqahReportView }))
+);
 
 const PUBLIC_SEO_TITLE = "Pesantren Islam Mutiara Insan | Pendidikan Tahfiz Al-Qur'an";
 const PUBLIC_CANONICAL_URL = 'https://mutiarainsantbb.vercel.app/';
@@ -434,6 +437,15 @@ export default function App() {
         if (isPureKesantrian) {
           return <KesantrianView tab="dashboard" onNavigate={handleNavigate} />;
         }
+
+        const isPurePengampu =
+          userRolesList.length > 0 &&
+          userRolesList.every((r) => r === 'PENGAMPU_HALAQAH' || r === 'pengampu_halaqah');
+
+        if (isPurePengampu) {
+          return <HalaqahReportView userRole={role} initialTab="reports" onNavigate={handleNavigate} />;
+        }
+
         if (hasRole(currentUser || role, 'MUDIR') && !hasRole(currentUser || role, 'ADMIN') && !hasRole(currentUser || role, 'KEPALA_SEKOLAH') && !hasRole(currentUser || role, 'GURU_MAPEL') && !hasRole(currentUser || role, 'WALI_KELAS')) {
           return <MudirDashboardView onNavigate={handleNavigate} />;
         }
@@ -456,6 +468,10 @@ export default function App() {
       case 'atk-history':
       case 'atk-reports':
         return <AtkView tab={currentTab} onNavigate={handleNavigate} />;
+      case 'halaqah-reports':
+        return <HalaqahReportView userRole={role} initialTab="reports" onNavigate={handleNavigate} />;
+      case 'halaqah-management':
+        return <HalaqahReportView userRole={role} initialTab="manage_halaqah" onNavigate={handleNavigate} />;
       case 'academic-calendar':
         return <AcademicCalendarView userRole={role} />;
       case 'students':

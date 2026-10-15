@@ -521,6 +521,65 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "curriculumGroup", "day", "startTime", "endTime", "subjectId", "teacherId", "createdAt", "updatedAt"]
+    },
+    "Halaqah": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID unik kelompok halaqah" },
+        "name": { "type": "string", "description": "Nama kelompok halaqah tahfiz & hadis" },
+        "pengampuTeacherId": { "type": "string", "description": "Relasi ke Teacher.id jika ustadz terdaftar di master guru" },
+        "pengampuUserId": { "type": "string", "description": "Relasi ke UserProfile.id atau userId" },
+        "pengampuName": { "type": "string", "description": "Nama ustadz pengampu halaqah" },
+        "targetJuz": { "type": "string", "description": "Target hafalan Al-Qur'an dan Hadis" },
+        "studentIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Daftar ID santri yang menjadi anggota halaqah"
+        },
+        "academicYearId": { "type": "string", "description": "Relasi ke AcademicYear.id" },
+        "description": { "type": "string", "description": "Deskripsi atau catatan khusus halaqah" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "pengampuName", "studentIds", "academicYearId"]
+    },
+    "HalaqahMonthlyReport": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID laporan bulanan unik deterministik" },
+        "studentId": { "type": "string", "description": "Relasi ke Student.id" },
+        "studentName": { "type": "string", "description": "Nama santri" },
+        "studentNis": { "type": "string", "description": "Nomor Induk Santri" },
+        "halaqahId": { "type": "string", "description": "Relasi ke Halaqah.id" },
+        "halaqahName": { "type": "string", "description": "Nama kelompok halaqah" },
+        "pengampuId": { "type": "string", "description": "ID pengampu (Teacher ID atau User ID)" },
+        "pengampuName": { "type": "string", "description": "Nama ustadz pengampu" },
+        "academicYearId": { "type": "string", "description": "Relasi ke AcademicYear.id" },
+        "year": { "type": "number", "description": "Tahun laporan (misal 2026)" },
+        "month": { "type": "number", "description": "Bulan laporan (1-12)" },
+        "monthName": { "type": "string", "description": "Label bulan dan tahun laporan" },
+        "quranStartSurah": { "type": "string" },
+        "quranStartAyah": { "type": "number" },
+        "quranStartJuz": { "type": "number" },
+        "quranStartPage": { "type": "number" },
+        "quranEndSurah": { "type": "string" },
+        "quranEndAyah": { "type": "number" },
+        "quranEndJuz": { "type": "number" },
+        "quranEndPage": { "type": "number" },
+        "quranNewPages": { "type": "number" },
+        "quranNewAyahs": { "type": "number" },
+        "hadithBook": { "type": "string" },
+        "hadithStartNumber": { "type": "number" },
+        "hadithEndNumber": { "type": "number" },
+        "hadithNewCount": { "type": "number" },
+        "totalAccumulatedJuz": { "type": "number" },
+        "totalAccumulatedPages": { "type": "number" },
+        "totalAccumulatedHadith": { "type": "number" },
+        "status": { "type": "string", "enum": ["Belum Diisi", "Draf", "Menunggu Verifikasi", "Terverifikasi"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "studentId", "halaqahId", "pengampuId", "year", "month", "status", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -623,6 +682,15 @@
     "/lessonSchedules/{scheduleId}": {
       "schema": "LessonSchedule",
       "description": "Koleksi jadwal pelajaran mingguan per kelompok kurikulum Paket B dan Paket C"
+    },
+    "/halaqahs/{halaqahId}": {
+      "schema": "Halaqah",
+      "description": "Master data kelompok halaqah tahfiz & hadis dan penugasan ustadz pengampu"
+    },
+    "/halaqahMonthlyReports/{reportId}": {
+      "schema": "HalaqahMonthlyReport",
+      "description": "Laporan perkembangan hafalan Al-Qur'an dan Hadis santri bulanan"
     }
   }
 }
+

@@ -8,7 +8,8 @@ import {
   Score,
   Attendance,
   ReportCard,
-  UserProfile
+  UserProfile,
+  Halaqah
 } from '../types';
 
 export const INITIAL_ACADEMIC_YEARS: AcademicYear[] = [
@@ -168,3 +169,37 @@ export const DEMO_USERS: UserProfile[] = [
     updatedAt: '2026-07-01T00:00:00.000Z',
   },
 ];
+
+export const INITIAL_HALAQAHS: Halaqah[] = [
+  {
+    id: 'hlq_ubay',
+    name: 'Halaqah Ubay bin Ka’ab (Kelas VII)',
+    pengampuTeacherId: 't_001',
+    pengampuName: 'Ustadz Ahmad Fauzi, Lc.',
+    targetJuz: 'Juz 30 & 29, Hadis Arbain 1–15',
+    studentIds: [],
+    academicYearId: 'ay_2026_2027_1',
+    description: 'Kelompok halaqah tahfiz Al-Qur’an dan hadis santri tingkat awal (Kelas VII).'
+  },
+  {
+    id: 'hlq_zaid',
+    name: 'Halaqah Zaid bin Tsabit (Kelas VIII)',
+    pengampuTeacherId: 't_002',
+    pengampuName: 'Ustadz Muhammad Rizky, S.Pd.I.',
+    targetJuz: 'Juz 28 & 27, Hadis Arbain 16–30',
+    studentIds: [],
+    academicYearId: 'ay_2026_2027_1',
+    description: 'Kelompok halaqah tahfiz Al-Qur’an dan hadis santri tingkat madya (Kelas VIII).'
+  },
+  {
+    id: 'hlq_abdullah',
+    name: 'Halaqah Abdullah bin Mas’ud (Kelas IX)',
+    pengampuTeacherId: 't_003',
+    pengampuName: 'Ustadz Abdullah Said, Al-Hafizh',
+    targetJuz: 'Juz 26 & 1, Hadis Arbain 31–42 & Umdatul Ahkam',
+    studentIds: [],
+    academicYearId: 'ay_2026_2027_1',
+    description: 'Kelompok halaqah tahfiz Al-Qur’an dan hadis santri tingkat lanjut (Kelas IX).'
+  }
+];
+

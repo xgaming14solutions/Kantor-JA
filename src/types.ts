@@ -10,6 +10,8 @@ export type UserRole =
   | 'KEPALA_SEKOLAH'
   | 'WALI_KELAS'
   | 'GURU_MAPEL'
+  | 'PENGAMPU_HALAQAH'
+  | 'pengampu_halaqah'
   | 'KEPALA_KESANTRIAN'
   | 'MUSYRIF_KESANTRIAN'
   | 'kepala_kesantrian'
@@ -471,6 +473,9 @@ export interface MabitPeriod {
 
 export function normalizeUserRole(rawRole?: string | null, user?: Partial<UserProfile> | null): UserRole {
   const clean = String(rawRole || '').trim().toUpperCase();
+  if (clean === 'PENGAMPU_HALAQAH' || clean === 'PENGAMPU HALAQAH' || clean === 'PENGAMPU' || clean === 'MUSYRIF_HALAQAH') {
+    return 'PENGAMPU_HALAQAH';
+  }
   if (clean === 'KEPALA_KESANTRIAN') return 'KEPALA_KESANTRIAN';
   if (clean === 'MUSYRIF_KESANTRIAN') return 'MUSYRIF_KESANTRIAN';
   if (clean === 'PETUGAS_KESANTRIAN') {
@@ -517,6 +522,12 @@ export const AVAILABLE_USER_ROLES: {
     label: 'Kepala Sekolah (KEPALA_SEKOLAH)',
     badge: 'KEPALA SEKOLAH',
     description: 'Penanggung jawab operasional sekolah, kurikulum, dan kalender akademik.',
+  },
+  {
+    id: 'PENGAMPU_HALAQAH',
+    label: 'Pengampu Halaqah (PENGAMPU_HALAQAH)',
+    badge: 'PENGAMPU HALAQAH',
+    description: 'Ustadz pembina halaqah tahfiz Al-Qur’an & hadis serta pencatat laporan capaian bulanan.',
   },
   {
     id: 'KEPALA_KESANTRIAN',
@@ -1000,4 +1011,164 @@ export interface LessonSchedule {
 
 export function canManageLessonSchedule(userOrRole?: Partial<UserProfile> | UserRole | string | null): boolean {
   return hasAnyRole(userOrRole, ['ADMIN', 'MUDIR', 'KEPALA_SEKOLAH']);
+}
+
+// =======================================================
+// HALAQAH TAHFIZ & LAPORAN BULANAN
+// =======================================================
+
+export type HalaqahReportStatus = 'Belum Diisi' | 'Draf' | 'Menunggu Verifikasi' | 'Terverifikasi';
+
+export interface Halaqah {
+  id: string; // e.g. "hlq_ubay"
+  name: string; // e.g. "Halaqah Ubay bin Ka’ab (Kelas VII)"
+  pengampuTeacherId?: string | null; // Relasi ke Teacher.id (jika ustadz terdaftar di master data guru)
+  pengampuUserId?: string | null; // Relasi ke UserProfile.id / Auth UID
+  pengampuName: string; // Nama ustadz pengampu halaqah
+  targetJuz: string; // Target hafalan halaqah, e.g. "Juz 30 & 29"
+  studentIds: string[]; // Daftar ID santri anggota halaqah
+  academicYearId: string; // Tahun ajaran aktif
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface HalaqahMonthlyReport {
+  id: string; // Deterministic: hlqr_${academicYearId}_${year}_${month}_${halaqahId}_${studentId}
+  studentId: string; // Relasi ke Student.id
+  studentName: string;
+  studentNis: string;
+  halaqahId: string; // Relasi ke Halaqah.id
+  halaqahName: string;
+  pengampuId: string; // ID ustadz pengampu (Teacher ID atau User ID)
+  pengampuName: string;
+  academicYearId: string;
+  year: number; // e.g. 2026
+  month: number; // 1 to 12 (e.g. 7=Juli, 10=Oktober)
+  monthName: string; // e.g. "Oktober 2026"
+
+  // A. Posisi Awal Bulan Al-Qur'an
+  quranStartSurah: string; // e.g. "An-Naba'"
+  quranStartSurahNumber: number; // 1 to 114
+  quranStartAyah: number;
+  quranStartJuz: number; // 1 to 30
+  quranStartPage: number; // 1 to 604
+
+  // B. Posisi Akhir Bulan Al-Qur'an
+  quranEndSurah: string; // e.g. "An-Nazi'at"
+  quranEndSurahNumber: number;
+  quranEndAyah: number;
+  quranEndJuz: number;
+  quranEndPage: number;
+
+  // C. Capaian Baru Bulan Ini (Al-Qur'an)
+  quranNewPages: number; // Total halaman baru yang dihafal
+  quranNewAyahs: number; // Total ayat baru yang dihafal
+  quranNotes?: string;
+
+  // D. Posisi Awal Hadis
+  hadithBook: string; // e.g. "Arba'in An-Nawawi", "Umdatul Ahkam"
+  hadithStartNumber: number; // e.g. 1
+  hadithStartTitle?: string;
+
+  // E. Posisi Akhir Hadis
+  hadithEndNumber: number; // e.g. 5
+  hadithEndTitle?: string;
+
+  // F. Capaian Baru Bulan Ini (Hadis)
+  hadithNewCount: number; // Total hadis baru dihafal
+  hadithListNumbers?: string; // e.g. "1, 2, 3, 4, 5"
+  hadithNotes?: string;
+
+  // G. Total Akumulasi Hafalan Santri (Hingga Akhir Bulan Laporan)
+  totalAccumulatedJuz: number; // Total juz santri yang sudah tuntas dihafal
+  totalAccumulatedPages: number; // Total halaman Al-Qur'an santri yang sudah tuntas
+  totalAccumulatedHadith: number; // Total hadis santri yang sudah tuntas
+  lastHafalanSurah: string;
+  lastHafalanAyah: number;
+  lastHafalanJuz: number;
+  lastHafalanPage: number;
+  lastHadithNumber: number;
+  lastHadithBook: string;
+  isAccumulationVerified: boolean; // Menandakan apakah total akumulasi telah diverifikasi
+
+  // H. Status & Verifikasi Mudir
+  status: HalaqahReportStatus;
+  verifiedBy?: string;
+  verifiedByName?: string;
+  verifiedAt?: string;
+  feedbackMudir?: string;
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Checks if a user is the assigned pengampu of a specific halaqah,
+ * or if they hold executive supervisory access (ADMIN, MUDIR, KEPALA_SEKOLAH).
+ */
+export function isAuthorizedForHalaqah(
+  currentUser: Partial<UserProfile> | Record<string, any> | UserRole | string | null | undefined,
+  halaqah: Halaqah | null | undefined,
+  teachersList: Teacher[] = []
+): { authorized: boolean; isSupervisor: boolean; isDirectPengampu: boolean; reason?: string } {
+  if (!currentUser) {
+    return { authorized: false, isSupervisor: false, isDirectPengampu: false, reason: 'Pengguna belum terautentikasi.' };
+  }
+
+  // Normalize currentUser object if string passed
+  const userObj: Partial<UserProfile> | Record<string, any> =
+    typeof currentUser === 'string' ? { role: currentUser as UserRole, roles: [currentUser as UserRole] } : currentUser;
+
+  // Admin, Mudir, and Kepala Sekolah have supervisory access to all halaqahs
+  const isSupervisor = hasAnyRole(userObj, ['ADMIN', 'MUDIR', 'KEPALA_SEKOLAH', 'KEPALA_KESANTRIAN']);
+  if (isSupervisor) {
+    return { authorized: true, isSupervisor: true, isDirectPengampu: false };
+  }
+
+  // If user does not have PENGAMPU_HALAQAH role
+  if (!hasRole(userObj, 'PENGAMPU_HALAQAH')) {
+    return { authorized: false, isSupervisor: false, isDirectPengampu: false, reason: 'Akun Anda tidak memiliki role Pengampu Halaqah.' };
+  }
+
+  if (!halaqah) {
+    return { authorized: false, isSupervisor: false, isDirectPengampu: false, reason: 'Data halaqah tidak ditemukan.' };
+  }
+
+  // Match directly by userId / id / uid
+  const targetUid = userObj.id || userObj.userId || userObj.uid;
+  const matchesUserId = halaqah.pengampuUserId && targetUid && (halaqah.pengampuUserId === targetUid);
+
+  // Match by teacherId
+  const matchesTeacherId = halaqah.pengampuTeacherId && userObj.teacherId && halaqah.pengampuTeacherId === userObj.teacherId;
+
+  // Match by teacher email or name lookup
+  const userName = (userObj.name || userObj.displayName || '').trim().toLowerCase();
+  const currentTeacher = teachersList.find(
+    (t) =>
+      (userObj.email && t.email?.toLowerCase() === userObj.email.toLowerCase()) ||
+      (userObj.teacherId && t.id === userObj.teacherId) ||
+      (userName && t.name?.toLowerCase().trim() === userName) ||
+      (userName && t.name?.toLowerCase().includes(userName)) ||
+      (userName && userName.includes(t.name?.toLowerCase().trim()))
+  );
+  const matchesTeacherObject = currentTeacher && halaqah.pengampuTeacherId === currentTeacher.id;
+
+  // Match by direct name string
+  const halaqahPengampuNameLower = (halaqah.pengampuName || '').toLowerCase();
+  const matchesName =
+    userName &&
+    halaqahPengampuNameLower &&
+    (halaqahPengampuNameLower.includes(userName) || userName.includes(halaqahPengampuNameLower));
+
+  if (matchesUserId || matchesTeacherId || matchesTeacherObject || matchesName) {
+    return { authorized: true, isSupervisor: false, isDirectPengampu: true };
+  }
+
+  return {
+    authorized: false,
+    isSupervisor: false,
+    isDirectPengampu: false,
+    reason: `Akses Terbatas: Anda bukan pengampu yang ditugaskan untuk ${halaqah.name}.`
+  };
 }

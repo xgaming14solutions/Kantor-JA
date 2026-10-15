@@ -222,6 +222,18 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
+    // Master Data: Halaqah Tahfiz & Hadits
+    match /halaqahs/{halaqahId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Transactions: Laporan Halaqah Bulanan
+    match /halaqahMonthlyReports/{reportId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
     // Catch-all: Deny all unmatched paths
     match /{document=**} {
       allow read, write: if false;

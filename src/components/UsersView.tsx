@@ -35,7 +35,8 @@ import {
   Mail,
   User,
   ShieldCheck,
-  UserPlus
+  UserPlus,
+  BookOpen
 } from 'lucide-react';
 
 interface UsersViewProps {
@@ -43,7 +44,7 @@ interface UsersViewProps {
 }
 
 export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
-  const { users, teachers, saveUser, toggleUserStatus, deleteUser } = useMasterData();
+  const { users, teachers, halaqahs, saveUser, toggleUserStatus, deleteUser } = useMasterData();
   const { currentUser, refreshUserProfile } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -748,6 +749,12 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                   const linkedTeacher = teachers.find((t) => t.id === u.teacherId);
                   const isCurrent = currentUser?.id === u.id;
                   const isAct = u.isActive !== false;
+                  const assignedHalaqahs = (halaqahs || []).filter(
+                    (h) =>
+                      (h.pengampuUserId && (h.pengampuUserId === u.id || h.pengampuUserId === u.userId)) ||
+                      (u.teacherId && h.pengampuTeacherId === u.teacherId) ||
+                      (u.name && h.pengampuName && h.pengampuName.toLowerCase().trim() === u.name.toLowerCase().trim())
+                  );
 
                   return (
                     <tr
@@ -801,7 +808,28 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                       </td>
 
                       {/* Role */}
-                      <td className="py-3.5 px-4">{getRoleBadge(u.role, u)}</td>
+                      <td className="py-3.5 px-4">
+                        {getRoleBadge(u.role, u)}
+                        {hasRole(u, 'PENGAMPU_HALAQAH') && (
+                          <div className="mt-1.5 space-y-1">
+                            {assignedHalaqahs.length > 0 ? (
+                              assignedHalaqahs.map((hlq) => (
+                                <div
+                                  key={hlq.id}
+                                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded"
+                                >
+                                  <BookOpen className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                  <span className="truncate max-w-[150px]">{hlq.name}</span>
+                                </div>
+                              ))
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                Belum ditugaskan halaqah
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
 
                       {/* Guru Terkait */}
                       <td className="py-3.5 px-4">
@@ -1061,7 +1089,10 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                             const newRoles = e.target.checked
                               ? Array.from(new Set([...addForm.roles, roleItem.id]))
                               : addForm.roles.filter((r) => r !== roleItem.id);
-                            const hasTeacher = newRoles.includes('WALI_KELAS') || newRoles.includes('GURU_MAPEL');
+                            const hasTeacher =
+                              newRoles.includes('WALI_KELAS') ||
+                              newRoles.includes('GURU_MAPEL') ||
+                              newRoles.includes('PENGAMPU_HALAQAH');
                             setAddForm({
                               ...addForm,
                               roles: newRoles,
@@ -1281,7 +1312,10 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                             const newRoles = e.target.checked
                               ? Array.from(new Set([...editForm.roles, roleItem.id]))
                               : editForm.roles.filter((r) => r !== roleItem.id);
-                            const hasTeacher = newRoles.includes('WALI_KELAS') || newRoles.includes('GURU_MAPEL');
+                            const hasTeacher =
+                              newRoles.includes('WALI_KELAS') ||
+                              newRoles.includes('GURU_MAPEL') ||
+                              newRoles.includes('PENGAMPU_HALAQAH');
                             setEditForm({
                               ...editForm,
                               roles: newRoles,
@@ -1502,6 +1536,51 @@ export const UsersView: React.FC<UsersViewProps> = ({ userRole }) => {
                   </div>
                 )}
               </div>
+
+              {/* Halaqah Binaan Details */}
+              {hasRole(selectedUser, 'PENGAMPU_HALAQAH') && (
+                (() => {
+                  const assignedHalaqahsForDetail = (halaqahs || []).filter(
+                    (h) =>
+                      (h.pengampuUserId && (h.pengampuUserId === selectedUser.id || h.pengampuUserId === selectedUser.userId)) ||
+                      (selectedUser.teacherId && h.pengampuTeacherId === selectedUser.teacherId) ||
+                      (selectedUser.name && h.pengampuName && h.pengampuName.toLowerCase().trim() === selectedUser.name.toLowerCase().trim())
+                  );
+
+                  return (
+                    <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-1.5">
+                      <div className="text-[11px] font-semibold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <BookOpen className="w-3.5 h-3.5 text-emerald-600" />
+                        Kelompok Halaqah Binaan
+                      </div>
+                      {assignedHalaqahsForDetail.length > 0 ? (
+                        <div className="space-y-1.5">
+                          {assignedHalaqahsForDetail.map((hlq) => (
+                            <div
+                              key={hlq.id}
+                              className="text-xs text-slate-800 font-semibold flex items-center justify-between bg-white p-2.5 rounded-lg border border-emerald-100 shadow-2xs"
+                            >
+                              <div>
+                                <span className="font-bold text-slate-900">{hlq.name}</span>
+                                <span className="block text-[11px] text-slate-500 font-normal">
+                                  Target: {hlq.targetJuz}
+                                </span>
+                              </div>
+                              <span className="text-[11px] font-mono font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full">
+                                {hlq.studentIds?.length || 0} Santri
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                          Akun ini memiliki role <strong>PENGAMPU_HALAQAH</strong>, tetapi belum dihubungkan dengan kelompok halaqah. Silakan buka menu <strong>Pengampu &amp; Kelompok Halaqah</strong> untuk menugaskannya.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()
+              )}
             </div>
 
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">

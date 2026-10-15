@@ -26,8 +26,9 @@ import {
   Activity,
   RotateCw,
   AlertTriangle,
+  UserCheck,
 } from 'lucide-react';
-import { calculateAtkStockStatus, hasRole, hasAnyRole } from '../types';
+import { calculateAtkStockStatus, hasRole, hasAnyRole, isAuthorizedForHalaqah } from '../types';
 import { getEffectiveTeacherId, getActiveTeacherAssignments } from '../lib/dbService';
 import {
   resolveEventEffectiveStatus,
@@ -41,6 +42,7 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
   const isKepsek = hasRole(currentUser || role, 'KEPALA_SEKOLAH');
   const isWaliKelas = hasRole(currentUser || role, 'WALI_KELAS');
   const isGuruMapel = hasRole(currentUser || role, 'GURU_MAPEL');
+  const isPengampu = hasRole(currentUser || role, 'PENGAMPU_HALAQAH');
   const {
     students = [],
     teachers = [],
@@ -58,6 +60,8 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
     atkTransactions = [],
     atkRequests = [],
     academicCalendarEvents = [],
+    halaqahs = [],
+    halaqahMonthlyReports = [],
     allowTeacherViewAtkStock,
     loading = false,
     dataError = null,
@@ -648,6 +652,33 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
   const myStudentsCount = students.filter(
     (s) => myTaughtClassIds.includes(s.classId) && s.status === 'Aktif'
   ).length;
+
+  // Halaqah binaan Ustadz / Pengampu
+  const myHalaqahs = useMemo(() => {
+    return halaqahs.filter((h) => isAuthorizedForHalaqah(currentUser || role, h, teachers).authorized);
+  }, [halaqahs, currentUser, role, teachers]);
+
+  const currentMonthNum = new Date().getMonth() + 1;
+  const currentYearNum = new Date().getFullYear();
+
+  // Halaqah stats for Admin
+  const halaqahAdminStats = useMemo(() => {
+    const totalGroups = halaqahs.length;
+    let totalSantriAssigned = 0;
+    halaqahs.forEach((h) => {
+      totalSantriAssigned += (h.studentIds || []).length;
+    });
+    const currentMonthReports = halaqahMonthlyReports.filter(
+      (r) => r.month === currentMonthNum && r.year === currentYearNum
+    );
+    const completedReports = currentMonthReports.filter((r) => r.status === 'Terverifikasi');
+    return {
+      totalGroups,
+      totalSantriAssigned,
+      currentMonthReportsCount: currentMonthReports.length,
+      completedReportsCount: completedReports.length,
+    };
+  }, [halaqahs, halaqahMonthlyReports, currentMonthNum, currentYearNum]);
 
   // Semantic badge helper
   const renderSemanticBadge = (
@@ -1376,7 +1407,149 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
         </section>
 
         {/* =====================================================
-            8. SECTION ATK & PERSEDIAAN (Inventory Management Style)
+            8. SECTION TAHFIZ AL-QUR'AN & HALAQAH SANTRI
+           ===================================================== */}
+        <section className="bg-white border border-[#DCE5E8] rounded-xl p-5 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#DCE5E8] pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-[18px] font-bold text-[#24343D]">
+                  Tahfiz Al-Qur'an &amp; Halaqah Santri
+                </h2>
+                <span className="text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-md">
+                  Periode Aktif: Bulan {currentMonthNum}/{currentYearNum}
+                </span>
+              </div>
+              <p className="text-xs text-[#71818A] mt-0.5">
+                Monitoring kelompok halaqah, penugasan ustadz pengampu, capaian hafalan Al-Qur'an dan Hadis
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => onNavigate('halaqah-management')}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-[#24485A] bg-[#F0F5F7] hover:bg-[#DCE5E8] transition inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Kelola Pengampu</span>
+              </button>
+              <button
+                onClick={() => onNavigate('halaqah-reports')}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#24485A] hover:bg-[#1C3948] transition inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Laporan Halaqah</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* 4 Kartu Ringkasan Halaqah */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+            <button
+              onClick={() => onNavigate('halaqah-management')}
+              className="text-left p-4 rounded-xl bg-white border border-[#DCE5E8] hover:border-[#5D8295] transition cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-[#71818A]">Kelompok Halaqah</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-[#5D8295]" />
+              </div>
+              <div className="text-2xl font-bold text-[#24343D] font-mono tabular-nums mt-2">
+                {halaqahAdminStats.totalGroups}
+              </div>
+              <div className="text-[11px] text-[#71818A] mt-1">Kelompok aktif terdaftar</div>
+            </button>
+
+            <button
+              onClick={() => onNavigate('halaqah-management')}
+              className="text-left p-4 rounded-xl bg-white border border-[#DCE5E8] hover:border-[#5D8295] transition cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-[#71818A]">Santri Terbina</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-[#5D9B7A]" />
+              </div>
+              <div className="text-2xl font-bold text-[#24343D] font-mono tabular-nums mt-2">
+                {halaqahAdminStats.totalSantriAssigned}
+              </div>
+              <div className="text-[11px] text-[#71818A] mt-1">Santri masuk kelompok</div>
+            </button>
+
+            <button
+              onClick={() => onNavigate('halaqah-reports')}
+              className="text-left p-4 rounded-xl bg-white border border-[#DCE5E8] hover:border-[#5D8295] transition cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-[#71818A]">Laporan Bulan Ini</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-[#D6A64A]" />
+              </div>
+              <div className="text-2xl font-bold text-[#24343D] font-mono tabular-nums mt-2">
+                {halaqahAdminStats.currentMonthReportsCount}
+              </div>
+              <div className="text-[11px] text-[#71818A] mt-1">Catatan hafalan tercatat</div>
+            </button>
+
+            <button
+              onClick={() => onNavigate('halaqah-reports')}
+              className="text-left p-4 rounded-xl bg-white border border-[#DCE5E8] hover:border-[#5D8295] transition cursor-pointer"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-[#71818A]">Laporan Tuntas</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-[#5D9B7A]" />
+              </div>
+              <div className="text-2xl font-bold text-[#5D9B7A] font-mono tabular-nums mt-2">
+                {halaqahAdminStats.completedReportsCount}
+              </div>
+              <div className="text-[11px] text-[#71818A] mt-1">Status tuntas / terverifikasi</div>
+            </button>
+          </div>
+
+          {/* Daftar Kelompok & Pengampu Ringkas */}
+          <div className="border border-[#DCE5E8] rounded-xl overflow-hidden">
+            <div className="bg-[#F4F7F8] px-4 py-2.5 border-b border-[#DCE5E8] flex items-center justify-between">
+              <span className="text-xs font-bold text-[#24343D] uppercase tracking-wider">
+                Kelompok Halaqah &amp; Ustadz Pengampu
+              </span>
+              <button
+                onClick={() => onNavigate('halaqah-management')}
+                className="text-xs font-semibold text-[#24485A] hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <span>Kelola Selengkapnya</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="divide-y divide-[#EBF0F2]">
+              {halaqahs.slice(0, 4).map((hlq) => {
+                const sCount = hlq.studentIds?.length || 0;
+                return (
+                  <div key={hlq.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 hover:bg-[#F9FBFC] transition">
+                    <div className="min-w-0">
+                      <div className="font-bold text-xs text-[#24343D] truncate">{hlq.name}</div>
+                      <div className="text-[11px] text-[#71818A] flex items-center gap-1.5 mt-0.5">
+                        <UserCheck className="w-3 h-3 text-indigo-600 shrink-0" />
+                        <span>Pengampu: <strong>{hlq.pengampuName}</strong></span>
+                        <span>&bull;</span>
+                        <span>Target: {hlq.targetJuz || 'Juz 30 & Hadis'}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                      <span className="font-mono text-xs font-bold bg-[#F0F5F7] text-[#24485A] px-2.5 py-1 rounded-md border border-[#DCE5E8]">
+                        {sCount} Santri
+                      </span>
+                      <button
+                        onClick={() => onNavigate('halaqah-reports')}
+                        className="px-2.5 py-1 rounded-md text-xs font-semibold text-[#24485A] hover:bg-[#EBF0F2] transition cursor-pointer"
+                      >
+                        Buka Laporan
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* =====================================================
+            9. SECTION ATK & PERSEDIAAN (Inventory Management Style)
            ===================================================== */}
         <section className="bg-white border border-[#DCE5E8] rounded-xl p-5 space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#DCE5E8] pb-4">
@@ -1701,10 +1874,16 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-xs text-[#71818A]">
               <span className="font-semibold text-[#24485A] bg-[#F0F5F7] border border-[#DCE5E8] px-2.5 py-0.5 rounded-md">
-                {isWaliKelas && isGuruMapel
+                {isPengampu && isWaliKelas
+                  ? 'Dashboard Wali Kelas & Pengampu Halaqah'
+                  : isPengampu && isGuruMapel
+                  ? 'Dashboard Guru Mapel & Pengampu Halaqah'
+                  : isWaliKelas && isGuruMapel
                   ? 'Dashboard Wali Kelas & Guru Mapel'
                   : isWaliKelas
                   ? 'Dashboard Wali Kelas'
+                  : isPengampu
+                  ? 'Dashboard Pengampu Halaqah'
                   : 'Dashboard Guru Mata Pelajaran'}
               </span>
               <span>&bull;</span>
@@ -1724,12 +1903,14 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
                 ? `Monitoring kelas binaan ${homeroomClass?.name || 'Binaan'}, absensi santri, serta penugasan mengajar mata pelajaran Anda.`
                 : isWaliKelas
                 ? `Monitoring kemajuan belajar, presensi, dan catatan raport siswa kelas ${homeroomClass?.name || 'Binaan'}.`
+                : isPengampu
+                ? 'Monitoring capaian hafalan Al-Qur\'an dan Hadis santri dalam kelompok halaqah binaan Anda.'
                 : 'Kelola kegiatan belajar mengajar, input nilai siswa, dan absensi mata pelajaran.'}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-center">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
           <button
             onClick={() => onNavigate('attendance')}
             className="px-3.5 py-2 text-xs font-semibold text-[#24343D] bg-[#F4F7F8] hover:bg-[#EBF0F2] border border-[#DCE5E8] rounded-lg transition cursor-pointer"
@@ -1742,8 +1923,110 @@ export const DashboardView: React.FC<{ onNavigate: (tab: string) => void }> = ({
           >
             Input Nilai
           </button>
+          {(isPengampu || myHalaqahs.length > 0) && (
+            <button
+              onClick={() => onNavigate('halaqah-reports')}
+              className="px-3.5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Laporan Halaqah</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* HALAQAH BINAAN PENGAMPU DASHBOARD */}
+      {(isPengampu || myHalaqahs.length > 0) && (
+        <div className="bg-white rounded-xl border border-indigo-200 shadow-xs overflow-hidden space-y-0">
+          <div className="px-5 py-4 bg-indigo-50/60 border-b border-indigo-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-1 rounded-lg bg-indigo-600 text-white">
+                  <UserCheck className="w-4 h-4" />
+                </span>
+                <h3 className="font-bold text-sm text-slate-900">
+                  Halaqah Binaan Tahfiz &amp; Hadis
+                </h3>
+                <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-200">
+                  {myHalaqahs.length} Kelompok Ditugaskan
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Pencatatan perkembangan hafalan Al-Qur'an (Surah, Juz, Halaman) dan Hadis santri setiap bulan
+              </p>
+            </div>
+            <button
+              onClick={() => onNavigate('halaqah-reports')}
+              className="px-3.5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition inline-flex items-center gap-1.5 shadow-xs cursor-pointer self-start sm:self-auto"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Buka Laporan Halaqah</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="p-5">
+            {myHalaqahs.length === 0 ? (
+              <div className="text-center py-6 text-xs text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
+                <p className="font-semibold text-slate-700">Akun Anda memiliki kewenangan Pengampu Halaqah</p>
+                <p className="mt-1">Belum ada kelompok halaqah yang ditugaskan kepada Anda oleh Administrator / Mudir.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {myHalaqahs.map((hlq) => {
+                  const studentCount = hlq.studentIds?.length || 0;
+                  const monthReports = halaqahMonthlyReports.filter(
+                    (r) => r.halaqahId === hlq.id && r.month === currentMonthNum && r.year === currentYearNum
+                  );
+                  const filledCount = monthReports.length;
+                  const targetJuz = hlq.targetJuz || 'Juz 30 & Hadis';
+
+                  return (
+                    <div
+                      key={hlq.id}
+                      className="p-4 rounded-xl border border-slate-200 hover:border-indigo-300 hover:shadow-xs transition bg-white flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="font-bold text-slate-900 text-sm">{hlq.name}</h4>
+                          <span className="text-[10px] font-semibold bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 shrink-0">
+                            {targetJuz}
+                          </span>
+                        </div>
+                        {hlq.description && (
+                          <p className="text-xs text-slate-500 mt-1 line-clamp-1">{hlq.description}</p>
+                        )}
+                        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100 text-xs">
+                          <div>
+                            <span className="text-[11px] text-slate-500 block">Jumlah Santri</span>
+                            <span className="text-base font-bold text-slate-900 font-mono">
+                              {studentCount} Santri
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[11px] text-slate-500 block">Laporan Bulan Ini</span>
+                            <span className="text-base font-bold text-indigo-600 font-mono">
+                              {filledCount}/{studentCount || 0}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => onNavigate('halaqah-reports')}
+                        className="mt-3 w-full py-1.5 px-3 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition inline-flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <span>Input &amp; Pantau Hafalan</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* WALI KELAS DASHBOARD */}
       {isWaliKelas && (

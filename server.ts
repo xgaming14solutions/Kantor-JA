@@ -1,5 +1,6 @@
 import express from 'express';
 import fs from 'fs';
+import http from 'http';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import {
@@ -46,6 +47,7 @@ function writePersistedSchoolIdentity(data: Record<string, any>): void {
 
 async function startServer() {
   const app = express();
+  const httpServer = http.createServer(app);
   const PORT = 3000;
 
   app.use(express.json({ limit: '15mb' }));
@@ -284,7 +286,11 @@ async function startServer() {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: isHmrDisabled ? false : undefined,
+        hmr: isHmrDisabled
+          ? false
+          : {
+              server: httpServer,
+            },
       },
       appType: 'spa',
     });
@@ -300,7 +306,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`KantoJA Server running on http://0.0.0.0:${PORT}`);
   });
 }

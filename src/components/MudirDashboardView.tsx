@@ -1208,6 +1208,17 @@ export const MudirDashboardView: React.FC<MudirDashboardViewProps> = ({ onNaviga
                 Rekapitulasi capaian ziyadah, konsistensi murajaah, target hafalan per halaqah/kelas, dan santri yang membutuhkan perhatian.
               </p>
             </div>
+            {onNavigate && (
+              <button
+                type="button"
+                onClick={() => onNavigate('halaqah-reports')}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 transition inline-flex items-center gap-1.5 cursor-pointer shadow-xs self-start sm:self-auto"
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>Buka Laporan Halaqah Lengkap</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">

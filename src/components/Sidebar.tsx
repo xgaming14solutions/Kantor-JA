@@ -39,6 +39,7 @@ import {
 export type MenuGroup =
   | 'MAIN'
   | 'AKADEMIK'
+  | 'TAHFIDZ'
   | 'KESANTRIAN'
   | 'ATK'
   | 'ADMINISTRASI'
@@ -55,6 +56,7 @@ export interface MenuItem {
 export const MENU_GROUP_LABELS: Record<MenuGroup, string> = {
   MAIN: 'MENU UTAMA',
   AKADEMIK: 'AKADEMIK',
+  TAHFIDZ: 'TAḤFIDZ',
   KESANTRIAN: 'KESANTRIAN',
   ATK: 'ATK & PERSEDIAAN',
   ADMINISTRASI: 'ADMINISTRASI',
@@ -76,6 +78,8 @@ export const NAVIGATION_ITEMS: MenuItem[] = [
       'KEPALA_SEKOLAH',
       'WALI_KELAS',
       'GURU_MAPEL',
+      'PENGAMPU_HALAQAH',
+      'pengampu_halaqah',
       'KEPALA_KESANTRIAN',
       'MUSYRIF_KESANTRIAN',
       'kepala_kesantrian',
@@ -183,6 +187,40 @@ export const NAVIGATION_ITEMS: MenuItem[] = [
       'PETUGAS_KESANTRIAN',
     ],
     group: 'AKADEMIK',
+  },
+
+  // =======================================================
+  // TAḤFIDZ
+  // =======================================================
+  {
+    id: 'halaqah-management',
+    label: 'Pengampu & Kelompok Halaqah',
+    icon: Users,
+    allowedRoles: [
+      'ADMIN',
+      'MUDIR',
+      'mudir',
+      'KEPALA_SEKOLAH',
+      'KEPALA_KESANTRIAN',
+      'PENGAMPU_HALAQAH',
+      'pengampu_halaqah',
+    ],
+    group: 'TAHFIDZ',
+  },
+  {
+    id: 'halaqah-reports',
+    label: 'Laporan Halaqah Bulanan',
+    icon: BookOpen,
+    allowedRoles: [
+      'ADMIN',
+      'MUDIR',
+      'mudir',
+      'KEPALA_SEKOLAH',
+      'KEPALA_KESANTRIAN',
+      'PENGAMPU_HALAQAH',
+      'pengampu_halaqah',
+    ],
+    group: 'TAHFIDZ',
   },
 
   // =======================================================
@@ -459,6 +497,9 @@ function formatSingleRoleLabel(role?: UserRole | string | null, kesantrianSubRol
       return 'Wali Kelas';
     case 'GURU_MAPEL':
       return 'Guru Mapel';
+    case 'PENGAMPU_HALAQAH':
+    case 'pengampu_halaqah':
+      return 'Pengampu Halaqah';
     case 'KEPALA_KESANTRIAN':
     case 'kepala_kesantrian':
       return 'Kepala Kesantrian';
@@ -518,6 +559,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const orderedGroups: MenuGroup[] = [
     'MAIN',
     'AKADEMIK',
+    'TAHFIDZ',
     'KESANTRIAN',
     'ATK',
     'ADMINISTRASI',
